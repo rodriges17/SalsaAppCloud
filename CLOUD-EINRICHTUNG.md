@@ -21,6 +21,8 @@ CLI-Alternative für die Function: nach Anmeldung `supabase functions deploy clo
 
 ## Bedienung und Rechte
 
+Die Cloud-Ansicht ist in Bereiche getrennt: **Bibliotheken** zeigt die zugänglichen Sammlungen. **Bibliothek erstellen** öffnet das Formular erst bei Bedarf; **Abbrechen** kehrt zur Übersicht zurück. **Meine Cloud-Figuren** zeigt den eigenen Cloud-Bestand mit und ohne Bibliothekszuordnung. **Version zuordnen** öffnet eine eigene Ansicht mit Zielbibliothek und Zurück-Button. **Verwaltung** enthält die Plattform-Einstellungen für Administratoren.
+
 Cloud zeigt öffentliche Bibliotheken ohne Anmeldung. Private Bibliotheken erfordern Anmeldung und Mitgliedschaft. Ein Bibliothekslink allein vergibt keine Rechte.
 
 Nur der Plattform-Administrator legt Personen an, schaltet Uploads/Bibliotheksgründung frei und setzt Quoten. Ohne Uploadfreigabe kann eine Person als lesendes Mitglied eingeladen werden. Anmeldelinks werden im Adminbereich erzeugt, kopiert und manuell verschickt. Sie sind einmalig und zeitlich begrenzt; bei verlorener Sitzung einen neuen erzeugen.

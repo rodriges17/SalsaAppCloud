@@ -11,7 +11,7 @@ function field(form, label, value = '', type = 'text') {
   if (type !== 'textarea') input.type = type; input.value = value; wrap.append(input); form.append(wrap); return input;
 }
 function select(form, label, options, selected) {
-  const wrap = node('label', label), input = node('select');
+  const wrap = node('label', label), input = node('select'); input.setAttribute('aria-label', label);
   for (const [value, name] of options) { const o = node('option', name); o.value = value; input.append(o); }
   if (selected !== undefined) input.value = selected; wrap.append(input); form.append(wrap); return input;
 }

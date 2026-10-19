@@ -85,7 +85,7 @@ test('assigning a cloud revision opens a visible focused view and attaches to th
  await signIn(page);const calls=await mock(page,true,true);await start(page);await page.locator('#cloudButton').tap();
  await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).tap();
  await page.getByRole('button',{name:/Version zuordnen:/}).tap();
- await expect(page.getByLabel('Zielbibliothek',{exact:true})).toBeInViewport();
+ await expect(page.getByRole('combobox',{name:'Zielbibliothek',exact:true})).toBeInViewport();
  await expect(page.locator('.cloud-card')).toBeFocused();
  await page.getByRole('button',{name:'Zurück zu Meine Cloud-Figuren',exact:true}).tap();
  await page.getByRole('button',{name:/Version zuordnen:/}).tap();
