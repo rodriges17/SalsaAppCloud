@@ -1,0 +1,16 @@
+.DS_Store
+DerivedData/
+*.xcresult/
+*.xcarchive/
+*.xcarchive.zip
+*.log
+xcuserdata/
+*.xcuserstate
+ios/SalsaTrainer.xcodeproj/
+*.p12
+*.mobileprovision
+AuthKey_*.p8
+node_modules/
+playwright-report/
+test-results/
+web-tests/fixtures/

@@ -1,0 +1,14 @@
+{
+  "name": "salsa-trainer-pwa",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test web-tests/*.test.js",
+    "test:browser": "playwright test"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.3.14",
+    "@playwright/test": "1.64.1",
+    "@supabase/supabase-js": "2.118.0"
+  }
+}

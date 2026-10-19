@@ -1,0 +1,3 @@
+project_id = "tzaprobvauikssnpiucl"
+[functions.cloud]
+verify_jwt = false

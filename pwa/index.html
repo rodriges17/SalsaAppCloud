@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#17141f"><meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="Deine privaten Salsa-Figuren und Videos. Offline lernen, in deinem Tempo.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; media-src 'self' blob: https://tzaprobvauikssnpiucl.supabase.co; connect-src 'self' https://tzaprobvauikssnpiucl.supabase.co; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <title>Salsa Trainer Cloud</title><link rel="manifest" href="./manifest.webmanifest"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="icon" href="./icons/icon-192.png"><link rel="stylesheet" href="./styles.css"><script type="module" src="./app.js"></script>
+</head>
+<body>
+  <main id="overview" class="overview">
+    <header class="heading"><h1>Salsa Cloud</h1><button id="cloudButton" class="text-button peach">Cloud</button><button id="tagsButton" class="text-button peach">Tags</button></header>
+    <div id="updateNotice" class="update-notice" hidden><span>Eine neue App-Version ist bereit.</span><button id="applyUpdate" class="secondary">Update laden</button></div><p class="tagline">Deine Schritte. Dein Tempo.</p>
+    <label class="sr-only" for="search">Figur suchen</label><input id="search" type="search" placeholder="Figur suchen" autocomplete="off">
+    <div id="statusFilters" class="chips" aria-label="Lernstand filtern"></div>
+    <div id="activeTag"></div>
+    <div class="list-toolbar"><strong id="figureCount">0 Figuren</strong><label class="peach">Sortierung: <select id="sort" aria-label="Sortierung"><option value="newest">Neueste</option><option value="name">Name</option><option value="status">Lernstand</option></select></label></div>
+    <div id="figureList" class="figure-list"></div>
+    <div id="empty" class="empty" hidden><span class="dance-icon" aria-hidden="true">♪</span><h2>Deine erste Figur</h2><p>Füge eigene Videos hinzu und übe in deinem Tempo.</p></div>
+    <footer class="overview-footer"><button id="infoButton" class="subtle small">Installation &amp; Speicher</button><span id="offlineStatus" class="small muted" role="status">Nur auf diesem Gerät</span></footer>
+    <div class="add-dock"><button id="importFigure" class="secondary">Figur importieren</button><button id="addFigure" class="primary add-button">＋ Figur hinzufügen</button></div>
+  </main>
+  <dialog id="editor" class="screen-dialog">
+    <header class="screen-header"><button id="editorBack" class="back" aria-label="Zurück">‹</button><h2 id="editorHeading">Figur hinzufügen</h2></header>
+    <form id="editorForm" novalidate>
+      <fieldset id="editorFields" class="editor-scroll">
+        <label for="figureTitle">Name der Figur</label><input id="figureTitle" required maxlength="160" autocomplete="off">
+        <label for="figureDescription">Beschreibung</label><textarea id="figureDescription" rows="4" placeholder="Schritte, Hinweise, Zählzeiten …"></textarea>
+        <label for="figureStatus">Lernstand</label><select id="figureStatus"><option>Neu</option><option>Am Üben</option><option>Sitzt</option></select>
+        <label for="figureTags">Tags</label><input id="figureTags" placeholder="z. B. Drehung, Anfänger" autocomplete="off">
+        <div class="section-heading"><h3 id="videoCount">Videos</h3><span class="small muted">Erstes Video = Vorschaubild</span></div>
+        <div id="draftVideos"></div>
+        <button id="pickVideos" class="secondary" type="button">＋ Videos hinzufügen</button>
+        <button id="reviewAll" class="secondary" type="button" hidden>Alle neuen Videos prüfen</button>
+        <input id="videoFiles" class="sr-only" type="file" accept="video/*,.mov,.mp4,.m4v" multiple tabindex="-1">
+        <p class="small muted">Aus Fotos oder Dateien wählen. Neue Videos zuerst in der Vorschau bestätigen. Die Originale bleiben unverändert.</p>
+      </fieldset>
+      <footer class="save-footer"><p id="editorError" class="error" role="alert" hidden></p><p id="saveProgress" role="status" hidden>Videos werden lokal gespeichert …</p><button id="saveFigure" class="primary" type="submit" disabled>Figur speichern</button></footer>
+    </form>
+  </dialog>
+  <dialog id="preview" class="screen-dialog preview-dialog">
+    <header class="screen-header"><button id="previewBack" class="back" aria-label="Zurück zur Figur">‹</button><h2>Video prüfen</h2></header>
+    <div class="preview-body"><h3 id="previewTitle"></h3><video id="previewVideo" controls playsinline preload="auto"></video><p id="previewError" class="error" role="alert" hidden></p><p class="small muted">Spiele das Video zur Kontrolle ab. Erst nach Bestätigung und Speichern wird es dauerhaft übernommen.</p><button id="acceptVideo" class="primary" disabled>Video übernehmen</button></div>
+  </dialog>
+  <section id="playerScreen" class="player-screen" aria-label="Lernplayer" hidden>
+    <header class="screen-header"><button id="playerBack" class="back" aria-label="Zurück zur Übersicht">‹</button><h2 id="playerTitle"></h2><button id="rotatePlayer" class="icon-button" aria-label="Hochformat / Querformat" aria-pressed="false">↻</button></header>
+    <div class="video-choice"><label for="playerVideoChoice" class="sr-only">Video auswählen</label><select id="playerVideoChoice"></select></div>
+    <div id="videoStage" class="video-stage"><video id="learningVideo" playsinline preload="auto"></video><div id="videoLoading" class="loading" hidden>Video wird geladen …</div></div>
+    <p id="playerError" class="error" role="alert" hidden></p>
+    <div class="timeline"><label for="seek" class="sr-only">Videoposition</label><input id="seek" type="range" min="0" max="1" step="0.01" value="0"><div class="time-labels"><span id="position">0:00</span><span id="duration">0:00</span></div></div>
+    <div class="player-controls"><button id="rewind" aria-label="5 Sekunden zurück">−5 s</button><button id="playPause" aria-label="Abspielen">▶</button><label class="sr-only" for="speed">Geschwindigkeit</label><select id="speed" aria-label="Geschwindigkeit"><option value="0.25">0,25×</option><option value="0.5">0,5×</option><option value="0.75">0,75×</option><option value="1" selected>1×</option></select><button id="fitCrop" aria-pressed="false">Fit</button><button id="fullLoop" aria-pressed="false">Loop</button><button id="markA">A</button><button id="markB" disabled>B</button><button id="clearAB" disabled>A–B löschen</button><button id="fullscreen">Vollbild</button></div>
+    <p id="abStatus" class="ab-status" aria-live="polite"></p><div id="playerDescription" class="player-description"></div>
+  </section>
+  <dialog id="cloudDialog" class="screen-dialog">
+    <header class="screen-header"><button id="cloudBack" class="back" aria-label="Zurück aus der Cloud">‹</button><h2>Cloud-Bibliotheken</h2></header>
+    <div class="cloud-scroll"><p id="cloudError" class="error" role="alert" hidden></p><div id="cloudBody"></div></div>
+    <footer class="save-footer"><p id="cloudStatus" role="status"></p><button id="cloudCancelUpload" class="secondary" hidden>Upload abbrechen</button></footer>
+  </dialog>
+  <dialog id="importChoiceDialog" class="small-dialog">
+    <h2>Figur importieren</h2>
+    <p>Wähle eine ZIP-Datei, die mit „Figur teilen“ erstellt wurde. Einen WhatsApp-Anhang zuerst in „Dateien“ oder „Downloads“ speichern.</p>
+    <label for="packageFile">Figuren-Paket (.zip) auswählen</label>
+    <input id="packageFile" type="file" aria-describedby="packageHelp">
+    <p id="packageHelp" class="small muted">Für einzelne Videos nutze „Figur hinzufügen“. Das ZIP wird hier geprüft; vorhandene Figuren bleiben erhalten.</p>
+    <button id="closeImportChoice" class="secondary">Abbrechen</button>
+  </dialog>
+  <dialog id="shareDialog" class="small-dialog">
+    <h2 id="shareTitle">Figur teilen</h2>
+    <p>Wähle die Videos. Name, Beschreibung, Tags und Videonamen werden mitgeschickt. Dein Lernstand bleibt bei dir.</p>
+    <fieldset id="shareVideos" aria-label="Videos zum Teilen"></fieldset>
+    <p id="shareSize" role="status"></p><p id="shareProgress" role="status" hidden>ZIP wird vorbereitet …</p>
+    <p id="shareError" class="error" role="alert" hidden></p>
+    <button id="preparePackage" class="primary">ZIP vorbereiten</button>
+    <button id="sendPackage" class="primary" hidden>ZIP teilen</button>
+    <a id="downloadPackage" class="secondary download-package" hidden>ZIP speichern</a>
+    <p class="small muted">Originalqualität, maximal 250 MB. ZIP in WhatsApp als Dokument senden. Empfänger: Anhang in Dateien speichern → App öffnen → Figur importieren.</p>
+    <button id="closeShare" class="secondary">Schließen</button>
+  </dialog>
+  <dialog id="importProgressDialog" class="small-dialog"><h2>Figur importieren</h2><p role="status">ZIP und Videos werden geprüft …</p><button id="cancelImport" class="secondary">Abbrechen</button></dialog>
+  <dialog id="confirmDialog" class="small-dialog"><h2 id="confirmTitle"></h2><p id="confirmMessage"></p><div class="dialog-actions"><button id="confirmCancel" class="secondary">Abbrechen</button><button id="confirmOK" class="primary">Bestätigen</button></div></dialog>
+  <dialog id="tagsDialog" class="small-dialog"><h2>Tags</h2><div id="tagOptions" class="tag-options"></div><button id="closeTags" class="secondary">Schließen</button></dialog>
+  <dialog id="infoDialog" class="small-dialog info-dialog"><h2>Dein Salsa Trainer Cloud</h2><p id="appVersion" class="small muted"></p><p>Deine lokalen Videos bleiben auf diesem Gerät. Nur wenn du eine Figur ausdrücklich in einer Cloud-Bibliothek veröffentlichst, werden die ausgewählten Videos und Angaben hochgeladen.</p><h3>Auf dem iPhone installieren</h3><p>In Safari öffnen → Teilen → <strong>Zum Home-Bildschirm</strong> → als Web-App öffnen. Danach zuerst die App über ihr neues Symbol starten und dort die Videos importieren.</p><h3>Offline lernen</h3><p id="offlineDetails">Die App wird nach dem ersten Online-Aufruf für die Offline-Nutzung vorbereitet.</p><h3>Lokaler Speicher</h3><p id="storageDetails"></p><p>Beim Löschen der Website-Daten gehen die gespeicherten Kopien verloren. Bei Speichermangel kann der Browser nicht dauerhaft geschützte Daten entfernen. Deine Originalvideos bleiben erhalten.</p><button id="persistStorage" class="secondary">Dauerhaften Speicher anfragen</button><p id="persistenceResult" role="status"></p><p class="small muted">Videos über „Videos hinzufügen“ importieren. Die PWA kann auf dem iPhone nicht als Ziel im Teilen-Menü registriert werden. Der Formatknopf dreht die Player-Ansicht; die Systemsperre für die Geräteausrichtung kann Safari nicht überall steuern.</p><button id="closeInfo" class="primary">Schließen</button></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <noscript>Für die lokale Videobibliothek muss JavaScript aktiviert sein.</noscript>
+</body></html>

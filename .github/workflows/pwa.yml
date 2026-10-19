@@ -1,0 +1,84 @@
+name: PWA tests and GitHub Pages
+on:
+  push:
+    branches: [main]
+    paths: ['pwa/**', 'web-tests/**', 'supabase/**', 'package.json', 'package-lock.json', 'playwright.config.js', '.github/workflows/pwa.yml']
+  pull_request:
+    paths: ['pwa/**', 'web-tests/**', 'supabase/**', 'package.json', 'package-lock.json', 'playwright.config.js', '.github/workflows/pwa.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pwa-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npm test
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno check --node-modules-dir=manual supabase/functions/cloud/index.ts
+      - run: npx playwright install chromium webkit
+      - name: Create local synthetic test videos
+        run: |
+          command -v ffmpeg >/dev/null || brew install ffmpeg
+          mkdir -p web-tests/fixtures
+          ffmpeg -f lavfi -i testsrc2=size=320x180:rate=12 -t 6 -c:v libx264 -pix_fmt yuv420p -movflags +faststart web-tests/fixtures/clip.mp4
+          ffmpeg -f lavfi -i testsrc2=size=180x320:rate=12 -t 5 -c:v libx264 -pix_fmt yuv420p -movflags +faststart web-tests/fixtures/portrait.mp4
+      - run: npm run test:browser
+        env:
+          DEBUG: pw:browser
+      - name: Upload browser results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pwa-browser-results
+          path: |
+            playwright-report/
+            test-results/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: pwa
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+  live-smoke:
+    needs: deploy
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npx playwright install chromium webkit
+      - name: Verify touch import on the published PWA
+        run: node web-tests/live-check.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pwa-live-results
+          path: test-results/live/

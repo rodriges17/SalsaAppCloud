@@ -1,0 +1,84 @@
+name: iOS build and tests
+on:
+  push:
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  pull_request:
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+      - name: Select simulator
+        run: |
+          xcodebuild -version
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json, subprocess
+          devices = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '-j']))['devices']
+          phones = [d for runtime, group in devices.items() if 'iOS' in runtime for d in group if d['name'].startswith('iPhone')]
+          if not phones:
+              raise SystemExit('No iPhone simulator installed')
+          print('SIMULATOR_ID=' + phones[0]['udid'])
+          PY
+      - name: Compile app, extension and tests
+        timeout-minutes: 12
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing -project ios/SalsaTrainer.xcodeproj -scheme SalsaTrainer \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO | tee ios-build.log
+      - name: Boot iPhone simulator
+        timeout-minutes: 5
+        run: |
+          xcrun simctl boot "$SIMULATOR_ID" || true
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+      - name: Run unit and UI tests
+        timeout-minutes: 12
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building -project ios/SalsaTrainer.xcodeproj -scheme SalsaTrainer \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -resultBundlePath TestResults.xcresult -derivedDataPath DerivedData \
+            -parallel-testing-enabled NO -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 60 -maximum-test-execution-time-allowance 120 \
+            CODE_SIGNING_ALLOWED=NO | tee ios-test.log
+      - name: Build unsigned device archive
+        run: |
+          set -o pipefail
+          xcodebuild archive -project ios/SalsaTrainer.xcodeproj -scheme SalsaTrainer \
+            -destination 'generic/platform=iOS' -archivePath SalsaTrainer-unsigned.xcarchive \
+            CODE_SIGNING_ALLOWED=NO | tee ios-archive.log
+          ditto -c -k --keepParent SalsaTrainer-unsigned.xcarchive SalsaTrainer-unsigned.xcarchive.zip
+      - name: Upload logs and test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-results
+          path: |
+            ios-build.log
+            ios-test.log
+            ios-archive.log
+            TestResults.xcresult
+          if-no-files-found: warn
+      - name: Upload unsigned device archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: SalsaTrainer-unsigned-device-archive
+          path: SalsaTrainer-unsigned.xcarchive.zip
+      - name: Upload generated Xcode project
+        uses: actions/upload-artifact@v4
+        with:
+          name: SalsaTrainer-Xcode-source
+          path: ios
