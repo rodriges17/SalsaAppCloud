@@ -1,6 +1,6 @@
 # Cloud-Bibliotheken – Prüfstand
 
-Projekt: `tzaprobvauikssnpiucl`, Supabase Free. Cloud-Oberfläche im Pull Request [#1](https://github.com/rodriges17/SalsaAppIOS/pull/1), noch nicht auf GitHub Pages veröffentlicht.
+Projekt: `tzaprobvauikssnpiucl`, Supabase Free. Cloud-Oberfläche separat in [SalsaAppCloud](https://github.com/rodriges17/SalsaAppCloud). Der frühere Pull Request #1 in SalsaAppIOS wird nicht in die Offline-App übernommen.
 
 ## Echte Supabase-Prüfung
 
@@ -45,4 +45,4 @@ Performance-INFO zu [nicht indexierten Fremdschlüsseln](https://supabase.com/do
 
 900 MB Gesamtspeicher, 50 MB pro Cloud-Video. Ausstehende Reservierungen und alte Versionen zählen mit. Supabase-Abruf-/Egress-Freigrenzen werden nicht automatisch durch die Speicherquote begrenzt. Signierte Video-Links bleiben bis zu fünf Minuten gültig, bereits lokal kopierte Inhalte lassen sich nicht zurückholen.
 
-Kein physisches iPhone/Android-Gerät und kein echter WhatsApp-Versand hier geprüft. Die Cloud-PWA-Veröffentlichung braucht noch die Freigabe für `main`; die automatische Freigabeprüfung lehnte diesen Schritt ab. Datenbank und Serverfunktion sind bereits eingerichtet.
+Kein physisches iPhone/Android-Gerät und kein echter WhatsApp-Versand hier geprüft. Datenbank und Serverfunktion sind eingerichtet. Die Veröffentlichung erfolgt im neuen Repository SalsaAppCloud; die Offline-App bleibt unverändert. Die Abspaltung wird im Workflow https://github.com/rodriges17/SalsaAppCloud/actions/runs/39194946945 geprüft.

@@ -4,14 +4,14 @@ Projekt `tzaprobvauikssnpiucl`. Der öffentliche Schlüssel ist in `pwa/cloud-co
 
 ## Status
 
-Im Projekt wurden die sechs Migrationen und die Edge Function bereits eingerichtet. Der Administrator ist angelegt. Ein echter API-/Storage-Test mit künstlichem Video war erfolgreich; die PWA-Veröffentlichung erfolgt separat über den Pull Request. Die folgenden Einrichtungsschritte sind für eine Neuinstallation dokumentiert.
+Im Projekt wurden die sechs Migrationen und die Edge Function bereits eingerichtet. Der Administrator ist angelegt. Ein echter API-/Storage-Test mit künstlichem Video war erfolgreich; die Cloud-PWA liegt separat im Repository `rodriges17/SalsaAppCloud`. Die folgenden Einrichtungsschritte sind für eine Neuinstallation dokumentiert.
 
 Der Code stellt Datenbankmigrationen, eine Edge Function und die PWA bereit. Erst nach Einrichtung im Supabase-Projekt sind echte Cloud-Aufrufe möglich. Die bevorzugte Einrichtung erfolgt über die Supabase-Anbindung in ChatGPT nach Freigabe des Projekts. Alternativ die folgenden Schritte im Dashboard ausführen.
 
 ## Einrichtung im Dashboard
 
 1. Im SQL Editor alle Dateien unter `supabase/migrations/` in aufsteigender Reihenfolge einmalig ausführen. Jede ist eine Transaktion.
-2. Authentication → URL Configuration: Site URL und erlaubte Redirect URL auf `https://rodriges17.github.io/SalsaAppIOS/` setzen. Öffentliche Selbstregistrierung für den geschlossenen Test im Dashboard deaktivieren; die Projektanbindung bietet diese Auth-Einstellung hier nicht an. Auch ohne diese Einstellung erhalten neue Konten keine Cloud-Berechtigungen. Ein automatischer E-Mail-Versand wird nicht verwendet.
+2. Authentication → URL Configuration: Site URL und erlaubte Redirect URL auf `https://rodriges17.github.io/SalsaAppCloud/` setzen. Öffentliche Selbstregistrierung für den geschlossenen Test im Dashboard deaktivieren; die Projektanbindung bietet diese Auth-Einstellung hier nicht an. Auch ohne diese Einstellung erhalten neue Konten keine Cloud-Berechtigungen. Ein automatischer E-Mail-Versand wird nicht verwendet.
 3. Edge Function `cloud` anlegen und den vollständigen Inhalt von `supabase/functions/cloud/index.ts` übernehmen. Gateway-JWT-Prüfung deaktivieren (`verify_jwt = false`), damit öffentliche Bibliotheksaufrufe möglich sind. Die Funktion validiert Nutzertokens selbst über Supabase Auth und prüft jede Aktion serverseitig. Diese Prüfung nicht entfernen.
 4. Function Secrets setzen: `CLOUD_ADMIN_EMAIL` = deine Admin-E-Mail, `CLOUD_BOOTSTRAP_TOKEN` = neue zufällige geheime Zeichenfolge mit mindestens 32 Zeichen. Supabases standardmäßige serverseitige `SUPABASE_URL`, `SUPABASE_ANON_KEY` und `SUPABASE_SERVICE_ROLE_KEY` müssen vorhanden sein. Keine dieser administrativen Angaben im Chat teilen.
 5. Die Function im Dashboard testen mit POST-JSON: `{"action":"bootstrap","payload":{"token":"DEIN_EINRICHTUNGSCODE"}}`. Sie erzeugt den ersten Administrator und gibt dessen einmaligen persönlichen Anmeldelink zurück. Es wird keine E-Mail verschickt. Link öffnen oder in der PWA unter Cloud → Mit persönlichem Link anmelden einfügen. In einer installierten iPhone-PWA den Link dort einfügen, damit die Sitzung in genau dieser App liegt.

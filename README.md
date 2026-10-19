@@ -107,4 +107,4 @@ Der Import prüft Größe, Struktur, Pfade, Anzahl, CRC32-Prüfsummen und Schema
 
 Die PWA erhält öffentliche/private Bibliotheken, eingeladene Mitwirkende, Freigaben, manuelle Anmeldelinks und lokale Offline-Übernahme. Die kostenlose Testkonfiguration nutzt einen privaten Supabase-Bucket mit 900 MB Gesamtlimit und 50 MB je Video. Plattformfreigaben und Quoten werden serverseitig geprüft.
 
-Einrichtung und Bedienung: [CLOUD-EINRICHTUNG.md](CLOUD-EINRICHTUNG.md). Validierung und Grenzen: [CLOUD-TESTBERICHT.md](CLOUD-TESTBERICHT.md). Die Erweiterung liegt zunächst im Pull Request und ist erst nach Veröffentlichung in der Live-PWA sichtbar.
+Einrichtung und Bedienung: [CLOUD-EINRICHTUNG.md](CLOUD-EINRICHTUNG.md). Validierung und Grenzen: [CLOUD-TESTBERICHT.md](CLOUD-TESTBERICHT.md). Die Cloud-Variante wird ausschließlich aus diesem Repository veröffentlicht. Die bestehende Offline-App bleibt im separaten Repository `SalsaAppIOS`.
