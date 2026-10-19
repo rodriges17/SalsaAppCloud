@@ -19,4 +19,6 @@ Beide GitHub-Pages-Adressen liegen weiterhin auf demselben Origin. Browser-Speic
 
 ## Status
 
-Code für die Abspaltung vorbereitet. Neues Repository, Veröffentlichung, Backend-URL-Umstellung und abschließende Live-Prüfung stehen noch aus.
+Abspaltung abgeschlossen: Cloud-App unter https://rodriges17.github.io/SalsaAppCloud/ veröffentlicht, Backend-URL umgestellt. 21 Logik-/Datenbanktests und 30 Browserprüfungen bestanden. Zusätzlicher Live-Test des Touch-Imports in Chrome und WebKit erfolgreich. Beide App-Adressen liefern HTTP 200, unterschiedliche Manifest-Namen und nur die neue App einen Cloud-Button. Offline-main bleibt 84d21e7405bd3656206a3ccb5c27f7bb2e5836d9.
+
+Prüflauf: https://github.com/rodriges17/SalsaAppCloud/actions/runs/39194946945 (zweiter Versuch: Veröffentlichung und Live-Test erfolgreich).
