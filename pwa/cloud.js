@@ -4,7 +4,7 @@ import { figureVideos } from './storage.js';
 const node = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
 const MB = value => `${(Number(value ?? 0) / 1000000).toFixed(1)} MB`;
 const action = (label, work) => { const b = node('button', label, 'secondary'); b.type = 'button'; b.onclick = () => Promise.resolve().then(work).catch(report); return b; };
-let dialog, body, errorBox, statusBox, hooks, state, current, busy = false, controller, source = null;
+let dialog, body, errorBox, statusBox, hooks, state, current, busy = false, controller, source = null, area = 'libraries';
 function report(error) { errorBox.textContent = error?.message ?? 'Cloud-Aufruf fehlgeschlagen.'; errorBox.hidden = false; }
 function field(form, label, value = '', type = 'text') {
   const wrap = node('label', label), input = node(type === 'textarea' ? 'textarea' : 'input');
@@ -24,12 +24,21 @@ async function run(message, work) {
   finally { busy = false; body.inert = false; document.getElementById('cloudBack').disabled = false; statusBox.textContent = ''; }
 }
 function close() { if (busy) return; dialog.close(); body.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); }); source = null; }
+async function navigate(next, library = null) {
+  source = null; area = next; await run('Laden …', () => load(library));
+}
+function focusSection(box) {
+  box.tabIndex = -1; box.focus(); box.scrollIntoView({ block: 'start' });
+}
 async function load(library = current) {
   await finishLogin(); state = await cloudCall('state'); current = library;
   if (state.me) await cloudCall(state.me.is_admin ? 'admin_cleanup' : 'cleanup').catch(() => {});
   body.replaceChildren();
   const toolbar = node('div', undefined, 'cloud-actions');
-  toolbar.append(action('Bibliotheken', () => run('Laden …', () => load(null))), action('Aktualisieren', () => run('Laden …', () => load(current))));
+  for (const [key, label] of [['libraries', 'Bibliotheken'], ...(state.me ? [['figures', 'Meine Cloud-Figuren']] : []), ...(state.me?.is_admin ? [['admin', 'Verwaltung']] : [])]) {
+    const button = action(label, () => navigate(key)); button.setAttribute('aria-pressed', String(area === key && !current && !source)); toolbar.append(button);
+  }
+  toolbar.append(action('Aktualisieren', () => run('Laden …', () => load(current))));
   if (signedIn()) toolbar.append(action('Abmelden', async () => { await logout(); await run('Laden …', () => load(null)); }));
   body.append(toolbar);
   if (state.me) body.append(node('p', `${state.me.email} · ${MB(state.me.used)} / ${MB(state.me.quota)} belegt${state.me.upload_enabled ? '' : ' · Lesen erlaubt, Uploads gesperrt'}`));
@@ -42,13 +51,20 @@ async function load(library = current) {
   }
   if (source) { await publishForm(); return; }
   if (current) { await libraryView(current); return; }
+  if (area === 'create') { libraryForm(); return; }
+  if (area === 'figures') {
+    body.append(node('h3', 'Meine Cloud-Figuren'), node('p', 'Alle deine hochgeladenen Figuren – auch ohne Bibliothekszuordnung. Eine Figur kann in mehreren Bibliotheken verwendet werden.'));
+    ownFigures(); return;
+  }
+  if (area === 'admin' && state.me?.is_admin) { adminForm(); return; }
+  body.append(node('h3', 'Bibliotheken'));
+  if (state.me?.upload_enabled) body.append(action('Bibliothek erstellen', () => navigate('create')));
   for (const lib of state.libraries) {
     const box = section(lib.title); box.append(node('p', `${lib.visibility === 'public' ? 'Öffentlich' : 'Privat'} · ${lib.collaborative ? 'Mitwirkende erlaubt' : 'Nur Besitzer'} · ${lib.moderated ? 'Mit Freigabe' : 'Sofort veröffentlichen'}`));
     box.append(action('Öffnen', () => run('Laden …', () => load(lib.id))));
   }
   if (!state.libraries.length) body.append(node('p', 'Noch keine zugänglichen Bibliotheken.'));
-  if (state.me?.upload_enabled) { libraryForm(); ownFigures(); }
-  if (state.me?.is_admin) adminForm();
+
 }
 function libraryForm(lib = null) {
   const box = section(lib ? 'Bibliothek einstellen' : 'Bibliothek erstellen'), form = node('form'); box.append(form);
@@ -59,6 +75,7 @@ function libraryForm(lib = null) {
     if (!form.reportValidity()) return;
     return run('Speichern …', async () => { const result = await cloudCall('library_save', { id: lib?.id, title: title.value, description: description.value, visibility: visibility.value, collaborative: collaborative.checked, moderated: moderated.checked }); await load(result.id); });
   }));
+  if (!lib) form.append(action('Abbrechen', () => navigate('libraries')));
   form.onsubmit = event => event.preventDefault();
 }
 async function libraryView(id) {
@@ -121,13 +138,17 @@ function revisionCard(box, rev) {
   })));
 }
 function attachForm(revision) {
+  body.replaceChildren();
+  body.append(action('Zurück zu Meine Cloud-Figuren', () => navigate('figures')));
   const box = section(`„${revision.title}“ zuordnen`);
+  focusSection(box);
   const libs = state.libraries.filter(l => l.contribute);
-  if (!libs.length) { box.append(node('p', 'Keine Bibliothek mit Beitragsberechtigung.')); return; }
+  if (!libs.length) { box.append(node('p', 'Keine Bibliothek mit Beitragsberechtigung. Erstelle eine Bibliothek oder lass dich zum Mitwirken einladen.')); if (state.me?.upload_enabled) box.append(action('Bibliothek erstellen', () => navigate('create'))); return; }
   const choice = select(box, 'Zielbibliothek', libs.map(l => [l.id, l.title]));
   box.append(action('Figur zuordnen', () => run('Zuordnen …', async () => { await cloudCall('attach', { library: choice.value, revision: revision.id }); await load(choice.value); })));
 }
 function ownFigures() {
+  if (!state.own_figures.length) body.append(node('p', 'Noch keine eigenen Cloud-Figuren. Lade eine lokale Figur über „In Cloud veröffentlichen“ hoch.'));
   for (const f of state.own_figures) {
     const box = section(f.revisions[0]?.title ?? 'Noch nicht fertig hochgeladene Figur');
     const allowed = checkbox(box, 'Öffentliche Veröffentlichung erlauben', f.public_allowed);
@@ -195,7 +216,7 @@ export function initCloud(callbacks) {
   const query = new URLSearchParams(location.search); if (query.has('library') || query.has('cloud')) setTimeout(() => openCloud(null, query.get('library')), 0);
 }
 export async function openCloud(local = null, library = null) {
-  if (busy || dialog.open) return; source = local; current = library;
+  if (busy || dialog.open) return; source = local; current = library; area = 'libraries';
   errorBox.hidden = true; body.replaceChildren(); dialog.showModal();
   await run('Cloud-Bibliotheken laden …', () => load(library));
   if (!body.childElementCount) body.append(action('Erneut versuchen', () => run('Laden …', () => load(library))));

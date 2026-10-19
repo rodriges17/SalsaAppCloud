@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-19-cloud-v1';
+const APP_VERSION = '2026-10-20-cloud-v2';
 import { initCloud, openCloud } from './cloud.js';
 import { exportFigure, importFigure, packageSize, packageFilename, MAX_PACKAGE_BYTES } from './package.js';
 import { STATUSES, cleanTags, timeLabel, filterFigures, ABLoop } from './logic.js';
