@@ -46,3 +46,14 @@ Performance-INFO zu [nicht indexierten Fremdschlüsseln](https://supabase.com/do
 900 MB Gesamtspeicher, 50 MB pro Cloud-Video. Ausstehende Reservierungen und alte Versionen zählen mit. Supabase-Abruf-/Egress-Freigrenzen werden nicht automatisch durch die Speicherquote begrenzt. Signierte Video-Links bleiben bis zu fünf Minuten gültig, bereits lokal kopierte Inhalte lassen sich nicht zurückholen.
 
 Kein physisches iPhone/Android-Gerät und kein echter WhatsApp-Versand hier geprüft. Datenbank und Serverfunktion sind eingerichtet. Die Veröffentlichung erfolgt im neuen Repository SalsaAppCloud; die Offline-App bleibt unverändert. Die Abspaltung wird im Workflow https://github.com/rodriges17/SalsaAppCloud/actions/runs/39194946945 geprüft.
+
+
+## Navigation und Zuordnung, 20.10.2026
+
+Version `2026-10-20-cloud-v2`: getrennte Bereiche Bibliotheken, Meine Cloud-Figuren und Verwaltung. Das Erstellformular wird erst durch Bibliothek erstellen geöffnet. Version zuordnen ersetzt den Inhalt durch eine eigene, fokussierte Ansicht statt die Auswahl unsichtbar am Seitenende anzuhängen.
+
+21 Logik-/Datenbanktests und 36 Browserprüfungen erfolgreich (57 insgesamt). Neue Szenarien prüfen Trennung der Bereiche, Öffnen/Abbrechen/Speichern des Erstellformulars, sichtbare Zielauswahl, Zurücknavigation, korrekte Zuordnungs-API und den Fall ohne berechtigte Zielbibliothek. Die erste Runde scheiterte ausschließlich an der Label-Abfrage des neuen Select-Felds; die Auswahlliste erhält nun eine explizite Beschriftung und wird per Combobox-Rolle geprüft.
+
+Erfolgreicher Prüf- und Veröffentlichungsworkflow: https://github.com/rodriges17/SalsaAppCloud/actions/runs/39316936767 . Die veröffentlichte app.js und cloud.js liefern HTTP 200 mit neuer Versionskennung und Navigation.
+
+Zusätzlicher Live-Importtest auf der veröffentlichten Seite in Chrome und WebKit erfolgreich.
