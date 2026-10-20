@@ -171,8 +171,9 @@ async function publishForm() {
   const library = select(box, 'Bibliothek', libs.map(l => [l.id, l.title]));
   const figure = select(box, 'Neue Figur oder neue Version', [['', 'Neue Cloud-Figur'], ...state.own_figures.map(f => [f.id, f.revisions[0]?.title ?? f.id])]);
   const allowed = checkbox(box, 'Öffentliche Veröffentlichung dieser Figur erlauben');
+  box.append(node('p', 'Mit Häkchen darf diese Figur in öffentlichen Bibliotheken ohne Anmeldung sichtbar sein. Ohne Häkchen ist sie nur in privaten Bibliotheken nutzbar. Das Häkchen allein veröffentlicht die Figur noch nicht.'));
   figure.onchange = () => { allowed.checked = state.own_figures.find(f => f.id === figure.value)?.public_allowed ?? false; };
-  box.append(action('Ausgewählte Videos hochladen', () => run('Upload vorbereiten …', async () => {
+  box.append(action('Ausgewählte Figur hochladen', () => run('Upload vorbereiten …', async () => {
     const videos = selected.filter(([check]) => check.checked).map(([, v]) => v);
     if (!videos.length) throw new Error('Bitte mindestens ein Video auswählen.');
     if (videos.some(v => v.blob.size > CLOUD_FILE_LIMIT)) throw new Error('Ein Video überschreitet 50 MB. Bitte ein kleineres Originalvideo auswählen.');

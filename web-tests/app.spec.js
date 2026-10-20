@@ -253,12 +253,12 @@ test('installed shell update bypasses stale HTTP CSS and preserves offline video
   await page.locator('#editorBack').tap(); await page.locator('#confirmOK').tap();
   await expect(page.locator('#editor')).not.toBeVisible();
   await page.locator('#applyUpdate').tap();
-  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-20-cloud-v2');
+  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-20-cloud-v3');
   await expect(page.locator('#importFigure')).toHaveCSS('pointer-events', 'auto');
   await expect(page.locator('.figure-card')).toHaveCount(1);
   const file = await exportPackage(page, info);
   await context.setOffline(true); await page.reload();
-  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-20-cloud-v2');
+  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-20-cloud-v3');
   await page.getByRole('button', { name: 'Ocho lernen' }).tap();
   await expect(page.locator('#learningVideo')).toHaveJSProperty('videoWidth', 320);
   await page.locator('#playPause').tap();
