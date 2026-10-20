@@ -362,6 +362,7 @@ async function storageInfo() {
 }
 $('infoButton').onclick = () => { storageInfo(); $('infoDialog').showModal(); };
 $('closeInfo').onclick = () => $('infoDialog').close();
+$('infoDialog').addEventListener('cancel', event => { if (deviceBusy) event.preventDefault(); });
 $('persistStorage').onclick = async () => {
   try { const granted = await navigator.storage?.persist?.(); $('persistenceResult').textContent = granted ? 'Dauerhafter Speicher wurde gewährt.' : 'Der Browser hat die Anfrage nicht bestätigt. Die App bleibt nutzbar. Auf dem Home-Bildschirm installierte Apps werden bevorzugt berücksichtigt.'; await storageInfo(); }
   catch { $('persistenceResult').textContent = 'Dieser Browser unterstützt die Speicheranfrage nicht.'; }
