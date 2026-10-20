@@ -11,7 +11,7 @@ export function validateLibrary(data) {
     if (!validId(f.id) || ids.has(f.id) || !validId(f.revision) || typeof f.title !== 'string' || !f.title.trim() || typeof f.description !== 'string' || !Array.isArray(f.tags) || f.tags.some(t => typeof t !== 'string') || !STATUSES.includes(f.status) || !Array.isArray(f.videos) || !f.videos.length || f.videos.length > 100) throw new Error('Beschädigte Figurenangaben im Geräteordner. Die Bibliothek wird nicht überschrieben.');
     ids.add(f.id);
     for (const v of f.videos) {
-      if (!validId(v.id) || ids.has(v.id) || !validFile(v.file) || paths.has(v.file) || typeof v.name !== 'string' || typeof v.type !== 'string' || !v.type.startsWith('video/') || !Number.isSafeInteger(v.size) || v.size <= 0 || !Number.isFinite(v.duration) || v.duration <= 0 || !Number.isInteger(v.crc)) throw new Error('Ungültige Videodaten im Geräteordner.');
+      if (!validId(v.id) || ids.has(v.id) || !validFile(v.file) || paths.has(v.file) || typeof v.name !== 'string' || typeof v.type !== 'string' || !(v.type.startsWith('video/') || v.type==='' || v.type==='application/octet-stream') || !Number.isSafeInteger(v.size) || v.size <= 0 || !Number.isFinite(v.duration) || v.duration <= 0 || !Number.isInteger(v.crc)) throw new Error('Ungültige Videodaten im Geräteordner.');
       ids.add(v.id); paths.add(v.file);
     }
     if (f.posterBytes !== null && f.posterBytes !== undefined && (!Array.isArray(f.posterBytes) || f.posterBytes.length > 1000000 || f.posterBytes.some(b => !Number.isInteger(b) || b < 0 || b > 255))) throw new Error('Ungültiges Vorschaubild.');

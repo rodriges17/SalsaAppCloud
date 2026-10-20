@@ -33,7 +33,7 @@ async function restoreView(){if(!open('Vollständiges Backup wiederherstellen'))
  body.append(n('p','Wähle alle zusammengehörigen .salsabackup-Dateien aus. Die App prüft zunächst alle Teile. Bestehende Figuren bleiben bis zur bestätigten Übernahme unverändert. Für Figur-ZIP-Dateien verwende „Figur importieren“.'));
  const label=n('label','Alle Sicherungsteile auswählen'),input=n('input');input.type='file';input.multiple=true;input.accept='.salsabackup,application/octet-stream';label.append(input);body.append(label);
  const details=n('div');body.append(details);
- input.onchange=async()=>{
+ const selectFiles=async()=>{
    const files=[...input.files];if(!files.length)return;details.replaceChildren();
    const archive=await run(options=>readBackup(files,options));if(!archive)return;
    const info=summary(archive.sources);details.append(n('p',`Sicherung vom ${date(archive.manifest.createdAt)}: ${info.figures} Figuren · ${info.videos} Videos · ${size(info.bytes)} · alle ${archive.manifest.partCount} Teile geprüft.`));
@@ -61,5 +61,6 @@ async function restoreView(){if(!open('Vollständiges Backup wiederherstellen'))
    }),conflicts);
    target.onchange=()=>{conflicts.replaceChildren();status.textContent='Ziel geändert. Bitte Wiederherstellung erneut prüfen.';};status.textContent='Alle Sicherungsdateien sind gültig.';
  };
+ input.onchange=()=>selectFiles().catch(e=>{status.textContent=e.message;});
 }
-export function initBackup(callbacks){hooks=callbacks;dialog=document.getElementById('backupDialog');body=document.getElementById('backupBody');status=document.getElementById('backupStatus');cancel=document.getElementById('backupCancel');close=document.getElementById('backupClose');cancel.onclick=()=>{controller?.abort();cancel.disabled=true;status.textContent='Abbruch angefordert …';};close.onclick=()=>{if(!busy){dialog.close();const old=urls;urls=[];setTimeout(()=>old.forEach(u=>URL.revokeObjectURL(u)),30000);}};dialog.addEventListener('cancel',e=>{e.preventDefault();if(!busy)close.onclick();});document.getElementById('createBackup').onclick=createView;document.getElementById('restoreBackup').onclick=restoreView;document.getElementById('infoButton').addEventListener('click',updateLast);window.addEventListener('beforeunload',e=>{if(busy){e.preventDefault();e.returnValue='';}});updateLast();}
+export function initBackup(callbacks){hooks=callbacks;dialog=document.getElementById('backupDialog');body=document.getElementById('backupBody');status=document.getElementById('backupStatus');cancel=document.getElementById('backupCancel');close=document.getElementById('backupClose');cancel.onclick=()=>{controller?.abort();cancel.disabled=true;status.textContent='Abbruch angefordert …';};close.onclick=()=>{if(!busy){dialog.close();const old=urls;urls=[];setTimeout(()=>old.forEach(u=>URL.revokeObjectURL(u)),30000);}};dialog.addEventListener('cancel',e=>{e.preventDefault();if(!busy)close.onclick();});document.getElementById('createBackup').onclick=()=>createView().catch(e=>{status.textContent=e.message;});document.getElementById('restoreBackup').onclick=()=>restoreView().catch(e=>{status.textContent=e.message;});document.getElementById('infoButton').addEventListener('click',updateLast);window.addEventListener('beforeunload',e=>{if(busy){e.preventDefault();e.returnValue='';}});updateLast();}

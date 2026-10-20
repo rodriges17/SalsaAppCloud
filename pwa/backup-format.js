@@ -73,13 +73,13 @@ function validateManifest(m) {
   const referenced = new Set(), sources = new Set();
   const asset = (id, kind, optional=false) => { if (id === null && optional) return; if (!integer(id,0,m.assets.length-1) || m.assets[id].kind !== kind) fail('Ungültiger Dateiverweis in der Sicherung.'); referenced.add(id); };
   for (const f of m.figures) {
-    if (!text(f.source,500) || sources.has(f.source) || !text(f.originalId,100) || !text(f.title,160) || !f.title.trim() || !text(f.description,100000) || !Array.isArray(f.tags) || f.tags.length>100 || f.tags.some(t=>!text(t,160)) || !['Neu','Am Üben','Sitzt'].includes(f.status) || !integer(f.createdAt,0,Number.MAX_SAFE_INTEGER) || !(f.importFingerprint===null || text(f.importFingerprint,1000)) || !hex(f.signature) || !Array.isArray(f.videos) || !f.videos.length || f.videos.length>1000) fail('Ungültige Figurenangaben in der Sicherung.');
+    if (!text(f.source,500) || sources.has(f.source) || !text(f.originalId,100) || !text(f.title,10000) || !f.title.trim() || !text(f.description,MAX_META) || !Array.isArray(f.tags) || f.tags.length>10000 || f.tags.some(t=>!text(t,10000)) || !['Neu','Am Üben','Sitzt'].includes(f.status) || !integer(f.createdAt,0,Number.MAX_SAFE_INTEGER) || !(f.importFingerprint===null || text(f.importFingerprint,1000)) || !hex(f.signature) || !Array.isArray(f.videos) || !f.videos.length || f.videos.length>1000) fail('Ungültige Figurenangaben in der Sicherung.');
     sources.add(f.source); asset(f.poster,'poster',true);
-    for (const v of f.videos) { if (!text(v.name,160) || !Number.isFinite(v.duration) || v.duration<=0 || !Number.isFinite(v.width) || v.width<0 || !Number.isFinite(v.height) || v.height<0) fail('Ungültige Videodaten.'); asset(v.asset,'video'); asset(v.poster,'poster',true); }
+    for (const v of f.videos) { if (!text(v.name,10000) || !Number.isFinite(v.duration) || v.duration<=0 || !Number.isFinite(v.width) || v.width<0 || !Number.isFinite(v.height) || v.height<0) fail('Ungültige Videodaten.'); asset(v.asset,'video'); asset(v.poster,'poster',true); }
   }
   const parts=Array.from({length:m.partCount},()=>[]);
   for (let i=0;i<m.assets.length;i++) {
-    const a=m.assets[i]; if(a.id!==i || !['video','poster'].includes(a.kind) || !integer(a.size,1,Number.MAX_SAFE_INTEGER) || !text(a.type,100) || (a.kind==='video' && !a.type.startsWith('video/')) || (a.kind==='poster' && !a.type.startsWith('image/')) || !Array.isArray(a.chunks) || !a.chunks.length || a.chunks.length>100000) fail('Ungültige Datei in der Sicherung.');
+    const a=m.assets[i]; if(a.id!==i || !['video','poster'].includes(a.kind) || !integer(a.size,1,Number.MAX_SAFE_INTEGER) || !text(a.type,100) || (a.kind==='video' && !(a.type.startsWith('video/') || a.type==='' || a.type==='application/octet-stream')) || (a.kind==='poster' && !a.type.startsWith('image/')) || !Array.isArray(a.chunks) || !a.chunks.length || a.chunks.length>100000) fail('Ungültige Datei in der Sicherung.');
     let size=0; for(let n=0;n<a.chunks.length;n++){const c=a.chunks[n];if(!integer(c.part,0,m.partCount-1)||!integer(c.offset,0,MAX_BACKUP_PART)||!integer(c.length,1,m.chunkBytes)||!hex(c.sha)||(n<a.chunks.length-1&&c.length!==m.chunkBytes))fail('Ungültiger Sicherungsblock.');size+=c.length;parts[c.part].push(c);} if(size!==a.size)fail('Unvollständige Datei in der Sicherung.');
   }
   if(referenced.size!==m.assets.length)fail('Unbekannte Dateien in der Sicherung.');
@@ -87,7 +87,7 @@ function validateManifest(m) {
   return parts;
 }
 export async function readBackup(files,{signal,progress=()=>{}}={}) {
-  if(!files.length)fail('Bitte alle Sicherungsteile auswählen.');const headers=[];
+  if(!files.length)fail('Bitte alle Sicherungsteile auswählen.');if(files.length>MAX_PARTS)fail('Zu viele Sicherungsdateien.');const headers=[];
   for(const file of files){check(signal);if(file.size<12||file.size>MAX_BACKUP_PART)fail('Ungültige Sicherungsdatei.');const start=new Uint8Array(await file.slice(0,12).arrayBuffer());if(dec.decode(start.slice(0,8))!==MAGIC)fail('Keine vollständige Salsa-Sicherung. Für Figur-ZIP bitte Figur importieren verwenden.');const length=new DataView(start.buffer).getUint32(8,true);if(!length||length>MAX_META||12+length>file.size)fail('Beschädigter Sicherungskopf.');let h;try{h=JSON.parse(dec.decode(new Uint8Array(await file.slice(12,12+length).arrayBuffer())));}catch{fail('Beschädigter Sicherungskopf.');}headers.push({...h,file,start:12+length});}
   const first=headers.find(h=>h.index===0);if(!first?.manifest)fail('Der erste Sicherungsteil fehlt.');const m=first.manifest,layout=validateManifest(m),manifestHash=await hashJSON(m);
   if(headers.length!==m.partCount)fail(`Unvollständige Sicherung: ${m.partCount} Teile erforderlich, ${headers.length} ausgewählt.`);
