@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-20-folder-access-v1';
+const APP_VERSION = '2026-10-20-info-top-v1';
 import { initBackup } from './backup-ui.js';
 import { initCloud, openCloud } from './cloud.js';
 import { exportFigure, importFigure, packageSize, packageFilename, MAX_PACKAGE_BYTES } from './package.js';
@@ -351,7 +351,7 @@ async function moveFigure(figure) {
     if (!figure.storageFolder) {
       if (!folderSupported()) throw new Error('Geräteordner werden hier nicht unterstützt. Bitte aktuelles Chrome auf Android oder Desktop verwenden.');
       target = settings.activeFolder ?? settings.folders[0]?.id;
-      if (!target) { await storageInfo(); $('infoDialog').showModal(); toast('Bitte zuerst unter Speicherort einen Geräteordner auswählen.'); return; }
+      if (!target) { await storageInfo(); showInfoDialog(); toast('Bitte zuerst unter Speicherort einen Geräteordner auswählen.'); return; }
     }
     const destination = target ? settings.folders.find(f => f.id === target)?.name : 'App-Speicher';
     if (!await confirmAction({ title: 'Figur übertragen?', message: `„${figure.title}“ nach „${destination}“ kopieren und prüfen? Die bisherige Kopie bleibt zunächst erhalten.`, ok: 'Kopieren und prüfen' })) return;
@@ -373,7 +373,13 @@ async function storageInfo() {
   try { await renderDeviceStorage(); } catch (e) { $('deviceStorageStatus').textContent = storageMessage(e); }
   $('offlineDetails').textContent = offlineReady ? 'Die App ist für Offline-Aufrufe bereit. Gespeicherte Videos funktionieren ohne Netz.' : 'Bitte die App einmal online laden und warten, bis „Offline bereit“ angezeigt wird.';
 }
-$('infoButton').onclick = () => { storageInfo(); $('infoDialog').showModal(); };
+function showInfoDialog() {
+  const dialog = $('infoDialog');
+  dialog.showModal();
+  $('infoTitle').focus({ preventScroll: true });
+  dialog.scrollTop = 0;
+}
+$('infoButton').onclick = () => { storageInfo(); showInfoDialog(); };
 $('closeInfo').onclick = () => $('infoDialog').close();
 $('infoDialog').addEventListener('cancel', event => { if (deviceBusy) event.preventDefault(); });
 $('persistStorage').onclick = async () => {
