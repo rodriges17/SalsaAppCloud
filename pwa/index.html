@@ -81,7 +81,42 @@
   <dialog id="importProgressDialog" class="small-dialog"><h2>Figur importieren</h2><p role="status">ZIP und Videos werden geprüft …</p><button id="cancelImport" class="secondary">Abbrechen</button></dialog>
   <dialog id="confirmDialog" class="small-dialog"><h2 id="confirmTitle"></h2><p id="confirmMessage"></p><div class="dialog-actions"><button id="confirmCancel" class="secondary">Abbrechen</button><button id="confirmOK" class="primary">Bestätigen</button></div></dialog>
   <dialog id="tagsDialog" class="small-dialog"><h2>Tags</h2><div id="tagOptions" class="tag-options"></div><button id="closeTags" class="secondary">Schließen</button></dialog>
-  <dialog id="infoDialog" class="small-dialog info-dialog"><h2>Dein Salsa Trainer Cloud</h2><p id="appVersion" class="small muted"></p><p>Deine lokalen Videos bleiben auf diesem Gerät. Nur wenn du eine Figur ausdrücklich in einer Cloud-Bibliothek veröffentlichst, werden die ausgewählten Videos und Angaben hochgeladen.</p><h3>Auf dem iPhone installieren</h3><p>In Safari öffnen → Teilen → <strong>Zum Home-Bildschirm</strong> → als Web-App öffnen. Danach zuerst die App über ihr neues Symbol starten und dort die Videos importieren.</p><h3>Offline lernen</h3><p id="offlineDetails">Die App wird nach dem ersten Online-Aufruf für die Offline-Nutzung vorbereitet.</p><h3>Speicherort</h3><p id="deviceStorageActive"></p><p>Geräteordner enthalten Videos, Figurenangaben und Lernstände. Sie werden direkt verwendet. Vorhandene Figuren kannst du über ihr Optionen-Menü kopieren und nach Prüfung übertragen.</p><div id="deviceStorageControls" class="cloud-card"></div><p id="deviceStorageStatus" role="status"></p><h3>App-Speicher</h3><p id="storageDetails"></p><p>Beim Löschen der Website-Daten gehen Kopien im App-Speicher verloren. Dateien im Geräteordner bleiben erhalten; wähle den Ordner anschließend erneut aus, um die Bibliothek wieder einzulesen. Bei Speichermangel kann der Browser nicht dauerhaft geschützte Daten entfernen. Deine Originalvideos bleiben erhalten.</p><button id="persistStorage" class="secondary">Dauerhaften Speicher anfragen</button><p id="persistenceResult" role="status"></p><p class="small muted">Videos über „Videos hinzufügen“ importieren. Die PWA kann auf dem iPhone nicht als Ziel im Teilen-Menü registriert werden. Der Formatknopf dreht die Player-Ansicht; die Systemsperre für die Geräteausrichtung kann Safari nicht überall steuern.</p><button id="closeInfo" class="primary">Schließen</button></dialog>
+  <dialog id="infoDialog" class="small-dialog info-dialog">
+    <h2>Dein Salsa Trainer Cloud</h2>
+    <p id="appVersion" class="small muted"></p>
+    <p>Verwalte deine Salsa-Figuren, lerne offline und teile ausgewählte Inhalte über Cloud-Bibliotheken. Deine Videos werden nur hochgeladen, wenn du dies ausdrücklich auswählst.</p>
+    <h3>Android: Chrome empfohlen</h3>
+    <p>Für den möglichst vollständigen Funktionsumfang empfehlen wir eine aktuelle Version von Google Chrome. Damit kannst du auch einen Geräteordner als Speicherort auswählen und Videos direkt daraus abspielen. Den Ordnerzugriff musst du ausdrücklich erlauben.</p>
+    <p>Andere Browser können Funktionen einschränken. Nicht unterstützte Speicheroptionen werden nicht angeboten. In Brave muss der Ordnerzugriff gegebenenfalls zuerst in den Browser-Einstellungen freigeschaltet werden.</p>
+    <p>Zum Installieren öffnest du die App in Chrome und wählst im Browsermenü „App installieren“ beziehungsweise „Zum Startbildschirm hinzufügen“. Starte sie anschließend über das neue App-Symbol.</p>
+    <h3>iPhone und iPad: Safari empfohlen</h3>
+    <p>Öffne die App in Safari und wähle „Teilen → Zum Home-Bildschirm“. Starte sie anschließend über das neue App-Symbol und importiere dort deine Videos.</p>
+    <p>Offline-Lernen, Cloud-Bibliotheken und ZIP-Import/-Export sind verfügbar. Ein frei wählbarer Geräteordner wird derzeit nicht unterstützt. Chrome auf dem iPhone bietet diesen zusätzlichen Ordnerzugriff ebenfalls nicht.</p>
+    <p>Deine Figuren und Videos liegen deshalb im internen Browser-/App-Speicher und nicht in einem sichtbaren Geräteordner.</p>
+    <h3>Offline lernen</h3>
+    <p>Lade die App zunächst einmal vollständig mit Internetverbindung. Danach kannst du lokal gespeicherte Figuren und Videos auch ohne Internet verwenden. Für Inhalte im Geräteordner muss der Ordnerzugriff weiterhin erlaubt sein.</p>
+    <p>Das Öffnen von Cloud-Bibliotheken sowie das Hoch- und Herunterladen von Videos benötigen eine Internetverbindung.</p>
+    <p id="offlineDetails" role="status">Die App wird nach dem ersten Online-Aufruf für die Offline-Nutzung vorbereitet.</p>
+    <h3>Speicherort wählen</h3>
+    <p>Standardmäßig werden neue Figuren im internen Browser-/App-Speicher gespeichert.</p>
+    <p>Auf unterstützten Geräten kannst du stattdessen einen Geräteordner auswählen. Die App speichert dort Videos, Figurenangaben und Lernstände im Unterordner „SalsaTrainer“ und spielt die Videos direkt daraus ab.</p>
+    <p>Die Speicherwahl gilt für neue Importe und aus der Cloud übernommene Figuren. Bestehende Figuren bleiben an ihrem bisherigen Speicherort. Über das Optionen-Menü einer Figur kannst du sie übertragen. Die bisherige Kopie wird erst nach erfolgreicher Prüfung und deiner zusätzlichen Bestätigung entfernt.</p>
+    <p id="deviceStorageActive"></p>
+    <div id="deviceStorageControls" class="cloud-card"></div>
+    <p id="deviceStorageStatus" role="status"></p>
+    <h3>App-Speicher</h3>
+    <p id="storageDetails"></p>
+    <button id="persistStorage" class="secondary">Dauerhaften Speicher anfragen</button>
+    <p id="persistenceResult" role="status"></p>
+    <h3>Daten erhalten und sichern</h3>
+    <p>Wenn du den Browser-/App-Speicher beziehungsweise die Website-Daten löschst, werden die dort gespeicherten Figuren, Videokopien und Lernstände gelöscht. Auch gewährter „dauerhafter Speicher“ schützt nicht vor diesem bewussten Löschen.</p>
+    <p>Dateien in einem ausgewählten Geräteordner bleiben erhalten. Wähle den Ordner anschließend erneut aus, um die Bibliothek mit ihren Figuren und Lernständen wieder einzulesen. Wird die Ordnerberechtigung entzogen, kannst du sie über „Ordner erneut verbinden“ wieder anfragen.</p>
+    <p>Sichere deine Figuren regelmäßig per ZIP-Export. Dieser enthält die Videos, Figurennamen, Beschreibungen und Tags, aber keine persönlichen Lernstände.</p>
+    <p>Wenn du einen Geräteordner als Speicherort eingerichtet hast, kannst du zusätzlich den dort angelegten Unterordner „SalsaTrainer“ vollständig kopieren. Diese Sicherung enthält auch deine Lernstände.</p>
+    <p>Verwendest du den internen Browser-/App-Speicher, gibt es keinen sichtbaren Bibliotheksordner. Nutze in diesem Fall den ZIP-Export zur Sicherung deiner Figuren.</p>
+    <p>Deine ursprünglichen Importdateien außerhalb der App und bereits hochgeladene Cloud-Inhalte bleiben beim Löschen des Browser-/App-Speichers erhalten. Lokale Änderungen werden nicht automatisch mit der Cloud synchronisiert.</p>
+    <button id="closeInfo" class="primary">Schließen</button>
+  </dialog>
   <div id="toast" class="toast" role="status" hidden></div>
   <noscript>Für die lokale Videobibliothek muss JavaScript aktiviert sein.</noscript>
 </body></html>
