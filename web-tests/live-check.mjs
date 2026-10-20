@@ -13,6 +13,7 @@ for (const [name, engine, options] of [
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(url);
     await page.waitForFunction(() => document.documentElement.dataset.appVersion === '2026-10-20-add-sheet-v1');
+    await page.getByRole('button', { name: 'Figur hinzufügen', exact: true }).tap();
     await page.getByRole('button', { name: 'Figur importieren', exact: true }).tap();
     assert.equal(await page.locator('#importChoiceDialog').isVisible(), true);
     const chooser = page.waitForEvent('filechooser');
@@ -20,6 +21,7 @@ for (const [name, engine, options] of [
     await (await chooser).setFiles({ name: 'invalid.zip', mimeType: 'application/zip', buffer: Buffer.from('not a package') });
     await page.getByRole('heading', { name: 'Import nicht möglich', exact: true }).waitFor();
     await page.locator('#confirmOK').tap();
+    await page.getByRole('button', { name: 'Figur hinzufügen', exact: true }).tap();
     await page.getByRole('button', { name: 'Figur importieren', exact: true }).tap();
     await page.screenshot({ path: `test-results/live/${name}-import.png` });
     await page.locator('#closeImportChoice').tap();
