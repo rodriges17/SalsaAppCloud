@@ -60,3 +60,24 @@ test('folder restore: a failed batch or cancellation keeps the complete previous
 test('folder restore: one batch preserves original dates and learning states and rejects stale plans',async()=>{
  const {restoreFolderBatch}=await import('../pwa/folder-storage.js');const {folder,mirror}=setup();const a={id:crypto.randomUUID(),figure:{...figure(),source:'backup-source',createdAt:1700000000000,poster:null},records:[draft()]};await restoreFolderBatch(folder,[a],[],mirror);const f=(await readLibrary(folder.handle)).figures[0];assert.equal(f.createdAt,1700000000000);assert.equal(f.status,'Am Üben');assert.equal(f.backupOrigin,'backup-source');await assert.rejects(restoreFolderBatch(folder,[{...a,id:crypto.randomUUID()}],[],mirror),/inzwischen/);assert.equal((await readLibrary(folder.handle)).figures.length,1);
 });
+
+test('folder staging: save and restore both reject a corrupt copy and retain old catalog and media',async()=>{
+ const {restoreFolderBatch}=await import('../pwa/folder-storage.js');
+ for(const operation of ['save','restore']){
+  const {folder,mirror}=setup(),saved=await writeFolderFigure(folder,figure(),[draft()],null,mirror),before=JSON.stringify(await readLibrary(folder.handle)),media=await folder.handle.getDirectoryHandle('media'),oldFile=folder.library.figures[0].videos[0].file;
+  const open=media.getFileHandle.bind(media);
+  media.getFileHandle=async(name,options)=>{const handle=await open(name,options);if(name===oldFile)return handle;return {...handle,async getFile(){const stored=await handle.getFile();const bytes=new Uint8Array(await stored.arrayBuffer());if(bytes.length)bytes[0]^=1;return new Blob([bytes]);}};};
+  if(operation==='save')await assert.rejects(writeFolderFigure(folder,{...saved,title:'Changed'},[draft()],saved.revision,mirror),/unvollständig/);
+  else await assert.rejects(restoreFolderBatch(folder,[{id:saved.id,figure:{...figure(),source:'restored',createdAt:1},records:[draft()]}],[saved],mirror),/unvollständig/);
+  assert.equal(JSON.stringify(await readLibrary(folder.handle)),before);assert.equal(media.files.size,1);assert.equal(await media.files.get(oldFile).text(),'video bytes');
+ }
+});
+test('folder staging: ambiguous restore commit keeps both newly referenced media and old pending cleanup bytes',async()=>{
+ const {restoreFolderBatch}=await import('../pwa/folder-storage.js'),{folder,mirror}=setup();
+ const saved=await writeFolderFigure(folder,figure(),[draft()],null,mirror),oldFile=folder.library.figures[0].videos[0].file;
+ folder.handle.failManifest='after';
+ await assert.rejects(restoreFolderBatch(folder,[{id:saved.id,figure:{...figure(),source:'restored',createdAt:1},records:[{...draft(),blob:new Blob(['replacement bytes'],{type:'video/mp4'})}]}],[saved],mirror),/ambiguous/);
+ const disk=await readLibrary(folder.handle),media=await folder.handle.getDirectoryHandle('media');
+ assert.equal(await(await readFolderVideo(folder,disk.figures[0],disk.figures[0].videos[0])).blob.text(),'replacement bytes');
+ assert.ok(disk.garbage.includes(oldFile));assert.equal(await media.files.get(oldFile).text(),'video bytes');assert.equal(media.files.size,2);
+});

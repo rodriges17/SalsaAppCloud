@@ -76,3 +76,29 @@ test('restore dialog keeps conflict choices after cancelling confirmation and ap
  await expect(page.locator('#confirmMessage')).toContainText('1 Figuren übernehmen');await page.locator('#confirmOK').tap();await expect(page.locator('#backupStatus')).toHaveText('Wiederherstellung abgeschlossen.');
  expect(await page.evaluate(async()=>(await(await import('/pwa/storage.js')).listFigures()).length)).toBe(1);
 });
+
+test('app staging rejects corrupt copies during save and restore without changing old media or metadata',async({page})=>{
+ await start(page);await seed(page);
+ const result=await page.evaluate(async()=>{
+  const s=await import('/pwa/storage.js'),f=await import('/pwa/backup-format.js');
+  const inventory=await s.inspectLocalBackup(),out=await s.exportLocalBackup(inventory.snapshot),archive=await f.readBackup(out.parts.map(p=>p.blob));
+  const originals=await s.listFigures(),old=originals[0],records=await s.figureVideos(old),cache=await caches.open(s.MEDIA_CACHE),keys=(await cache.keys()).map(r=>r.url).sort();
+  const snapshot=JSON.stringify(originals.map(f=>[f.id,f.revision,f.title]));
+  const match=Cache.prototype.match;Cache.prototype.match=async function(request,...args){
+   const response=await match.call(this,request,...args),url=typeof request==='string'?request:request.url;
+   if(response&&url.includes('__private_media__')&&!keys.includes(url)){
+    const bytes=new Uint8Array(await response.arrayBuffer());bytes[0]^=1;return new Response(bytes,{headers:{'Content-Type':'video/mp4'}});
+   }
+   return response;
+  };
+  let saveError='',restoreError='';
+  try{
+   try{await s.saveFigure({...old,title:'Must not commit'},records.map(v=>({...v,id:crypto.randomUUID(),existing:false,confirmed:true})),old.revision);}catch(e){saveError=e.message;}
+   const plan=await s.planBackupRestore(archive);try{await s.restoreBackupPlan(plan,plan.rows.map(()=>'copy'));}catch(e){restoreError=e.message;}
+  }finally{Cache.prototype.match=match;}
+  const after=await s.listFigures(),verified=await s.figureVideos(after.find(f=>f.id===old.id));
+  const db=await s.database(),jobs=await new Promise(resolve=>{const r=db.transaction('imports').objectStore('imports').getAll();r.onsuccess=()=>resolve(r.result.length);});
+  return {saveError,restoreError,snapshot,after:JSON.stringify(after.map(f=>[f.id,f.revision,f.title])),keys,afterKeys:(await cache.keys()).map(r=>r.url).sort(),sameBytes:await(await import('/pwa/package.js')).checksum(records[0].blob)===await(await import('/pwa/package.js')).checksum(verified[0].blob),jobs};
+ });
+ expect(result.saveError).toContain('Videokopie');expect(result.restoreError).toContain('Videokopie');expect(result.after).toBe(result.snapshot);expect(result.afterKeys).toEqual(result.keys);expect(result.sameBytes).toBe(true);expect(result.jobs).toBe(0);
+});

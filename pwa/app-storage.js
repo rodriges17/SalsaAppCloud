@@ -1,4 +1,5 @@
 import { validateDraft } from './logic.js';
+import { checksum } from './package.js';
 let dbPromise;
 const scope = new URL('./', import.meta.url).pathname;
 export const DB_NAME = `salsa-trainer:${scope}:v1`;
@@ -27,6 +28,42 @@ export async function getVideo(id) {
 }
 export async function figureVideos(figure) { const records = await Promise.all(figure.videoIds.map(getVideo)); if (records.some(v => !v || v.figureId !== figure.id)) throw new Error('Eine lokale Videodatei fehlt. Bitte die Figur bearbeiten.'); return records; }
 
+// Cache-specific staging: journal fresh keys before writing, verify every new
+// copy, and retain existing keys until the metadata transaction has completed.
+async function cacheStaging(cache, signal) {
+  const db = await database(), job = { id: crypto.randomUUID(), updatedAt: Date.now(), keys: [] };
+  let committed = false;
+  await writeImport(job);
+  return {
+    job,
+    async video(draft, { id = draft.id, figureId, existing = false, name = draft.name, contentType = draft.blob.type || 'application/octet-stream' } = {}) {
+      signal?.throwIfAborted();
+      const cacheKey = existing ? draft.cacheKey : prefix + crypto.randomUUID();
+      if (!cacheKey?.startsWith(prefix)) throw new Error('Ungültiger lokaler Videopfad.');
+      if (existing) {
+        if (!await cache.match(cacheKey)) throw new Error('Eine gespeicherte Videodatei fehlt.');
+      } else {
+        job.keys.push(cacheKey); await writeImport(job);
+        signal?.throwIfAborted();
+        await cache.put(cacheKey, new Response(draft.blob, { headers: { 'Content-Type': contentType } }));
+        const stored = await cache.match(cacheKey), storedBlob = stored ? await stored.blob() : null;
+        if (!storedBlob || storedBlob.size !== draft.blob.size || await checksum(storedBlob, signal) !== await checksum(draft.blob, signal)) throw new Error('Die gespeicherte Videokopie konnte nicht geprüft werden.');
+      }
+      signal?.throwIfAborted();
+      return { id, figureId, name, cacheKey, duration: draft.duration, width: draft.width, height: draft.height, posterBytes: draft.poster ? await draft.poster.arrayBuffer() : null, existing };
+    },
+    async commit(obsolete) {
+      committed = true;
+      await Promise.all(obsolete.map(key => cache.delete(key).catch(() => {})));
+    },
+    async discard() {
+      if (committed) return;
+      await Promise.all(job.keys.map(key => cache.delete(key).catch(() => {})));
+      await new Promise(resolve => { const tx = db.transaction('imports', 'readwrite'); tx.objectStore('imports').delete(job.id); tx.oncomplete = tx.onabort = resolve; tx.onerror = () => {}; });
+    }
+  };
+}
+
 // Only metadata and small poster buffers enter IndexedDB. Cache Storage streams video
 // bytes without the WebKit IDB Blob limitation or a whole-file ArrayBuffer in JS memory.
 // Fresh keys are staged before an atomic metadata/link commit. Failure removes all new
@@ -35,21 +72,9 @@ export async function saveFigure(figure, drafts, expectedRevision = null) {
   validateDraft(figure.title, drafts);
   if (!globalThis.caches) throw new Error('Der lokale Medienspeicher ist nicht verfügbar. Bitte die App über HTTPS in Safari oder Chrome öffnen.');
   const db = await database(), cache = await caches.open(MEDIA_CACHE);
-  const job = { id: crypto.randomUUID(), updatedAt: Date.now(), keys: [] };
-  const prepared = [];
-  for (const draft of drafts) {
-    const cacheKey = draft.existing ? draft.cacheKey : prefix + crypto.randomUUID();
-    if (!cacheKey?.startsWith(prefix)) throw new Error('Ungültiger lokaler Videopfad.');
-    if (!draft.existing) job.keys.push(cacheKey);
-    prepared.push({ id: draft.id, figureId: figure.id, name: draft.name.trim(), cacheKey, duration: draft.duration, width: draft.width, height: draft.height, posterBytes: draft.poster ? await draft.poster.arrayBuffer() : null, existing: draft.existing });
-  }
-  await writeImport(job);
-  let committed = false;
+  const stage = await cacheStaging(cache), job = stage.job, prepared = [];
   try {
-    for (let i = 0; i < prepared.length; i++) {
-      if (!prepared[i].existing) await cache.put(prepared[i].cacheKey, new Response(drafts[i].blob, { headers: { 'Content-Type': drafts[i].blob.type || 'application/octet-stream' } }));
-      else if (!(await cache.match(prepared[i].cacheKey))) throw new Error('Eine gespeicherte Videodatei fehlt.');
-    }
+    for (const draft of drafts) prepared.push(await stage.video(draft, { figureId: figure.id, existing: !!draft.existing, name: draft.name.trim() }));
     const result = await new Promise((resolve, reject) => {
       const tx = db.transaction(['figures', 'videos', 'imports'], 'readwrite');
       const figures = tx.objectStore('figures'), videos = tx.objectStore('videos'), imports = tx.objectStore('imports');
@@ -84,16 +109,11 @@ export async function saveFigure(figure, drafts, expectedRevision = null) {
         };
       };
     });
-    committed = true;
-    await Promise.all(result.obsolete.map(key => cache.delete(key).catch(() => {})));
+    await stage.commit(result.obsolete);
     return hydratePoster(result.saved);
-  } finally {
-    if (!committed) {
-      await Promise.all(job.keys.map(key => cache.delete(key).catch(() => {})));
-      await new Promise(resolve => { const tx = db.transaction('imports', 'readwrite'); tx.objectStore('imports').delete(job.id); tx.oncomplete = tx.onabort = resolve; tx.onerror = () => {}; });
-    }
-  }
+  } finally { await stage.discard(); }
 }
+
 export async function deleteFigure(figure) {
   const db = await database();
   const keys = await new Promise((resolve, reject) => {
@@ -121,25 +141,19 @@ export function storageMessage(error) { return error?.name === 'QuotaExceededErr
 
 // One metadata transaction makes a full restore visible only after every media copy is verified.
 export async function restoreAppBatch(items, expected, { signal, progress = () => {} } = {}) {
-  const { checksum } = await import('./package.js');
-  const db = await database(), cache = await caches.open(MEDIA_CACHE), job = { id: crypto.randomUUID(), updatedAt: Date.now(), keys: [] }, prepared = [];
-  let committed = false;
+  const db = await database(), cache = await caches.open(MEDIA_CACHE), stage = await cacheStaging(cache, signal), job = stage.job, prepared = [];
   try {
     for (const item of items) {
       signal?.throwIfAborted(); const videoRecords = [];
       for (const draft of item.records) {
-        signal?.throwIfAborted(); const cacheKey = prefix + crypto.randomUUID(); job.keys.push(cacheKey); await writeImport(job);
-        await cache.put(cacheKey, new Response(draft.blob, { headers: { 'Content-Type': draft.blob.type } }));
-        const stored = await cache.match(cacheKey);
-        if (!stored || await checksum(await stored.blob(), signal) !== await checksum(draft.blob, signal)) throw new Error('Die wiederhergestellte Videokopie konnte nicht geprüft werden.');
-        videoRecords.push({ id: crypto.randomUUID(), figureId: item.id, name: draft.name, cacheKey, duration: draft.duration, width: draft.width, height: draft.height, posterBytes: draft.poster ? await draft.poster.arrayBuffer() : null });
+        const { existing, ...record } = await stage.video(draft, { id: crypto.randomUUID(), figureId: item.id, contentType: draft.blob.type });
+        videoRecords.push(record);
         progress({ phase: 'copy' });
       }
       const f = item.figure;
       prepared.push({ saved: { id: item.id, title: f.title, description: f.description, tags: f.tags, status: f.status, createdAt: f.createdAt, importFingerprint: f.importFingerprint ?? null, backupOrigin: f.source, revision: crypto.randomUUID(), duration: videoRecords[0].duration, videoIds: videoRecords.map(v => v.id), posterBytes: f.poster ? await f.poster.arrayBuffer() : videoRecords[0].posterBytes }, videos: videoRecords });
     }
     signal?.throwIfAborted(); if (!prepared.length) return 0;
-    if (!job.keys.length) await writeImport(job);
     const obsolete = await new Promise((resolve, reject) => {
       const tx = db.transaction(['figures','videos','imports'],'readwrite'), figures = tx.objectStore('figures'), videos = tx.objectStore('videos'), imports = tx.objectStore('imports');
       let error; const oldKeys = [], abort = () => { error = new DOMException('Wiederherstellung abgebrochen.','AbortError'); try { tx.abort(); } catch {} };
@@ -157,11 +171,6 @@ export async function restoreAppBatch(items, expected, { signal, progress = () =
         imports.delete(job.id);
       };
     });
-    committed = true; await Promise.all(obsolete.map(key=>cache.delete(key).catch(()=>{}))); return prepared.length;
-  } finally {
-    if (!committed) {
-      await Promise.all(job.keys.map(key=>cache.delete(key).catch(()=>{})));
-      await new Promise(resolve=>{const tx=db.transaction('imports','readwrite');tx.objectStore('imports').delete(job.id);tx.oncomplete=tx.onabort=resolve;tx.onerror=()=>{};});
-    }
-  }
+    await stage.commit(obsolete); return prepared.length;
+  } finally { await stage.discard(); }
 }
