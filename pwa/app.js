@@ -1,8 +1,9 @@
-const APP_VERSION = '2026-10-20-cloud-v4';
+const APP_VERSION = '2026-10-20-folder-v1';
 import { initCloud, openCloud } from './cloud.js';
 import { exportFigure, importFigure, packageSize, packageFilename, MAX_PACKAGE_BYTES } from './package.js';
+import { checksum } from './package.js';
 import { STATUSES, cleanTags, timeLabel, filterFigures, ABLoop } from './logic.js';
-import { listFigures, figureVideos, saveFigure, deleteFigure, storageMessage, cleanupInterruptedImports } from './storage.js';
+import { listFigures, figureVideos, saveFigure, deleteFigure, storageMessage, cleanupInterruptedImports, folderSupported, storageSettings, chooseFolder, connectFolder, reconnectFolder, setStorageFolder, transferFigure } from './storage.js';
 
 const $ = id => document.getElementById(id);
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
@@ -52,15 +53,18 @@ function renderOverview() {
     else { thumb = el('span', 'card-thumb thumb-placeholder', '▷'); thumb.setAttribute('aria-hidden', 'true'); }
     const copy = el('span', 'card-copy'); copy.append(el('span', 'card-title', figure.title), el('span', 'card-status', figure.status));
     if (figure.tags.length) copy.append(el('span', 'card-tags', figure.tags.join(' · ')));
+    if (figure.storageFolder) copy.append(el('span', 'card-meta', figure.storageProblem ? `Geräteordner nicht verfügbar · erneut verbinden · ${figure.storageProblem}` : `Geräteordner · ${figure.folderName || 'SalsaTrainer'}`));
     copy.append(el('span', 'card-meta', `${timeLabel(figure.duration)} · ${figure.videoIds.length} Video${figure.videoIds.length === 1 ? '' : 's'}`)); main.append(thumb, copy);
     const options = button('⋮', event => { event.stopPropagation(); const wasOpen = options.getAttribute('aria-expanded') === 'true'; closeMenus(); if (!wasOpen) showMenu(); }, 'card-options');
     options.setAttribute('aria-label', `Optionen für ${figure.title}`); options.setAttribute('aria-expanded', 'false');
     function showMenu() {
       options.setAttribute('aria-expanded', 'true'); const menu = el('div', 'card-menu');
       menu.append(button('In Cloud veröffentlichen', () => { closeMenus(); openCloud(figure); }), button('Figur teilen', () => { closeMenus(); openShare(figure); }), button('Bearbeiten', () => { closeMenus(); openEditor(figure); }), button('Löschen', async () => {
-        closeMenus(); const accepted = await confirmAction({ title: `„${figure.title}“ löschen?`, message: 'Die Figur und alle zugehörigen lokalen Videokopien werden entfernt. Die Originaldateien bleiben erhalten.', ok: 'Löschen' });
+        closeMenus(); const accepted = await confirmAction({ title: `„${figure.title}“ löschen?`, message: 'Die Figur und alle zugehörigen verwalteten Videos werden gelöscht, auch Dateien im Geräteordner. Deine ursprünglichen Importdateien bleiben erhalten.', ok: 'Löschen' });
         if (accepted) { try { await deleteFigure(figure); changed(); await refresh(); toast('Figur gelöscht.'); } catch (error) { toast(storageMessage(error)); await refresh(); } }
-      }, 'danger')); card.append(menu);
+      }, 'danger'));
+      if (figure.storageFolder || folderSupported()) menu.append(button(figure.storageFolder ? 'In App-Speicher übertragen' : 'In Geräteordner übertragen', () => { closeMenus(); moveFigure(figure); }));
+      card.append(menu);
     }
     main.addEventListener('contextmenu', event => { event.preventDefault(); closeMenus(); showMenu(); });
     card.append(main, options); $('figureList').append(card);
@@ -93,8 +97,8 @@ function isDirty() { return editor && (JSON.stringify(formValue()) !== editor.in
 async function openEditor(figure = null, imported = null) {
   if (opening || editor || learning) return; opening = true;
   try {
-    const records = figure ? await figureVideos(figure) : [];
-    editor = { id: figure?.id ?? crypto.randomUUID(), revision: figure?.revision ?? null, drafts: records.map(r => ({ ...r, existing: true, confirmed: true })), busy: false, allowClose: false, replacing: null, reviewAll: false };
+    const records = figure ? await figureVideos(figure, true) : [];
+    editor = { id: figure?.id ?? crypto.randomUUID(), revision: figure?.revision ?? null, storageFolder: figure?.storageFolder, drafts: records.map(r => ({ ...r, existing: !r.missing, confirmed: !r.missing })), busy: false, allowClose: false, replacing: null, reviewAll: false };
     $('figureTitle').value = figure?.title ?? ''; $('figureDescription').value = figure?.description ?? '';
     $('figureStatus').value = figure?.status ?? 'Neu'; $('figureTags').value = figure?.tags.join(', ') ?? '';
     editor.initialForm = JSON.stringify(formValue()); editor.initialDrafts = draftSignature(editor.drafts);
@@ -135,24 +139,25 @@ function renderDrafts() {
     const card = el('div', 'draft-card'); card.dataset.videoId = draft.id;
     const input = el('input'); input.value = draft.name; input.placeholder = 'Videoname (optional)'; input.maxLength = 160; input.setAttribute('aria-label', `Name von Video ${index + 1}`);
     input.addEventListener('input', () => { draft.name = input.value; });
-    const note = el('p', `draft-status${draft.confirmed ? ' confirmed' : ''}`, draft.confirmed ? 'Bestätigt' : 'Vorschau erforderlich');
+    const note = el('p', `draft-status${draft.confirmed ? ' confirmed' : ''}`, draft.missing ? 'Datei fehlt oder wurde verändert – bitte ersetzen' : draft.confirmed ? 'Bestätigt' : 'Vorschau erforderlich');
     const actions = el('div', 'draft-actions');
-    actions.append(button('Vorschau', () => { editor.reviewAll = false; openPreview(draft); }), button('Ersetzen', () => chooseFiles(draft.id)));
+    const previewButton = button('Vorschau', () => { editor.reviewAll = false; openPreview(draft); }); previewButton.disabled = !!draft.missing;
+    actions.append(previewButton, button('Ersetzen', () => chooseFiles(draft.id)));
     const up = button('↑', () => { [editor.drafts[index - 1], editor.drafts[index]] = [editor.drafts[index], editor.drafts[index - 1]]; renderDrafts(); }); up.disabled = index === 0; up.setAttribute('aria-label', `Video ${index + 1} nach oben`);
     const down = button('↓', () => { [editor.drafts[index + 1], editor.drafts[index]] = [editor.drafts[index], editor.drafts[index + 1]]; renderDrafts(); }); down.disabled = index === editor.drafts.length - 1; down.setAttribute('aria-label', `Video ${index + 1} nach unten`);
     const remove = button('Entfernen', () => { editor.drafts.splice(index, 1); renderDrafts(); }, 'danger'); remove.disabled = editor.drafts.length <= 1;
     actions.append(up, down, remove); card.append(input, note, actions); $('draftVideos').append(card);
   });
-  $('reviewAll').hidden = !editor.drafts.some(d => !d.confirmed); updateSave();
+  $('reviewAll').hidden = !editor.drafts.some(d => !d.confirmed && !d.missing); updateSave();
 }
-$('reviewAll').onclick = () => { editor.reviewAll = true; const draft = editor.drafts.find(d => !d.confirmed); if (draft) openPreview(draft); };
+$('reviewAll').onclick = () => { editor.reviewAll = true; const draft = editor.drafts.find(d => !d.confirmed && !d.missing); if (draft) openPreview(draft); };
 $('editorBack').onclick = () => history.back();
 $('editor').addEventListener('cancel', event => { event.preventDefault(); history.back(); });
 $('editorForm').addEventListener('submit', async event => {
   event.preventDefault(); if (!editor || editor.busy || $('saveFigure').disabled) return;
   const active = editor; setError('editorError', null); setBusy(true);
   try {
-    await saveFigure({ id: active.id, ...formValue(), importFingerprint: active.importFingerprint }, active.drafts, active.revision);
+    await saveFigure({ id: active.id, ...formValue(), importFingerprint: active.importFingerprint, storageFolder: active.storageFolder }, active.drafts, active.revision);
     changed(); await refresh();
     if (editor === active) { active.allowClose = true; setBusy(false); history.back(); toast('Figur lokal gespeichert.'); }
   } catch (error) { if (editor === active) { setBusy(false); setError('editorError', storageMessage(error)); } }
@@ -200,7 +205,7 @@ window.addEventListener('popstate', async event => {
     const accepted = preview?.accepted; cleanupPreview(); route = target;
     if (!accepted && editor) editor.reviewAll = false;
     if (target === 'editor') {
-      if (reviewNext && accepted && editor) { reviewNext = false; const next = editor.drafts.find(d => !d.confirmed); if (next) setTimeout(() => { if (editor && route === 'editor') openPreview(next); }, 0); else editor.reviewAll = false; }
+      if (reviewNext && accepted && editor) { reviewNext = false; const next = editor.drafts.find(d => !d.confirmed && !d.missing); if (next) setTimeout(() => { if (editor && route === 'editor') openPreview(next); }, 0); else editor.reviewAll = false; }
       return;
     }
   }
@@ -294,16 +299,70 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { pau
 window.addEventListener('pagehide', () => { pause(); previewVideo.pause(); });
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && learning && !document.fullscreenElement) { event.preventDefault(); history.back(); } });
 
+
+let deviceBusy = false;
+async function deviceWork(work) {
+  if (deviceBusy) return; deviceBusy = true; $('closeInfo').disabled = true;
+  $('deviceStorageStatus').textContent = 'Bitte warten …';
+  $('deviceStorageControls').inert = true;
+  try { await work(); changed(); await refresh(); await renderDeviceStorage(); $('deviceStorageStatus').textContent = 'Gespeichert.'; }
+  catch (e) { $('deviceStorageStatus').textContent = storageMessage(e); }
+  finally { deviceBusy = false; $('closeInfo').disabled = false; $('deviceStorageControls').inert = false; }
+}
+async function renderDeviceStorage() {
+  const settings = await storageSettings(), controls = $('deviceStorageControls'); controls.replaceChildren();
+  const selected = settings.folders.find(f => f.id === settings.activeFolder);
+  $('deviceStorageActive').textContent = `Neue Figuren: ${selected ? 'Geräteordner „' + selected.name + '“' : 'App-Speicher'}. Vorhandene Figuren bleiben an ihrem bisherigen Speicherort.`;
+  controls.append(button('App-Speicher verwenden', () => deviceWork(() => setStorageFolder(null)), 'secondary'));
+  if (settings.supported) {
+    controls.append(button('Geräteordner auswählen', async () => {
+      // Open the OS picker directly in the click handler, before any other async work.
+      let candidate; try { candidate = await chooseFolder(); } catch (e) { if (e.name !== 'AbortError') $('deviceStorageStatus').textContent = storageMessage(e); return; }
+      const count = candidate.library.figures.length;
+      if (!await confirmAction({ title: count ? 'Bibliotheksordner öffnen?' : 'Geräteordner verwenden?', message: `„${candidate.name}“ enthält ${count} Figuren. Videos, Angaben und Lernstände werden eingelesen. Neue Figuren werden hier gespeichert. Vorhandene App-Figuren werden nicht verschoben.`, ok: count ? 'Bibliothek öffnen' : 'Ordner verwenden' })) return;
+      await deviceWork(() => connectFolder(candidate));
+    }, 'secondary'));
+  } else controls.append(el('p', 'muted', 'Geräteordner werden in diesem Browser nicht unterstützt. Verwende aktuelles Chrome auf Android oder Desktop. Auf iPhone/Safari bleibt der App-Speicher mit ZIP-Sicherung verfügbar.'));
+  for (const folder of settings.folders) {
+    const row = el('div', 'cloud-card'); row.append(el('strong', '', `${folder.name} · ${folder.library.figures.length} Figuren${folder.id === settings.activeFolder ? ' · aktiv' : ''}`));
+    if (settings.supported) row.append(button('Ordner erneut verbinden', () => deviceWork(() => reconnectFolder(folder.id)), 'secondary'), button('Für neue Figuren verwenden', () => deviceWork(async () => { await reconnectFolder(folder.id); await setStorageFolder(folder.id); }), 'secondary'));
+    if (folder.library.garbage.length) row.append(el('p', 'error', 'Dateibereinigung ausstehend. Bitte Ordner erneut verbinden.'));
+    controls.append(row);
+  }
+}
+async function moveFigure(figure) {
+  if (opening || editor || learning) return; opening = true;
+  try {
+    const settings = await storageSettings();
+    let target = null;
+    if (!figure.storageFolder) {
+      if (!folderSupported()) throw new Error('Geräteordner werden hier nicht unterstützt. Bitte aktuelles Chrome auf Android oder Desktop verwenden.');
+      target = settings.activeFolder ?? settings.folders[0]?.id;
+      if (!target) { await storageInfo(); $('infoDialog').showModal(); toast('Bitte zuerst unter Speicherort einen Geräteordner auswählen.'); return; }
+    }
+    const destination = target ? settings.folders.find(f => f.id === target)?.name : 'App-Speicher';
+    if (!await confirmAction({ title: 'Figur übertragen?', message: `„${figure.title}“ nach „${destination}“ kopieren und prüfen? Die bisherige Kopie bleibt zunächst erhalten.`, ok: 'Kopieren und prüfen' })) return;
+    toast('Figur wird kopiert und geprüft …');
+    await transferFigure(figure, target);
+    await refresh(); changed();
+    if (await confirmAction({ title: 'Kopie erfolgreich geprüft', message: 'Die neue Kopie ist gespeichert. Sollen die bisherigen verwalteten Videos und Angaben dieser Figur am alten Speicherort jetzt entfernt werden? Ursprüngliche Importdateien bleiben erhalten.', ok: 'Bisherige Kopie entfernen', cancel: 'Beide behalten' })) await deleteFigure(figure);
+    changed(); await refresh(); toast('Übertragung abgeschlossen.');
+  } catch (e) { toast(storageMessage(e)); await refresh(); }
+  finally { opening = false; }
+}
+
 let offlineReady = false;
 async function storageInfo() {
   try {
     const estimate = await navigator.storage?.estimate?.(); const persistent = await navigator.storage?.persisted?.();
     $('storageDetails').textContent = `${estimate ? `Ungefähr ${Math.round((estimate.usage ?? 0) / 1048576)} MB lokal belegt. ` : ''}${persistent ? 'Der Browser hat dauerhaften Speicher gewährt.' : 'Dauerhafter Speicher ist bisher nicht bestätigt.'}`;
   } catch { $('storageDetails').textContent = 'Der Browser kann keine Speicherinformationen anzeigen.'; }
+  try { await renderDeviceStorage(); } catch (e) { $('deviceStorageStatus').textContent = storageMessage(e); }
   $('offlineDetails').textContent = offlineReady ? 'Die App ist für Offline-Aufrufe bereit. Gespeicherte Videos funktionieren ohne Netz.' : 'Bitte die App einmal online laden und warten, bis „Offline bereit“ angezeigt wird.';
 }
 $('infoButton').onclick = () => { storageInfo(); $('infoDialog').showModal(); };
 $('closeInfo').onclick = () => $('infoDialog').close();
+$('infoDialog').addEventListener('cancel', event => { if (deviceBusy) event.preventDefault(); });
 $('persistStorage').onclick = async () => {
   try { const granted = await navigator.storage?.persist?.(); $('persistenceResult').textContent = granted ? 'Dauerhafter Speicher wurde gewährt.' : 'Der Browser hat die Anfrage nicht bestätigt. Die App bleibt nutzbar. Auf dem Home-Bildschirm installierte Apps werden bevorzugt berücksichtigt.'; await storageInfo(); }
   catch { $('persistenceResult').textContent = 'Dieser Browser unterstützt die Speicheranfrage nicht.'; }
