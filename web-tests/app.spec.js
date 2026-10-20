@@ -9,7 +9,7 @@ async function start(page) {
   await page.evaluate(async () => { await navigator.serviceWorker.ready; if (!navigator.serviceWorker.controller) await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true })); });
 }
 async function addFigure(page) {
-  await page.getByRole('button', { name: '＋ Figur hinzufügen' }).click();
+  await page.locator('#openAddFigure').tap(); await page.locator('#addFigure').click();
   await page.locator('#figureTitle').fill('Ocho'); await page.locator('#figureDescription').fill('Links drehen');
   await page.locator('#figureTags').fill('Drehung, Anfänger');
   await page.locator('#videoFiles').setInputFiles([clip, portrait]);
@@ -87,7 +87,7 @@ test('rename, reorder, preview replacement cancellation, discard and deletion', 
 });
 
 test('invalid preview cannot be saved and metadata conflicts roll back new blobs', async ({ page }) => {
-  await start(page); await page.locator('#addFigure').click(); await page.locator('#figureTitle').fill('Invalid');
+  await start(page); await page.locator('#openAddFigure').tap(); await page.locator('#addFigure').click(); await page.locator('#figureTitle').fill('Invalid');
   await page.locator('#videoFiles').setInputFiles({ name: 'broken.mp4', mimeType: 'video/mp4', buffer: Buffer.from('not a movie') });
   await page.locator('.draft-card').getByRole('button', { name: 'Vorschau', exact: true }).click();
   await expect(page.locator('#previewError')).toBeVisible(); await expect(page.locator('#acceptVideo')).toBeDisabled();
@@ -154,6 +154,7 @@ async function exportPackage(page, info, subset = false) {
   await page.locator('#closeShare').click(); return file;
 }
 async function choosePackage(page, file) {
+  await page.locator('#openAddFigure').tap();
   const [chooser] = await Promise.all([
     page.waitForEvent('filechooser'),
     page.getByRole('button', { name: 'Figur importieren', exact: true }).tap().then(async () => {
@@ -219,7 +220,7 @@ test('ZIP share uses a prepared file and keeps download available when native sh
 
 test('touch import works after cancel, keyboard editing and returning from the player', async ({ page }, info) => {
   await start(page);
-  await page.getByRole('button', { name: 'Figur importieren', exact: true }).tap();
+  await page.locator('#openAddFigure').tap(); await page.getByRole('button', { name: 'Figur importieren', exact: true }).tap();
   await expect(page.locator('#importChoiceDialog')).toBeVisible();
   await expect(page.locator('#packageFile')).toBeVisible();
   await page.locator('#closeImportChoice').tap();
@@ -247,18 +248,18 @@ test('installed shell update bypasses stale HTTP CSS and preserves offline video
   await page.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); await r.update(); });
   await expect(page.locator('#updateNotice')).toBeVisible();
   // An update must not throw away a draft. It is applied from the overview.
-  await page.locator('#addFigure').tap(); await page.locator('#figureTitle').fill('Keep my draft');
+  await page.locator('#openAddFigure').tap(); await page.locator('#addFigure').tap(); await page.locator('#figureTitle').fill('Keep my draft');
   await page.evaluate(() => document.getElementById('applyUpdate').click());
   await expect(page.locator('#figureTitle')).toHaveValue('Keep my draft');
   await page.locator('#editorBack').tap(); await page.locator('#confirmOK').tap();
   await expect(page.locator('#editor')).not.toBeVisible();
   await page.locator('#applyUpdate').tap();
-  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-20-video-selection-v1');
+  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-20-add-sheet-v1');
   await expect(page.locator('#importFigure')).toHaveCSS('pointer-events', 'auto');
   await expect(page.locator('.figure-card')).toHaveCount(1);
   const file = await exportPackage(page, info);
   await context.setOffline(true); await page.reload();
-  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-20-video-selection-v1');
+  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-20-add-sheet-v1');
   await page.getByRole('button', { name: 'Ocho lernen' }).tap();
   await expect(page.locator('#learningVideo')).toHaveJSProperty('videoWidth', 320);
   await page.locator('#playPause').tap();

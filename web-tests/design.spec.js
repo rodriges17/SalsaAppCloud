@@ -19,7 +19,7 @@ test('Step by Step defaults to Klar, persists Terrakotta and fonts work after of
   await expect(page.locator('#offlineStatus')).toContainText('Offline bereit', { timeout: 30000 });
   await page.evaluate(async () => { await navigator.serviceWorker.ready; if (!navigator.serviceWorker.controller) await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true })); await document.fonts.ready; });
   await seed(page);
-  expect(await page.locator('#addFigure').evaluate(button => button.getBoundingClientRect().width)).toBeGreaterThan(300);
+  await expect(page.locator('#openAddFigure')).toBeVisible();
   await page.screenshot({ path: info.outputPath('klar-figuren.png'), fullPage: true });
   await page.locator('#infoButton').tap(); await page.locator('#themeChoice').selectOption('light');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light'); await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f8f2ea');
@@ -70,4 +70,27 @@ test.describe('primary navigation and cloud layouts', () => {
     await expect(page.locator('#learningVideo')).not.toHaveAttribute('src');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
+});
+
+
+test('add sheet stays reachable after scrolling, works in both themes and restores focus when cancelled',async({page},info)=>{
+ await start(page);await seed(page);
+ await page.evaluate(()=>{const list=document.getElementById('figureList');for(let i=0;i<12;i++)list.append(list.firstElementChild.cloneNode(true));});
+ await page.evaluate(()=>window.scrollTo(0,700));
+ await expect.poll(()=>page.locator('.page-intro').evaluate(node=>Math.round(node.getBoundingClientRect().top))).toBe(0);
+ const add=page.getByRole('button',{name:'Figur hinzufügen',exact:true});await expect(add).toBeInViewport();
+ for(const theme of ['dark','light']){
+  await page.evaluate(theme=>window.stepAppearance.set(theme),theme);await add.tap();
+  const sheet=page.getByRole('dialog',{name:'Figur hinzufügen',exact:true});await expect(sheet).toBeVisible();
+  await expect(sheet.getByRole('button',{name:'Neue Figur erstellen',exact:true})).toBeVisible();await expect(sheet.getByRole('button',{name:'Figur importieren',exact:true})).toBeVisible();
+  await page.screenshot({path:info.outputPath(`${theme}-add-sheet.png`)});
+  await sheet.getByRole('button',{name:'Schließen',exact:true}).tap();await expect(sheet).not.toBeVisible();await expect(add).toBeFocused();
+ }
+ await add.tap();await page.keyboard.press('Escape');await expect(page.locator('#addChoiceDialog')).not.toBeVisible();await expect(add).toBeFocused();
+ await add.tap();await page.touchscreen.tap(8,8);await expect(page.locator('#addChoiceDialog')).not.toBeVisible();
+ await add.tap();await page.getByRole('button',{name:'Neue Figur erstellen',exact:true}).tap();await expect(page.locator('#editor')).toBeVisible();await expect(page.locator('#addChoiceDialog')).not.toBeVisible();
+ await page.locator('#editorBack').tap();await expect(page.locator('#editor')).not.toBeVisible();
+ await add.tap();await page.getByRole('button',{name:'Figur importieren',exact:true}).tap();await expect(page.locator('#importChoiceDialog')).toBeVisible();await expect(page.locator('#addChoiceDialog')).not.toBeVisible();await page.locator('#closeImportChoice').tap();
+ await page.setViewportSize({width:320,height:650});await add.tap();expect(await page.locator('#addChoiceDialog').evaluate(node=>node.scrollWidth<=node.clientWidth)).toBe(true);await page.locator('#closeAddChoice').tap();
+ await page.setViewportSize({width:740,height:360});await add.tap();await expect(page.locator('#importFigure')).toBeInViewport();
 });

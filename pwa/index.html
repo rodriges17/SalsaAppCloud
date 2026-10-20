@@ -12,18 +12,23 @@
 </head>
 <body>
   <main id="overview" class="overview">
-    <div class="overview-controls"><header class="heading"><h1>Step by Step</h1><button id="infoButton" class="header-icon" aria-label="Installation &amp; Speicher" title="Einstellungen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 3-1 3-3 1-2 4 2 2v4l4 2 3-1 3 1 4-2v-4l2-2-2-4-3-1-1-3H9Z"/><circle cx="12" cy="11" r="3"/></svg></button></header>
-    <div id="updateNotice" class="update-notice" hidden><span>Eine neue App-Version ist bereit.</span><button id="applyUpdate" class="secondary">Update laden</button></div><div class="page-intro"><h2>Meine Figuren</h2><p class="muted">Deine Schritte. Dein Tempo.</p></div>
-    <label class="sr-only" for="search">Figur suchen</label><input id="search" type="search" placeholder="Figur suchen" autocomplete="off">
+    <header class="heading"><h1>Step by Step</h1><button id="infoButton" class="header-icon" aria-label="Installation &amp; Speicher" title="Einstellungen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 3-1 3-3 1-2 4 2 2v4l4 2 3-1 3 1 4-2v-4l2-2-2-4-3-1-1-3H9Z"/><circle cx="12" cy="11" r="3"/></svg></button></header>
+    <div id="updateNotice" class="update-notice" hidden><span>Eine neue App-Version ist bereit.</span><button id="applyUpdate" class="secondary">Update laden</button></div><div class="page-intro"><div><h2>Meine Figuren</h2><p class="muted">Deine Schritte. Dein Tempo.</p></div><button id="openAddFigure" class="primary add-trigger" type="button" aria-label="Figur hinzufügen" aria-haspopup="dialog" aria-controls="addChoiceDialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div>
+    <div class="overview-filters"><label class="sr-only" for="search">Figur suchen</label><input id="search" type="search" placeholder="Figur suchen" autocomplete="off">
     <div class="filter-row"><div id="statusFilters" class="chips" aria-label="Lernstand filtern"></div><button id="tagsButton" class="header-icon" aria-label="Tags" title="Nach Tags filtern"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 3 8 0 10 10-8 8L3 11V3Z"/><circle cx="7" cy="7" r="1"/></svg></button></div>
     <div id="activeTag"></div></div>
     <div class="list-toolbar"><strong id="figureCount">0 Figuren</strong><label class="peach">Sortierung: <select id="sort" aria-label="Sortierung"><option value="newest">Neueste</option><option value="name">Name</option><option value="status">Lernstand</option></select></label></div>
     <div id="figureList" class="figure-list"></div>
     <div id="empty" class="empty" hidden><span class="dance-icon" aria-hidden="true">♪</span><h2>Deine erste Figur</h2><p>Füge eigene Videos hinzu und übe in deinem Tempo.</p></div>
     <footer class="overview-footer"><span id="offlineStatus" class="small muted" role="status">Nur auf diesem Gerät</span></footer>
-    <div class="add-dock"><button id="addFigure" class="primary add-button">＋ Figur hinzufügen</button><button id="importFigure" class="secondary">Figur importieren</button></div>
   </main>
   <nav class="bottom-nav" aria-label="Hauptnavigation"><button type="button" data-nav="figures" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="6.7" r="1.5"/><circle cx="19" cy="6.7" r="1.5"/><path d="M2 15.3 5.6 11c2.8-.8 4.8-3.4 6.4-6.8 1.6 3.4 3.6 6 6.4 6.8l3.6 4.3M5.6 11 7 15.3 3.7 21M7 15.3l3.7 5.1M18.4 11 17 15.3l3.3 5.7M17 15.3l-3.7 5.1"/></svg><span>Figuren</span></button><button type="button" id="cloudButton" data-nav="cloud"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18a4 4 0 0 1-.5-8 6.5 6.5 0 0 1 12.4-1.8A5 5 0 0 1 18 18H6Z"/></svg><span>Cloud-Speicher</span></button></nav>
+  <dialog id="addChoiceDialog" class="add-sheet" aria-labelledby="addChoiceTitle">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <header class="sheet-heading"><h2 id="addChoiceTitle">Figur hinzufügen</h2><button id="closeAddChoice" class="header-icon" type="button" aria-label="Schließen" autofocus><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
+    <button id="addFigure" class="add-choice" type="button" aria-label="Neue Figur erstellen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="14" height="14" rx="3"/><path d="m16 10 6-3v10l-6-3M9 9v6M6 12h6"/></svg><span><strong>Neue Figur erstellen</strong><span>Eigene Videos auswählen und eine Figur anlegen.</span></span><svg class="choice-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+    <button id="importFigure" class="add-choice" type="button" aria-label="Figur importieren"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7ZM8 13h8m-3-3 3 3-3 3"/></svg><span><strong>Figur importieren</strong><span>Eine Figur aus einer ZIP-Datei übernehmen.</span></span><svg class="choice-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  </dialog>
   <dialog id="editor" class="screen-dialog">
     <header class="screen-header"><button id="editorBack" class="back" aria-label="Zurück">‹</button><h2 id="editorHeading">Figur hinzufügen</h2></header>
     <form id="editorForm" novalidate>
@@ -65,7 +70,7 @@
     <p>Wähle eine ZIP-Datei, die mit „Figur teilen“ erstellt wurde. Einen WhatsApp-Anhang zuerst in „Dateien“ oder „Downloads“ speichern.</p>
     <label for="packageFile">Figuren-Paket (.zip) auswählen</label>
     <input id="packageFile" type="file" aria-describedby="packageHelp">
-    <p id="packageHelp" class="small muted">Für einzelne Videos nutze „Figur hinzufügen“. Das ZIP wird hier geprüft; vorhandene Figuren bleiben erhalten.</p>
+    <p id="packageHelp" class="small muted">Für einzelne Videos wähle „Neue Figur erstellen“. Das ZIP wird hier geprüft; vorhandene Figuren bleiben erhalten.</p>
     <button id="closeImportChoice" class="secondary">Abbrechen</button>
   </dialog>
   <dialog id="shareDialog" class="small-dialog">

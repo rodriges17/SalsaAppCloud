@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-20-video-selection-v1';
+const APP_VERSION = '2026-10-20-add-sheet-v1';
 import { initBackup } from './backup-ui.js';
 import { initCloud, openCloud } from './cloud.js';
 import { exportFigure, importFigure, packageSize, packageFilename, MAX_PACKAGE_BYTES } from './package.js';
@@ -126,7 +126,14 @@ async function openEditor(figure = null, imported = null) {
     renderDrafts(); setBusy(false); $('editor').showModal(); pushRoute('editor'); $('figureTitle').focus();
   } catch (error) { toast(storageMessage(error)); } finally { opening = false; }
 }
-$('addFigure').onclick = () => openEditor();
+$('openAddFigure').onclick = () => $('addChoiceDialog').showModal();
+$('closeAddChoice').onclick = () => $('addChoiceDialog').close();
+$('addChoiceDialog').addEventListener('click', event => {
+  if (event.target !== $('addChoiceDialog')) return;
+  const rect = $('addChoiceDialog').getBoundingClientRect();
+  if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) $('addChoiceDialog').close();
+});
+$('addFigure').onclick = () => { $('addChoiceDialog').close(); openEditor(); };
 function updateSave() { $('saveFigure').disabled = !editor || editor.busy || !$('figureTitle').value.trim() || !editor.drafts.length || editor.drafts.some(d => !d.confirmed); }
 function setBusy(value) { editor.busy = value; $('editorFields').disabled = value; $('editorBack').disabled = value; $('saveProgress').hidden = !value; updateSave(); }
 $('editorForm').addEventListener('input', updateSave);
@@ -471,7 +478,7 @@ $('sendPackage').onclick = async () => {
 };
 $('importFigure').onclick = () => {
   if (editor || opening || packageImport) { toast('Bitte zuerst den aktuellen Vorgang beenden.'); return; }
-  $('packageFile').value = ''; $('importChoiceDialog').showModal();
+  $('addChoiceDialog').close(); $('packageFile').value = ''; $('importChoiceDialog').showModal();
 };
 $('closeImportChoice').onclick = () => $('importChoiceDialog').close();
 $('cancelImport').onclick = () => { packageImport?.abort(); packageImport = null; $('importProgressDialog').close(); };
@@ -513,7 +520,7 @@ if ('serviceWorker' in navigator) {
   });
 }
 $('applyUpdate').onclick = () => {
-  if (editor || preview || learning || sharing || packageImport || $('importChoiceDialog').open) {
+  if (editor || preview || learning || sharing || packageImport || $('addChoiceDialog').open || $('importChoiceDialog').open) {
     toast('Bitte zuerst den aktuellen Vorgang beenden und zur Übersicht zurückkehren.'); return;
   }
   location.reload();
