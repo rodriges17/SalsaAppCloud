@@ -1,4 +1,4 @@
-const VERSION = '2026-10-20-backup-v1';
+const VERSION = '2026-10-20-backup-v2';
 const PREFIX = `salsa-trainer:${new URL(self.registration.scope).pathname}:`;
 const CACHE = PREFIX + VERSION;
 const files = ['.', './index.html', './styles.css', './app.js', './cloud.js', './cloud-api.js', './cloud-config.js', './storage.js', './app-storage.js', './folder-storage.js', './logic.js', './package.js', './backup-format.js', './backup-ui.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];

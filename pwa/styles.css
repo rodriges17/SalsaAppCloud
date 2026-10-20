@@ -31,3 +31,6 @@
 .backup-body .cloud-card { margin-block:12px; }
 .backup-download { display:block; text-align:center; padding:14px; border:1px solid var(--border); border-radius:12px; text-decoration:none; color:inherit; }
 .backup-body p { overflow-wrap:anywhere; }
+
+.backup-actions { display:grid; gap:12px; margin-block:16px; }
+.backup-actions button { width:100%; }
