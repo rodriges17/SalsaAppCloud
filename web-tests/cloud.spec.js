@@ -68,6 +68,9 @@ async function signIn(page) {
 }
 test('libraries and own cloud figures are separate; creation is explicit and cancellable',async({page})=>{
  await signIn(page);const calls=await mock(page,true,true);await start(page);await page.locator('#cloudButton').tap();
+ await expect(page.getByRole('heading',{name:'Meine Cloud-Figuren',exact:true})).toBeVisible();
+ await expect(page.locator('.cloud-thumbnail')).toHaveAttribute('src', /^blob:/);
+ await page.getByRole('button',{name:'Bibliotheken',exact:true}).tap();
  await expect(page.getByLabel('Name',{exact:true})).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Einer Bibliothek zuordnen',exact:true})).toHaveCount(0);
  await expect(page.getByLabel('Person: E-Mail-Adresse',{exact:true})).toHaveCount(0);
@@ -111,7 +114,7 @@ test('temporary auth refresh failure preserves login and restores admin and libr
  await page.route(`${host}/auth/v1/token?grant_type=refresh_token`,r=>r.fulfill({status:++attempts===1?503:200,contentType:'application/json',body:JSON.stringify(attempts===1?{error:'Temporary auth outage'}:{access_token:'test-user-jwt',refresh_token:'rotated-refresh',expires_in:3600})}));
  await start(page);await page.locator('#cloudButton').tap();await expect(page.locator('#cloudError')).toContainText('Temporary auth outage');
  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('salsa-cloud-session:/pwa/:v1')).refresh_token)).toBe('test-refresh');
- await page.locator('#cloudBack').tap();await page.locator('#cloudButton').tap();await expect(page.getByRole('button',{name:'Verwaltung',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Bibliothek erstellen',exact:true})).toBeVisible();
+ await page.locator('#cloudBack').tap();await page.locator('#cloudButton').tap();await expect(page.getByRole('button',{name:'Verwaltung',exact:true})).toBeVisible();await page.getByRole('button',{name:'Bibliotheken',exact:true}).tap();await expect(page.getByRole('button',{name:'Bibliothek erstellen',exact:true})).toBeVisible();
  await page.reload();await page.locator('#cloudButton').tap();await expect(page.getByRole('button',{name:'Verwaltung',exact:true})).toBeVisible();expect(attempts).toBe(2);
  expect(calls.filter(c=>c.action==='state').every(c=>c.authorization==='Bearer test-user-jwt')).toBe(true);
 });
@@ -186,6 +189,8 @@ test('one primary assignment uses newest revision; history previews and assigns 
  const revision=(id,date)=>({id,title:'Cloud Drehung',created_at:date,description:'',tags:[],videos:[{id:'video-'+id,name:'Führung',type:'video/mp4',size:bytes.length}]});
  const calls=await mock(page,true,[{id:'figure-1',public_allowed:true,revisions:[revision('old','2026-10-20T00:08:13Z'),revision('latest','2026-10-20T00:11:45Z')]}]);
  await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).tap();
+ await expect(page.locator('.cloud-thumbnail')).toHaveAttribute('src', /^blob:/);
+ expect(calls.filter(c=>c.action==='media_url').every(c=>c.payload.revision==='latest')).toBe(true);
  const assign=page.getByRole('button',{name:'Einer Bibliothek zuordnen',exact:true});await expect(assign).toHaveCount(1);
  const history=page.locator('.cloud-history');await expect(history).not.toHaveAttribute('open','');
  await expect(page.getByRole('button',{name:'Diese Version einer Bibliothek zuordnen',exact:true})).toHaveCount(0);
@@ -193,7 +198,7 @@ test('one primary assignment uses newest revision; history previews and assigns 
  await page.getByRole('button',{name:'Figur zuordnen',exact:true}).tap();await expect.poll(()=>calls.filter(c=>c.action==='attach').length).toBe(1);expect(calls.find(c=>c.action==='attach').payload.revision).toBe('latest');
  await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).tap();
  await page.getByText('Versionsverlauf · 2 Versionen',{exact:true}).tap();const older=page.locator('.cloud-history article').nth(1);await expect(older).toContainText('08:13');
- await older.getByRole('button',{name:'Video: Führung',exact:true}).tap();await expect(older.locator('video')).toHaveJSProperty('videoWidth',320);expect(calls.find(c=>c.action==='media_url').payload).toEqual({revision:'old',media:'video-old'});
+ await older.getByRole('button',{name:'Video: Führung',exact:true}).tap();await expect(older.locator('video')).toHaveJSProperty('videoWidth',320);expect(calls.find(c=>c.action==='media_url' && c.payload.revision==='old').payload).toEqual({revision:'old',media:'video-old'});
  await page.getByText('Versionsverlauf · 2 Versionen',{exact:true}).tap();await expect(history.locator('video')).toHaveCount(0);
  await page.getByText('Versionsverlauf · 2 Versionen',{exact:true}).tap();await older.getByRole('button',{name:'Diese Version einer Bibliothek zuordnen',exact:true}).tap();
  await expect(page.locator('#cloudBody')).toContainText('08:13');await page.getByRole('button',{name:'Figur zuordnen',exact:true}).tap();await expect.poll(()=>calls.filter(c=>c.action==='attach').length).toBe(2);expect(calls.filter(c=>c.action==='attach')[1].payload.revision).toBe('old');

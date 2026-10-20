@@ -12,11 +12,11 @@
 </head>
 <body>
   <main id="overview" class="overview">
-    <header class="heading"><h1>Step by Step</h1><button id="infoButton" class="header-icon" aria-label="Installation &amp; Speicher" title="Einstellungen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 3-1 3-3 1-2 4 2 2v4l4 2 3-1 3 1 4-2v-4l2-2-2-4-3-1-1-3H9Z"/><circle cx="12" cy="11" r="3"/></svg></button></header>
+    <div class="overview-controls"><header class="heading"><h1>Step by Step</h1><button id="infoButton" class="header-icon" aria-label="Installation &amp; Speicher" title="Einstellungen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 3-1 3-3 1-2 4 2 2v4l4 2 3-1 3 1 4-2v-4l2-2-2-4-3-1-1-3H9Z"/><circle cx="12" cy="11" r="3"/></svg></button></header>
     <div id="updateNotice" class="update-notice" hidden><span>Eine neue App-Version ist bereit.</span><button id="applyUpdate" class="secondary">Update laden</button></div><div class="page-intro"><h2>Meine Figuren</h2><p class="muted">Deine Schritte. Dein Tempo.</p></div>
     <label class="sr-only" for="search">Figur suchen</label><input id="search" type="search" placeholder="Figur suchen" autocomplete="off">
     <div class="filter-row"><div id="statusFilters" class="chips" aria-label="Lernstand filtern"></div><button id="tagsButton" class="header-icon" aria-label="Tags" title="Nach Tags filtern"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 3 8 0 10 10-8 8L3 11V3Z"/><circle cx="7" cy="7" r="1"/></svg></button></div>
-    <div id="activeTag"></div>
+    <div id="activeTag"></div></div>
     <div class="list-toolbar"><strong id="figureCount">0 Figuren</strong><label class="peach">Sortierung: <select id="sort" aria-label="Sortierung"><option value="newest">Neueste</option><option value="name">Name</option><option value="status">Lernstand</option></select></label></div>
     <div id="figureList" class="figure-list"></div>
     <div id="empty" class="empty" hidden><span class="dance-icon" aria-hidden="true">♪</span><h2>Deine erste Figur</h2><p>Füge eigene Videos hinzu und übe in deinem Tempo.</p></div>

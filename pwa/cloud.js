@@ -4,7 +4,7 @@ import { figureVideos } from './storage.js';
 const node = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
 const MB = value => `${(Number(value ?? 0) / 1000000).toFixed(1)} MB`;
 const action = (label, work) => { const b = node('button', label, 'secondary'); b.type = 'button'; b.onclick = () => Promise.resolve().then(work).catch(report); return b; };
-let dialog, body, errorBox, statusBox, hooks, state, current, busy = false, controller, source = null, area = 'libraries';
+let dialog, body, errorBox, statusBox, hooks, state, current, busy = false, controller, source = null, area = 'figures';
 function report(error, target = errorBox) { target.textContent = error?.message ?? 'Cloud-Aufruf fehlgeschlagen.'; target.hidden = false; target.scrollIntoView({ block: 'nearest' }); }
 function field(form, label, value = '', type = 'text') {
   const wrap = node('label', label), input = node(type === 'textarea' ? 'textarea' : 'input');
@@ -23,7 +23,7 @@ async function run(message, work, errorTarget = errorBox) {
   try { return await work(); } catch (error) { report(error, errorTarget); }
   finally { busy = false; body.inert = false; document.getElementById('cloudBack').disabled = false; dialog.querySelectorAll('[data-nav]').forEach(button => { button.disabled = false; }); statusBox.textContent = ''; }
 }
-function close() { if (busy) return; dialog.close(); body.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); }); source = null; }
+function close() { if (busy) return; cancelThumbnails(); dialog.close(); body.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); }); source = null; }
 async function navigate(next, library = null) {
   source = null; area = next; await run('Laden …', () => load(library));
 }
@@ -36,7 +36,8 @@ async function load(library = current) {
     const cleaned = await cloudCall(state.me.is_admin ? 'admin_cleanup' : 'cleanup').catch(() => null);
     if (cleaned?.cleaned) state = await cloudCall('state');
   }
-  clearPreviews(body); body.replaceChildren();
+  if (!state.me) area = 'libraries';
+  cancelThumbnails(); clearPreviews(body); body.replaceChildren();
   const toolbar = node('div', undefined, 'cloud-tabs');
   toolbar.setAttribute('aria-label', 'Cloud-Bereiche');
   for (const [key, label] of [...(state.me ? [['figures', 'Meine Figuren']] : []), ['libraries', 'Bibliotheken']]) {
@@ -54,7 +55,7 @@ async function load(library = current) {
     const box = section('Mit persönlichem Link anmelden'), form = node('form'); box.append(form);
     const link = field(form, 'Anmeldelink einfügen', '', 'password'); link.autocomplete = 'off';
     box.append(node('p', 'In einer installierten iPhone-App den Link hier einfügen, damit die Anmeldung in dieser App erfolgt.'));
-    form.append(action('Anmelden', () => run('Anmelden …', async () => { await loginWithLink(link.value.trim()); await load(null); }))); form.onsubmit = e => e.preventDefault();
+    form.append(action('Anmelden', () => run('Anmelden …', async () => { await loginWithLink(link.value.trim()); area = 'figures'; await load(null); }))); form.onsubmit = e => e.preventDefault();
   }
   if (source) { await publishForm(); return; }
   if (current) { await libraryView(current); return; }
@@ -163,11 +164,56 @@ function attachForm(revision) {
   const choice = select(box, 'Zielbibliothek', libs.map(l => [l.id, l.title]));
   box.append(action('Figur zuordnen', () => run('Zuordnen …', async () => { await cloudCall('attach', { library: choice.value, revision: revision.id }); await load(choice.value); })));
 }
+let thumbnailJobs = new Set();
+function cancelThumbnails() {
+  for (const cancel of thumbnailJobs) cancel();
+  thumbnailJobs.clear();
+}
+function thumbnail(heading, revision, media) {
+  const image = node('img', undefined, 'cloud-thumbnail');
+  image.alt = ''; image.width = 64; image.height = 64; heading.prepend(image);
+  let cancelled = false, player, timer, objectURL, rejectLoad;
+  const stopPlayer = () => { clearTimeout(timer); if (player) { player.pause(); player.removeAttribute('src'); player.load(); player = null; } };
+  const cancel = () => { cancelled = true; observer.disconnect(); rejectLoad?.(new Error('Cancelled')); stopPlayer(); if (objectURL) URL.revokeObjectURL(objectURL); };
+  thumbnailJobs.add(cancel);
+  const observer = new IntersectionObserver(entries => {
+    if (!entries.some(entry => entry.isIntersecting)) return;
+    observer.disconnect();
+    (async () => {
+      try {
+        const signed = await cloudCall('media_url', { revision: revision.id, media: media.id });
+        if (cancelled || !heading.isConnected) return;
+        player = document.createElement('video');
+        player.crossOrigin = 'anonymous'; player.muted = true; player.playsInline = true; player.preload = 'metadata';
+        await new Promise((resolve, reject) => {
+          rejectLoad = reject;
+          timer = setTimeout(() => reject(new Error('Thumbnail timeout')), 15000);
+          player.onloadedmetadata = () => { if (Number.isFinite(player.duration) && player.duration > 0.1) player.currentTime = Math.min(0.1, player.duration / 2); };
+          player.onerror = reject;
+          player.onloadeddata = () => {
+            if (player.currentTime > 0 || !Number.isFinite(player.duration) || player.duration <= 0.1) resolve();
+            else player.currentTime = Math.min(0.1, player.duration / 2);
+          };
+          player.onseeked = resolve; player.src = signed.url;
+        });
+        if (cancelled || !heading.isConnected || !player?.videoWidth) return;
+        const canvas = document.createElement('canvas');
+        canvas.width = 160; canvas.height = Math.max(1, Math.round(160 * player.videoHeight / player.videoWidth));
+        canvas.getContext('2d').drawImage(player, 0, 0, canvas.width, canvas.height);
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+        if (!cancelled && heading.isConnected && blob) { objectURL = URL.createObjectURL(blob); image.src = objectURL; }
+      } catch { if (!cancelled) image.remove(); }
+      finally { stopPlayer(); }
+    })();
+  }, { root: body, rootMargin: '100px' });
+  observer.observe(heading);
+}
 function ownFigures() {
   if (!state.own_figures.length) body.append(node('p', 'Noch keine eigenen Cloud-Figuren. Lade eine lokale Figur über „In Cloud veröffentlichen“ hoch.'));
   for (const f of state.own_figures) {
     const revisions = [...f.revisions].sort((a, b) => (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0));
     const latest = revisions[0], box = section(latest?.title ?? 'Noch nicht fertig hochgeladene Figur');
+    if (latest?.videos?.[0]) thumbnail(box.querySelector('h3'), latest, latest.videos[0]);
     box.append(node('p', `Öffentliche Veröffentlichung: ${f.public_allowed ? 'Erlaubt' : 'Nicht erlaubt'}`));
     box.append(action(f.public_allowed ? 'Öffentliche Veröffentlichung widerrufen' : 'Öffentliche Veröffentlichung erlauben', () => run('Freigabe ändern …', async () => {
       await cloudCall('public_permission', { figure: f.id, allowed: !f.public_allowed }); await load(null);
@@ -272,14 +318,14 @@ export function initCloud(callbacks) {
   hooks = callbacks; dialog = document.getElementById('cloudDialog'); body = document.getElementById('cloudBody'); errorBox = document.getElementById('cloudError'); statusBox = document.getElementById('cloudStatus');
   document.getElementById('cloudBack').onclick = close;
   dialog.querySelector('[data-nav=figures]').onclick = close;
-  dialog.querySelector('[data-nav=cloud]').onclick = () => { if (!busy) navigate('libraries'); };
+  dialog.querySelector('[data-nav=cloud]').onclick = () => { if (!busy) navigate('figures'); };
   document.getElementById('cloudCancelUpload').onclick = () => controller?.abort();
   dialog.addEventListener('cancel', e => { e.preventDefault(); close(); });
   document.getElementById('cloudButton').onclick = () => openCloud();
   const query = new URLSearchParams(location.search); if (query.has('library') || query.has('cloud')) setTimeout(() => openCloud(null, query.get('library')), 0);
 }
 export async function openCloud(local = null, library = null) {
-  if (busy || dialog.open) return; source = local; current = library; area = 'libraries';
+  if (busy || dialog.open) return; source = local; current = library; area = 'figures';
   errorBox.hidden = true; body.replaceChildren(); dialog.showModal();
   await run('Cloud-Bibliotheken laden …', () => load(library));
   if (!body.childElementCount) body.append(action('Erneut versuchen', () => run('Laden …', () => load(library))));
