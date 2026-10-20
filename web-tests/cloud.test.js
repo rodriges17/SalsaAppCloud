@@ -107,3 +107,45 @@ test('cloud: cleanup cannot release quota while a storage object still exists', 
  await root('select cloud_delete_figure($1,$2)',[figure,B]);
  assert.equal((await api(B,'state')).me.used,0); assert.equal((await api(null,'library',{id:other})).entries.length,0);
 });
+
+test('cloud posters: owner-only writes, read permissions follow revisions and bytes count toward quota', async () => {
+ await api(A,'admin_person',{id:B,enabled:true,quota:250000000});
+ const done=await uploaded(B,null,true),rid=done.revision;
+ const jpeg=Buffer.from('ffd8ff010203ffd9','hex').toString('base64');
+ await assert.rejects(api(null,'poster_get',{revision:rid}));
+ await assert.rejects(api(C,'poster_put',{revision:rid,data:jpeg,kind:'local'}));
+ await role(B);await assert.rejects(db.query('select * from cloud_private.revision_posters'));
+ await assert.rejects(api(B,'poster_put',{revision:rid,data:'abcd',kind:'local'}));
+ await assert.rejects(api(B,'poster_put',{revision:rid,data:Buffer.concat([Buffer.from('ffd8ff','hex'),Buffer.alloc(65536),Buffer.from('ffd9','hex')]).toString('base64'),kind:'local'}));
+ assert.equal((await api(B,'poster_put',{revision:rid,data:jpeg,kind:'local'})).poster,jpeg);
+ assert.equal((await api(B,'state')).me.used,11);
+ const pub=(await api(A,'library_save',{title:'Poster library',visibility:'public',collaborative:false,moderated:false})).id;
+ await api(A,'attach',{library:pub,revision:rid});
+ assert.equal((await api(null,'poster_get',{revision:rid})).poster,jpeg);
+ assert.equal((await api(null,'poster_get',{revision:rid})).can_write,false);
+ await api(B,'public_permission',{figure:done.figure,allowed:false});await assert.rejects(api(null,'poster_get',{revision:rid}));
+ await api(B,'public_permission',{figure:done.figure,allowed:true});
+ const replacement=Buffer.from('ffd8ff040506ffd9','hex').toString('base64');
+ assert.equal((await api(B,'poster_put',{revision:rid,data:replacement,kind:'local'})).poster,jpeg);
+ await assert.rejects(api(A,'admin_person',{id:B,enabled:true,quota:10}));
+ await api(A,'admin_person',{id:B,enabled:true,quota:50000010});
+ await assert.rejects(api(B,'reserve',{videos}));
+ const before=(await api(B,'state')).me.used;
+ await api(A,'library_delete',{id:pub});assert.equal((await api(B,'poster_get',{revision:rid})).poster,jpeg);assert.equal((await api(B,'state')).me.used,before);
+ await root('delete from storage.objects where name in (select path from cloud_media where figure_id=$1)',[done.figure]);await root('select cloud_delete_figure($1,$2)',[done.figure,B]);assert.equal((await api(B,'state')).me.used,0);
+});
+test('cloud posters: generated frame can upgrade once to the original local image', async () => {
+ await api(A,'admin_person',{id:B,enabled:true,quota:250000000});const done=await uploaded(B),rid=done.revision;
+ const frame=Buffer.from('ffd8ff01ffd9','hex').toString('base64'),local=Buffer.from('ffd8ff02ffd9','hex').toString('base64');
+ await api(B,'poster_put',{revision:rid,data:frame,kind:'frame'});assert.equal((await api(B,'poster_get',{revision:rid})).kind,'frame');
+ await api(A,'poster_put',{revision:rid,data:local,kind:'local'});assert.equal((await api(B,'poster_get',{revision:rid})).poster,local);
+ assert.equal((await api(B,'poster_put',{revision:rid,data:frame,kind:'frame'})).poster,local);
+});
+test('cloud posters: optional upload poster is atomic with commit and public consent', async () => {
+ const job=await api(B,'reserve',{videos});
+ await root("insert into storage.objects(bucket_id,name,metadata) values ('salsa-cloud',$1,$2)",[job.media[0].path,JSON.stringify({size:3,mimetype:'video/mp4'})]);await root('select cloud_finish_media($1,$2)',[job.media[0].id,B]);
+ const request={job:job.job,title:'Atomic poster',description:'',tags:[],public_allowed:true,videos:[{id:job.media[0].id,name:'Video'}],poster:{data:'invalid',kind:'local'}};
+ await assert.rejects(api(B,'commit',request));assert.equal((await root('select count(*)::int as n from cloud_revisions where figure_id=$1',[job.figure])).rows[0].n,0);
+ assert.equal((await api(B,'state')).own_figures.find(f=>f.id===job.figure).public_allowed,false);
+ request.poster.data=Buffer.from('ffd8ff01ffd9','hex').toString('base64');const done=await api(B,'commit',request);assert.equal((await api(B,'poster_get',{revision:done.revision})).poster,request.poster.data);
+});

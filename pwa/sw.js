@@ -1,7 +1,7 @@
-const VERSION = '2026-10-20-add-sheet-v1';
+const VERSION = '2026-10-20-library-posters-v1';
 const PREFIX = `salsa-trainer:${new URL(self.registration.scope).pathname}:`;
 const CACHE = PREFIX + VERSION;
-const files = ['.', './index.html', './styles.css', './appearance.js', './fonts/Inter-400.woff', './fonts/Inter-500.woff', './fonts/Inter-600.woff', './fonts/Inter-700.woff', './app.js', './cloud.js', './cloud-api.js', './cloud-config.js', './storage.js', './app-storage.js', './folder-storage.js', './logic.js', './package.js', './backup-format.js', './backup-ui.js', './backup-workflow.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
+const files = ['.', './index.html', './styles.css', './appearance.js', './fonts/Inter-400.woff', './fonts/Inter-500.woff', './fonts/Inter-600.woff', './fonts/Inter-700.woff', './app.js', './cloud.js', './cloud-posters.js', './cloud-api.js', './cloud-config.js', './storage.js', './app-storage.js', './folder-storage.js', './logic.js', './package.js', './backup-format.js', './backup-ui.js', './backup-workflow.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 const assets = files.map(path => new URL(path, self.registration.scope).href);
 self.addEventListener('install', event => { event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(assets.map(url => new Request(url, { cache: 'reload' })))).then(() => self.skipWaiting())); });
 self.addEventListener('activate', event => { event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith(PREFIX) && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())); });

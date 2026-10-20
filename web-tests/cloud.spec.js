@@ -4,12 +4,14 @@ import { readFile } from 'node:fs/promises';
 // WebKit does not reliably intercept cross-origin preflights behind a service worker.
 test.use({ serviceWorkers: 'block' });
 const host='http://127.0.0.1:4173';
+const POSTER='/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHBwgHBgoICAgLCgoLDhgQDg0NDh0VFhEYIx8lJCIfIiEmKzcvJik0KSEiMEExNDk7Pj4+JS5ESUM8SDc9Pjv/2wBDAQoLCw4NDhwQEBw7KCIoOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozv/wAARCAAMAAwDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwBtFFFYnin/2Q==';
 test.beforeEach(async ({page}) => {
  await page.route('**/pwa/cloud-config.js', route => route.fulfill({contentType:'application/javascript',body:`export const CLOUD_URL='${host}';export const CLOUD_KEY='test-publishable';export const CLOUD_FILE_LIMIT=50000000;`}));
 });
 const library={id:'lib-1',owner_id:'owner',title:'Cloud Kurs',description:'Geteilte Figuren',visibility:'public',collaborative:false,moderated:true,manage:false,contribute:false};
 async function mock(page,admin=false, own=false, contribute=true, options={}){
  const clip=await readFile('web-tests/fixtures/clip.mp4');
+ options.posters ??= new Map();
  const rev={id:'rev-1',figure_id:'figure-1',title:'Cloud Drehung',description:'Aus der Cloud',tags:['Salsa'],videos:[{id:'video-1',name:'Führung',type:'video/mp4',size:clip.length}]},calls=[];
  if(options.videos)rev.videos=options.videos.map(video=>({...rev.videos[0],...video}));
  await page.route(new RegExp('^'+host+'/(functions|storage)/'),async route=>{
@@ -20,10 +22,12 @@ async function mock(page,admin=false, own=false, contribute=true, options={}){
   const {action,payload}=req.postDataJSON();calls.push({action,payload,authorization:req.headers().authorization});let result={ok:true};
   if(action==='state')result={me:admin&&req.headers().authorization?{id:'admin',email:'admin@example.test',is_admin:true,upload_enabled:true,used:0,quota:500000000}:null,settings:{used:0,total_limit:900000000},people:[],libraries:options.noLibraries?[]:[{...library,contribute,visibility:options.visibility??library.visibility}],own_figures:Array.isArray(own)?own:own?[{id:'figure-1',public_allowed:options.publicAllowed??true,revisions:[{...rev,created_at:'2026-10-19T00:00:00Z'}]}]:[]};
   if(action==='public_permission'){if(options.failPermission)return route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({error:'Test: Freigabe konnte nicht gespeichert werden'})});options.publicAllowed=payload.allowed;}
-  if(action==='library')result={library,manage:false,contribute:false,members:[],entries:[{figure_id:'figure-1',owner_id:'owner',public_allowed:true,published:rev,pending:null}]};
+  if(action==='library')result={library,manage:options.manage??false,contribute:options.manage??false,members:[],entries:options.entries??[{figure_id:'figure-1',owner_id:'owner',public_allowed:true,published:rev,pending:null}]};
   if(action==='reserve')result={job:'job-1',media:payload.videos.map((v,i)=>({id:'uploaded-'+i,path:'test/'+i+'.mp4'}))};
   if(action==='commit')result={revision:'uploaded-revision'};
   if(action==='library_save')result={id:'lib-1'};
+  if(action==='poster_get')result={...(options.posters.get(payload.revision)??(!own&&!options.noPoster?{poster:POSTER,kind:'local'}:{poster:null})),can_write:admin&&!!req.headers().authorization};
+  if(action==='poster_put'){result=options.posters.get(payload.revision);if(!result||result.kind==='frame'&&payload.kind==='local'){result={poster:payload.data,kind:payload.kind};options.posters.set(payload.revision,result);}}
   if(action==='media_url')result={url:host+'/storage/v1/object/sign/salsa-cloud/video-1?token=fake'};
   if(action==='admin_link')result={link:'https://rodriges17.github.io/SalsaAppCloud/?cloud=1&type=magiclink&token_hash=one-time-test'};
   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(result),headers:{'Access-Control-Allow-Origin':'*'}});
@@ -215,8 +219,8 @@ test('direct public permission actions preserve state on failure and toggle only
  await expect(page.locator('#cloudBody')).toContainText('Private Bibliotheken bleiben unverändert.');
 });
 
-test('cloud reuses the exact local poster and remembers it after the local copy is removed',async({page},info)=>{
- await signIn(page);const calls=await mock(page,true,true);await start(page);
+test('cloud poster stays identical on a new anonymous device and after local removal',async({page,browser},info)=>{
+ await signIn(page);const options={};const calls=await mock(page,true,true,true,options);await start(page);
  const expected=await page.evaluate(async()=>{
   const storage=await import('/pwa/storage.js');
   const blob=await(await fetch('/web-tests/fixtures/clip.mp4')).blob();
@@ -226,7 +230,7 @@ test('cloud reuses the exact local poster and remembers it after the local copy 
   window.dispatchEvent(new Event('focus'));
   const image=new Image();const url=URL.createObjectURL(poster);image.src=url;await image.decode();context.clearRect(0,0,90,90);context.drawImage(image,0,0);URL.revokeObjectURL(url);return canvas.toDataURL();
  });
- const pixels=async()=>page.locator('.cloud-thumbnail').evaluate(async image=>{await image.decode();const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;canvas.getContext('2d').drawImage(image,0,0);return canvas.toDataURL();});
+ const pixels=async(target=page)=>target.locator('.cloud-thumbnail').evaluate(async image=>{await image.decode();const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;canvas.getContext('2d').drawImage(image,0,0);return canvas.toDataURL();});
  await expect(page.locator('.card-thumb')).toHaveAttribute('src',/^blob:/);
  await page.locator('#cloudButton').tap();await expect(page.locator('.cloud-thumbnail')).toHaveAttribute('src',/^blob:/);
  expect(await pixels()).toEqual(expected);expect(calls.filter(c=>c.action==='media_url')).toHaveLength(0);
@@ -235,6 +239,14 @@ test('cloud reuses the exact local poster and remembers it after the local copy 
  await page.evaluate(async()=>{const s=await import('/pwa/storage.js');await s.deleteFigure((await s.listFigures()).find(f=>f.id==='same-poster'));});
  await page.reload();await page.locator('#cloudButton').tap();await expect(page.locator('.cloud-thumbnail')).toHaveAttribute('src',/^blob:/);
  expect(await pixels()).toEqual(expected);expect(calls.filter(c=>c.action==='media_url')).toHaveLength(0);
+ expect(options.posters.get('rev-1').kind).toBe('local');
+ const context=await browser.newContext({isMobile:true,hasTouch:true,viewport:{width:390,height:844}}),other=await context.newPage();
+ try {
+  await other.route('**/pwa/cloud-config.js',route=>route.fulfill({contentType:'application/javascript',body:`export const CLOUD_URL='${host}';export const CLOUD_KEY='test';export const CLOUD_FILE_LIMIT=50000000;`}));
+  const readCalls=await mock(other,false,false,true,options);await start(other);await other.locator('#cloudButton').tap();await other.getByRole('button',{name:'Öffnen',exact:true}).tap();await other.locator('.revision-heading').scrollIntoViewIfNeeded();
+  await expect(other.locator('.cloud-thumbnail')).toHaveAttribute('src',/^blob:/);expect(await pixels(other)).toEqual(expected);expect(readCalls.filter(c=>c.action==='media_url'||c.action==='poster_put')).toHaveLength(0);
+  await expect(other.locator('.danger-zone')).toHaveCount(0);
+ } finally { await context.close(); }
 });
 
 
@@ -247,4 +259,28 @@ test('multiple cloud videos have an explicit download selection and only selecte
  expect(calls.filter(call=>call.action==='media_url')).toHaveLength(0);
  await checks.nth(1).check();await download.tap();await expect(page.locator('#editor')).toBeVisible();await expect(page.locator('.draft-card')).toHaveCount(1);
  expect(calls.filter(call=>call.action==='media_url').map(call=>call.payload.media)).toEqual(['video-2']);
+});
+
+test('library details keep their tab selected, show distinct revision posters and put deletion last',async({page},info)=>{
+ await signIn(page);
+ const clip=await readFile('web-tests/fixtures/clip.mp4');
+ const rev=(id,title)=>({id,title,description:'',tags:[],created_at:'2026-10-20T12:00:00Z',videos:[{id:'video-'+id,name:'Video',type:'video/mp4',size:clip.length}]});
+ const options={manage:true,entries:[{figure_id:'figure-1',owner_id:'owner',public_allowed:true,published:rev('published','Veröffentlichte Figur'),pending:rev('pending','Neue Fassung')}],posters:new Map([['published',{poster:POSTER,kind:'local'}],['pending',{poster:POSTER,kind:'local'}]])};
+ const calls=await mock(page,true,false,true,options);await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Bibliotheken',exact:true}).tap();await page.getByRole('button',{name:'Öffnen',exact:true}).tap();
+ await expect(page.getByRole('button',{name:'Bibliotheken',exact:true})).toHaveAttribute('aria-pressed','true');await expect(page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true})).toHaveAttribute('aria-pressed','false');
+ const revisions=page.locator('.cloud-revision');await expect(revisions).toHaveCount(2);await expect(revisions.nth(0).getByRole('heading',{name:'Veröffentlicht',exact:true})).toBeVisible();
+ for(let i=0;i<2;i++){await revisions.nth(i).locator('.revision-heading').scrollIntoViewIfNeeded();await expect(revisions.nth(i).locator('.cloud-thumbnail')).toHaveAttribute('src',/^blob:/);}
+ expect(calls.filter(c=>c.action==='poster_get').map(c=>c.payload.revision)).toEqual(expect.arrayContaining(['published','pending']));
+ await expect(revisions.nth(1)).toContainText('Zur Freigabe');await expect(revisions.nth(1)).toContainText('Neue Fassung');
+ const danger=page.locator('#cloudBody > :last-child');await expect(danger).toHaveClass(/danger-zone/);await expect(danger).toContainText('Cloud-Figuren, Videos und lokale Kopien bleiben erhalten');
+ for(const theme of ['dark','light']){await page.evaluate(theme=>window.stepAppearance.set(theme),theme);await danger.scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath(`${theme}-library-danger.png`)});}
+ await danger.getByRole('button',{name:'Bibliothek löschen',exact:true}).tap();await expect(page.locator('#confirmTitle')).toContainText('Cloud Kurs');await expect(page.locator('#confirmMessage')).toContainText('bleiben erhalten');await page.locator('#confirmCancel').tap();expect(calls.filter(c=>c.action==='library_delete')).toHaveLength(0);
+ await danger.getByRole('button',{name:'Bibliothek löschen',exact:true}).tap();await page.locator('#confirmOK').tap();await expect.poll(()=>calls.filter(c=>c.action==='library_delete').length).toBe(1);
+});
+test('failed poster loading keeps a neutral placeholder and the figure actions usable',async({page})=>{
+ await mock(page);await page.route(`${host}/functions/v1/cloud`,async(route,next)=>{
+  const data=route.request().postDataJSON();if(data.action==='poster_get')return route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({error:'Test: Vorschaubild nicht verfügbar'})});await route.fallback();
+ });
+ await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Öffnen',exact:true}).tap();await page.locator('.revision-heading').scrollIntoViewIfNeeded();await expect(page.locator('.cloud-thumbnail-placeholder')).toBeVisible();await expect(page.locator('.cloud-thumbnail')).toHaveCount(0);
+ await page.getByRole('button',{name:'In meine Figuren übernehmen',exact:true}).tap();await expect(page.locator('#editor')).toBeVisible();
 });

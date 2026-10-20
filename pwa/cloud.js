@@ -1,6 +1,7 @@
 import { cloudCall, signedIn, uploadMedia, logout, loginWithLink, finishLogin } from './cloud-api.js';
 import { CLOUD_FILE_LIMIT } from './cloud-config.js';
-import { figureVideos, listFigures } from './storage.js';
+import { figureVideos } from './storage.js';
+import { createPosterView, posterPayload } from './cloud-posters.js';
 const node = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
 const MB = value => `${(Number(value ?? 0) / 1000000).toFixed(1)} MB`;
 const action = (label, work) => { const b = node('button', label, 'secondary'); b.type = 'button'; b.onclick = () => Promise.resolve().then(work).catch(report); return b; };
@@ -38,10 +39,11 @@ async function load(library = current) {
   }
   if (!state.me) area = 'libraries';
   cancelThumbnails(); clearPreviews(body); body.replaceChildren();
+  posterView = createPosterView(body, state.me);
   const toolbar = node('div', undefined, 'cloud-tabs');
   toolbar.setAttribute('aria-label', 'Cloud-Bereiche');
   for (const [key, label] of [...(state.me ? [['figures', 'Meine Figuren']] : []), ['libraries', 'Bibliotheken']]) {
-    const button = action(label, () => navigate(key)); if (key === 'figures') button.setAttribute('aria-label', 'Meine Cloud-Figuren'); button.setAttribute('aria-pressed', String(area === key && !current && !source)); toolbar.append(button);
+    const button = action(label, () => navigate(key)); if (key === 'figures') button.setAttribute('aria-label', 'Meine Cloud-Figuren'); button.setAttribute('aria-pressed', String(!source && (current ? key === 'libraries' : area === key || (area === 'create' && key === 'libraries')))); toolbar.append(button);
   }
   const utilities = node('div', undefined, 'cloud-utilities');
   if (state.me?.is_admin) utilities.append(action('Verwaltung', () => navigate('admin')));
@@ -95,9 +97,9 @@ async function libraryView(id) {
   if (lib.visibility === 'public') intro.append(node('p', 'Figuren ohne Zustimmung zur öffentlichen Veröffentlichung bleiben für Lesende verborgen.'));
   for (const entry of detail.entries) {
     const box = section(entry.published?.title ?? entry.pending?.title ?? 'Figur ohne veröffentlichte Version');
-    if (entry.published) revisionCard(box, entry.published);
+    if (entry.published) revisionCard(box, entry.published, 'Veröffentlicht');
     if (entry.pending) {
-      box.append(node('p', `Zur Prüfung: ${entry.pending.title}`)); revisionCard(box, entry.pending);
+      revisionCard(box, entry.pending, 'Zur Freigabe');
       if (detail.manage) box.append(action('Freigeben', () => review(true)), action('Ablehnen', () => review(false)));
     }
     async function review(accept) { await run('Prüfung speichern …', async () => { await cloudCall('review', { library: id, figure: entry.figure_id, accept }); await load(id); }); }
@@ -105,11 +107,6 @@ async function libraryView(id) {
     if (detail.contribute && entry.published) box.append(action('In weitere Bibliothek aufnehmen', () => attachForm(entry.published)));
   }
   if (detail.manage) {
-    intro.append(action('Bibliothek löschen', async () => {
-      if (await hooks.confirm({ title: 'Bibliothek löschen?', message: 'Die Sammlung und ihre Mitgliedschaften werden entfernt. Cloud-Figuren bleiben in deinem Besitz und können weiterverwendet werden.', ok: 'Bibliothek löschen' })) {
-        await run('Löschen …', async () => { await cloudCall('library_delete', { id }); await load(null); });
-      }
-    }));
     libraryForm(lib);
     const members = section('Mitglieder');
     members.append(node('p', 'Mitwirkende müssen vom Plattform-Administrator zum Upload freigeschaltet sein.'));
@@ -117,6 +114,13 @@ async function libraryView(id) {
     const form = node('form'); members.append(form); const email = field(form, 'E-Mail-Adresse', '', 'email'); email.required = true;
     const role = select(form, 'Rolle', [['reader', 'Lesen'], ['contributor', 'Mitwirken'], ['remove', 'Entfernen']]);
     form.append(action('Mitglied speichern', () => { if (form.reportValidity()) return run('Speichern …', async () => { await cloudCall('member', { library: id, email: email.value, role: role.value }); await load(id); }); })); form.onsubmit = e => e.preventDefault();
+    const danger = section('Gefahrenbereich'); danger.classList.add('danger-zone');
+    danger.append(node('p', 'Beim Löschen werden diese Bibliothek und ihre Mitgliedschaften entfernt. Cloud-Figuren, Videos und lokale Kopien bleiben erhalten.'));
+    const remove = action('Bibliothek löschen', async () => {
+      if (await hooks.confirm({ title: `Bibliothek „${lib.title}“ löschen?`, message: `„${lib.title}“ und ihre Mitgliedschaften werden entfernt. Cloud-Figuren, Videos und lokale Kopien bleiben erhalten.`, ok: 'Bibliothek löschen', destructive: true })) {
+        await run('Löschen …', async () => { await cloudCall('library_delete', { id }); area = 'libraries'; await load(null); });
+      }
+    }); remove.className = 'danger-button'; danger.append(remove);
   }
 }
 function versionLabel(revision) {
@@ -130,7 +134,13 @@ async function previewVideo(box, revision, video) {
   clearPreviews(box);
   const player = node('video'); player.controls = true; player.playsInline = true; player.src = signed.url; box.append(player);
 }
-function revisionCard(box, rev) {
+function revisionCard(parent, rev, label) {
+  const box = node('article', undefined, 'cloud-revision'), heading = node('div', undefined, 'revision-heading');
+  const copy = node('div'); copy.append(node('h4', label), node('p', versionLabel(rev))); heading.append(copy);
+  if (rev.videos?.[0]) thumbnail(heading, rev);
+  box.append(heading);
+  if (rev.title !== parent.querySelector('h3').textContent) box.append(node('p', rev.title, 'revision-title'));
+  parent.append(box);
   box.append(node('p', rev.description), node('p', rev.tags.join(' · ')));
   const chosen = [], multiple = rev.videos.length > 1;
   if (multiple) box.append(node('h4', 'Videos zum Herunterladen auswählen'));
@@ -168,93 +178,15 @@ function attachForm(revision) {
   const choice = select(box, 'Zielbibliothek', libs.map(l => [l.id, l.title]));
   box.append(action('Figur zuordnen', () => run('Zuordnen …', async () => { await cloudCall('attach', { library: choice.value, revision: revision.id }); await load(choice.value); })));
 }
-let thumbnailJobs = new Set(), localPosters;
-const posterDB = () => new Promise((resolve, reject) => {
-  const request = indexedDB.open(`step-cloud-posters:${new URL('./', import.meta.url).pathname}:v1`, 1);
-  request.onupgradeneeded = () => request.result.createObjectStore('posters');
-  request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
-});
-async function revisionPoster(revision, blob) {
-  const bytes = blob ? await blob.arrayBuffer() : null;
-  const db = await posterDB();
-  try { return await new Promise((resolve, reject) => {
-    const tx = db.transaction('posters', blob ? 'readwrite' : 'readonly');
-    const store = tx.objectStore('posters'), key = `${state.me.id}:${revision}`;
-    const request = blob ? store.put(bytes, key) : store.get(key);
-    let result; request.onsuccess = () => { result = request.result; };
-    tx.oncomplete = () => resolve(blob ?? (result instanceof ArrayBuffer ? new Blob([result], { type: 'image/jpeg' }) : result)); tx.onabort = () => reject(tx.error); tx.onerror = () => {};
-  }); } finally { db.close(); }
-}
-async function localRevisionPoster(revision) {
-  const cached = await revisionPoster(revision.id).catch(() => null);
-  if (cached) return cached;
-  localPosters ??= listFigures().catch(() => []);
-  const matches = [];
-  for (const figure of await localPosters) {
-    if (!figure.poster) continue;
-    if (figure.importFingerprint === `cloud:${revision.id}:${revision.videos.map(v => v.id).join(',')}`) { matches.push(figure); continue; }
-    if (figure.title !== revision.title || (figure.description ?? '') !== (revision.description ?? '') || JSON.stringify(figure.tags) !== JSON.stringify(revision.tags)) continue;
-    try {
-      // Folder catalogs retain their poster and media metadata even while permission is absent.
-      const records = figure.videos ?? await figureVideos(figure);
-      if (revision.videos.every(media => records.some(v => v.name === media.name && (v.size ?? v.blob?.size) === media.size && (v.type ?? v.blob?.type) === media.type))) matches.push(figure);
-    } catch { /* An unavailable local copy must never prevent opening cloud figures. */ }
-  }
-  if (matches.length !== 1) return null;
-  const poster = matches[0].poster;
-  await revisionPoster(revision.id, poster).catch(() => {});
-  return poster;
-}
-function cancelThumbnails() {
-  for (const cancel of thumbnailJobs) cancel();
-  thumbnailJobs.clear();
-}
-function thumbnail(heading, revision, media) {
-  const image = node('img', undefined, 'cloud-thumbnail');
-  image.alt = ''; image.width = 64; image.height = 64; heading.prepend(image);
-  let cancelled = false, player, timer, objectURL, rejectLoad;
-  const stopPlayer = () => { clearTimeout(timer); if (player) { player.pause(); player.removeAttribute('src'); player.load(); player = null; } };
-  const cancel = () => { cancelled = true; observer.disconnect(); rejectLoad?.(new Error('Cancelled')); stopPlayer(); if (objectURL) URL.revokeObjectURL(objectURL); };
-  thumbnailJobs.add(cancel);
-  const observer = new IntersectionObserver(entries => {
-    if (!entries.some(entry => entry.isIntersecting)) return;
-    observer.disconnect();
-    (async () => {
-      try {
-        const local = await localRevisionPoster(revision);
-        if (cancelled || !heading.isConnected) return;
-        if (local) { objectURL = URL.createObjectURL(local); image.src = objectURL; return; }
-        const signed = await cloudCall('media_url', { revision: revision.id, media: media.id });
-        if (cancelled || !heading.isConnected) return;
-        player = document.createElement('video');
-        player.crossOrigin = 'anonymous'; player.muted = true; player.playsInline = true; player.preload = 'metadata';
-        await new Promise((resolve, reject) => {
-          rejectLoad = reject;
-          timer = setTimeout(() => reject(new Error('Thumbnail timeout')), 15000);
-          player.onloadedmetadata = () => { player.currentTime = Number.isFinite(player.duration) && player.duration > 0 ? Math.min(1, player.duration / 2) : 0; };
-          player.onerror = reject;
-          player.onloadeddata = () => { if (player.duration === 0) resolve(); };
-          player.onseeked = resolve; player.src = signed.url;
-        });
-        if (cancelled || !heading.isConnected || !player?.videoWidth) return;
-        const canvas = document.createElement('canvas');
-        canvas.width = 160; canvas.height = Math.max(1, Math.round(160 * player.videoHeight / player.videoWidth));
-        canvas.getContext('2d').drawImage(player, 0, 0, canvas.width, canvas.height);
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
-        if (!cancelled && heading.isConnected && blob) { objectURL = URL.createObjectURL(blob); image.src = objectURL; }
-      } catch { if (!cancelled) image.remove(); }
-      finally { stopPlayer(); }
-    })();
-  }, { root: body, rootMargin: '100px' });
-  observer.observe(heading);
-}
+let posterView;
+function cancelThumbnails() { posterView?.dispose(); posterView = null; }
+function thumbnail(heading, revision) { posterView?.add(heading, revision); }
 function ownFigures() {
-  localPosters = null;
   if (!state.own_figures.length) body.append(node('p', 'Noch keine eigenen Cloud-Figuren. Lade eine lokale Figur über „In Cloud veröffentlichen“ hoch.'));
   for (const f of state.own_figures) {
     const revisions = [...f.revisions].sort((a, b) => (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0));
     const latest = revisions[0], box = section(latest?.title ?? 'Noch nicht fertig hochgeladene Figur');
-    if (latest?.videos?.[0]) thumbnail(box.querySelector('h3'), latest, latest.videos[0]);
+    if (latest?.videos?.[0]) { box.querySelector('h3').classList.add('has-thumbnail'); thumbnail(box.querySelector('h3'), latest); }
     box.append(node('p', `Öffentliche Veröffentlichung: ${f.public_allowed ? 'Erlaubt' : 'Nicht erlaubt'}`));
     box.append(action(f.public_allowed ? 'Öffentliche Veröffentlichung widerrufen' : 'Öffentliche Veröffentlichung erlauben', () => run('Freigabe ändern …', async () => {
       await cloudCall('public_permission', { figure: f.id, allowed: !f.public_allowed }); await load(null);
@@ -333,8 +265,8 @@ async function publishForm() {
         await cloudCall('finalize', { id: reserved.media[i].id });
       }
       controller.signal.throwIfAborted();
-      const saved = await cloudCall('commit', { job, public_allowed: allowed.checked, title: local.title, description: local.description, tags: local.tags, videos: reserved.media.map((m, i) => ({ id: m.id, name: videos[i].name })) }); job = null;
-      if (local.poster) await revisionPoster(saved.revision, local.poster).catch(() => {});
+      const poster = await posterPayload(local.poster).catch(() => null);
+      const saved = await cloudCall('commit', { job, ...(poster ? { poster } : {}), public_allowed: allowed.checked, title: local.title, description: local.description, tags: local.tags, videos: reserved.media.map((m, i) => ({ id: m.id, name: videos[i].name })) }); job = null;
       if (library.value) await cloudCall('attach', { library: library.value, revision: saved.revision });
       source = null; area = library.value ? 'libraries' : 'figures'; await load(library.value || null);
     } catch (error) {

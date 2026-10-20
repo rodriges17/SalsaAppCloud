@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-20-add-sheet-v1';
+const APP_VERSION = '2026-10-20-library-posters-v1';
 import { initBackup } from './backup-ui.js';
 import { initCloud, openCloud } from './cloud.js';
 import { exportFigure, importFigure, packageSize, packageFilename, MAX_PACKAGE_BYTES } from './package.js';
@@ -22,9 +22,10 @@ function setError(id, message) { $(id).textContent = message ?? ''; $(id).hidden
 function pushRoute(view) { route = view; history.pushState({ salsa: true, view }, '', `#${view === 'editor' ? 'figur' : view === 'preview' ? 'vorschau' : 'lernen'}`); }
 history.replaceState({ salsa: true, view: 'home' }, '', location.pathname + location.search);
 
-function confirmAction({ title, message = '', ok = 'Bestätigen', cancel = 'Abbrechen' }) {
+function confirmAction({ title, message = '', ok = 'Bestätigen', cancel = 'Abbrechen', destructive = false }) {
   if ($('confirmDialog').open) return Promise.resolve(false);
   $('confirmTitle').textContent = title; $('confirmMessage').textContent = message;
+  $('confirmOK').classList.toggle('danger-button', destructive);
   $('confirmOK').textContent = ok; $('confirmCancel').textContent = cancel;
   return new Promise(resolve => {
     const finish = value => { $('confirmDialog').close(); $('confirmOK').onclick = null; $('confirmCancel').onclick = null; $('confirmDialog').oncancel = null; resolve(value); };
