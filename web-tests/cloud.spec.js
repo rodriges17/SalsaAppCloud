@@ -28,7 +28,7 @@ async function mock(page,admin=false, own=false, contribute=true, options={}){
   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(result),headers:{'Access-Control-Allow-Origin':'*'}});
  });return calls;
 }
-async function start(page){await page.goto('/pwa/');await expect(page.getByRole('heading',{name:'Salsa Cloud',exact:true})).toBeVisible();}
+async function start(page){await page.goto('/pwa/');await expect(page.getByRole('heading',{name:'Step by Step',exact:true})).toBeVisible();}
 test('public cloud download requires confirmed previews and becomes an offline copy',async({page,context})=>{
  await mock(page);await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Öffnen',exact:true}).tap();
  await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();await page.getByRole('button',{name:'In meine Figuren übernehmen',exact:true}).tap();

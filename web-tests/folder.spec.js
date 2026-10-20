@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
-async function start(page) { await page.goto('/pwa/'); await expect(page.getByRole('heading',{name:'Salsa Cloud',exact:true})).toBeVisible(); }
+async function start(page) { await page.goto('/pwa/'); await expect(page.getByRole('heading',{name:'Step by Step',exact:true})).toBeVisible(); }
 async function enablePicker(page, name) {
  await page.addInitScript(name=>{
   window.registeredFolder=async()=>{const name=`salsa-folders:${new URL('./',location.href).pathname}:v1`;const db=await new Promise((resolve,reject)=>{const r=indexedDB.open(name);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});try{return await new Promise((resolve,reject)=>{const r=db.transaction('entries').objectStore('entries').getAll();r.onsuccess=()=>resolve(r.result.find(f=>f.id!=='config'));r.onerror=()=>reject(r.error);});}finally{db.close();}};

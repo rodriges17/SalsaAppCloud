@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-20-public-permission-v1';
+const APP_VERSION = '2026-10-20-step-by-step-v1';
 import { initBackup } from './backup-ui.js';
 import { initCloud, openCloud } from './cloud.js';
 import { exportFigure, importFigure, packageSize, packageFilename, MAX_PACKAGE_BYTES } from './package.js';
@@ -52,7 +52,7 @@ function renderOverview() {
     let thumb;
     if (figure.poster) { const url = URL.createObjectURL(figure.poster); posterURLs.push(url); thumb = el('img', 'card-thumb'); thumb.src = url; thumb.alt = ''; }
     else { thumb = el('span', 'card-thumb thumb-placeholder', '▷'); thumb.setAttribute('aria-hidden', 'true'); }
-    const copy = el('span', 'card-copy'); copy.append(el('span', 'card-title', figure.title), el('span', 'card-status', figure.status));
+    const copy = el('span', 'card-copy'); copy.append(el('span', 'card-title', figure.title), el('span', 'card-status status-' + (figure.status === 'Sitzt' ? 'learned' : figure.status === 'Am Üben' ? 'practice' : 'new'), figure.status));
     if (figure.tags.length) copy.append(el('span', 'card-tags', figure.tags.join(' · ')));
     if (figure.storageFolder) copy.append(el('span', 'card-meta', figure.folderAccessRequired ? 'Ordner gespeichert – Zugriff erneut erlauben' : figure.storageProblem ? `Geräteordner: ${figure.storageProblem}` : `Geräteordner · ${figure.folderName || 'SalsaTrainer'}`));
     copy.append(el('span', 'card-meta', `${timeLabel(figure.duration)} · ${figure.videoIds.length} Video${figure.videoIds.length === 1 ? '' : 's'}`)); main.append(thumb, copy);
@@ -86,7 +86,7 @@ function renderOverview() {
 function renderFilters() {
   $('statusFilters').replaceChildren();
   for (const value of ['', ...STATUSES]) {
-    const node = button(value || 'Alle Lernstände', () => { statusFilter = value; renderFilters(); renderOverview(); });
+    const node = button(value || 'Alle', () => { statusFilter = value; renderFilters(); renderOverview(); });
     node.setAttribute('aria-pressed', String(value === statusFilter)); $('statusFilters').append(node);
   }
 }
@@ -315,12 +315,12 @@ document.addEventListener('keydown', event => { if (event.key === 'Escape' && le
 
 let deviceBusy = false;
 async function deviceWork(work) {
-  if (deviceBusy) return; deviceBusy = true; $('closeInfo').disabled = true;
+  if (deviceBusy) return; deviceBusy = true; $('closeInfo').disabled = true; $('closeInfoTop').disabled = true;
   $('deviceStorageStatus').textContent = 'Bitte warten …';
   $('deviceStorageControls').inert = true;
   try { await work(); changed(); await refresh(); await renderDeviceStorage(); $('deviceStorageStatus').textContent = 'Gespeichert.'; }
   catch (e) { $('deviceStorageStatus').textContent = storageMessage(e); }
-  finally { deviceBusy = false; $('closeInfo').disabled = false; $('deviceStorageControls').inert = false; }
+  finally { deviceBusy = false; $('closeInfo').disabled = false; $('closeInfoTop').disabled = false; $('deviceStorageControls').inert = false; }
 }
 async function renderDeviceStorage() {
   const settings = await storageSettings(), controls = $('deviceStorageControls'); controls.replaceChildren();
@@ -379,7 +379,9 @@ function showInfoDialog() {
   $('infoTitle').focus({ preventScroll: true });
   dialog.scrollTop = 0;
 }
-$('infoButton').onclick = () => { storageInfo(); showInfoDialog(); };
+$('infoButton').onclick = () => { $('themeChoice').value = window.stepAppearance.get(); storageInfo(); showInfoDialog(); };
+$('themeChoice').onchange = () => { $('themeStatus').textContent = window.stepAppearance.set($('themeChoice').value) ? 'Die Auswahl wird auf diesem Gerät gespeichert.' : 'Das Farbschema gilt für diesen Aufruf. Der Browser konnte die Auswahl nicht speichern.'; };
+$('closeInfoTop').onclick = () => { if (!deviceBusy) $('infoDialog').close(); };
 $('closeInfo').onclick = () => $('infoDialog').close();
 $('infoDialog').addEventListener('cancel', event => { if (deviceBusy) event.preventDefault(); });
 $('persistStorage').onclick = async () => {
@@ -515,6 +517,15 @@ $('applyUpdate').onclick = () => {
   }
   location.reload();
 };
+document.querySelectorAll('[data-nav]').forEach(nav => {
+  if (nav.id === 'cloudButton' || nav.closest('#cloudDialog')) return;
+  nav.onclick = async () => {
+    if (nav.closest('#infoDialog')) { if (deviceBusy) return; $('infoDialog').close(); }
+    if (learning) { await new Promise(resolve => { window.addEventListener('popstate', resolve, { once: true }); history.back(); }); }
+    if (nav.dataset.nav === 'cloud') openCloud();
+    else { window.scrollTo({ top: 0 }); $('search').focus({ preventScroll: true }); }
+  };
+});
 initCloud({ confirm: confirmAction, imported: async imported => {
   const current = await listFigures();
   if (current.some(f => f.importFingerprint === imported.fingerprint) && !await confirmAction({ title: 'Cloud-Version bereits übernommen', message: 'Trotzdem eine weitere lokale Kopie erstellen?', ok: 'Weitere Kopie erstellen' })) return;

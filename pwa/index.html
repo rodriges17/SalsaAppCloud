@@ -1,27 +1,28 @@
 <!doctype html>
-<html lang="de">
+<html lang="de" data-theme="dark">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#17141f"><meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#17121f"><meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="description" content="Deine privaten Salsa-Figuren und Videos. Offline lernen, in deinem Tempo.">
+  <meta name="description" content="Deine Tanzfiguren und Videos. Schritt für Schritt offline lernen und ausgewählte Inhalte teilen.">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; media-src 'self' blob: https://tzaprobvauikssnpiucl.supabase.co; connect-src 'self' https://tzaprobvauikssnpiucl.supabase.co; object-src 'none'; base-uri 'self'; form-action 'none'">
-  <title>Salsa Trainer Cloud</title><link rel="manifest" href="./manifest.webmanifest"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
-  <link rel="icon" href="./icons/icon-192.png"><link rel="stylesheet" href="./styles.css"><script type="module" src="./app.js"></script>
+  <title>Step by Step</title><link rel="manifest" href="./manifest.webmanifest"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <script src="./appearance.js"></script><link rel="icon" href="./icons/icon-192.png"><link rel="stylesheet" href="./styles.css"><script type="module" src="./app.js"></script>
 </head>
 <body>
   <main id="overview" class="overview">
-    <header class="heading"><h1>Salsa Cloud</h1><button id="cloudButton" class="text-button peach">Cloud</button><button id="tagsButton" class="text-button peach">Tags</button></header>
-    <div id="updateNotice" class="update-notice" hidden><span>Eine neue App-Version ist bereit.</span><button id="applyUpdate" class="secondary">Update laden</button></div><p class="tagline">Deine Schritte. Dein Tempo.</p>
+    <header class="heading"><h1>Step by Step</h1><button id="infoButton" class="header-icon" aria-label="Installation &amp; Speicher" title="Einstellungen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 3-1 3-3 1-2 4 2 2v4l4 2 3-1 3 1 4-2v-4l2-2-2-4-3-1-1-3H9Z"/><circle cx="12" cy="11" r="3"/></svg></button></header>
+    <div id="updateNotice" class="update-notice" hidden><span>Eine neue App-Version ist bereit.</span><button id="applyUpdate" class="secondary">Update laden</button></div><div class="page-intro"><h2>Meine Figuren</h2><p class="muted">Deine Schritte. Dein Tempo.</p></div>
     <label class="sr-only" for="search">Figur suchen</label><input id="search" type="search" placeholder="Figur suchen" autocomplete="off">
-    <div id="statusFilters" class="chips" aria-label="Lernstand filtern"></div>
+    <div class="filter-row"><div id="statusFilters" class="chips" aria-label="Lernstand filtern"></div><button id="tagsButton" class="header-icon" aria-label="Tags" title="Nach Tags filtern"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 3 8 0 10 10-8 8L3 11V3Z"/><circle cx="7" cy="7" r="1"/></svg></button></div>
     <div id="activeTag"></div>
     <div class="list-toolbar"><strong id="figureCount">0 Figuren</strong><label class="peach">Sortierung: <select id="sort" aria-label="Sortierung"><option value="newest">Neueste</option><option value="name">Name</option><option value="status">Lernstand</option></select></label></div>
     <div id="figureList" class="figure-list"></div>
     <div id="empty" class="empty" hidden><span class="dance-icon" aria-hidden="true">♪</span><h2>Deine erste Figur</h2><p>Füge eigene Videos hinzu und übe in deinem Tempo.</p></div>
-    <footer class="overview-footer"><button id="infoButton" class="subtle small">Installation &amp; Speicher</button><span id="offlineStatus" class="small muted" role="status">Nur auf diesem Gerät</span></footer>
-    <div class="add-dock"><button id="importFigure" class="secondary">Figur importieren</button><button id="addFigure" class="primary add-button">＋ Figur hinzufügen</button></div>
+    <footer class="overview-footer"><span id="offlineStatus" class="small muted" role="status">Nur auf diesem Gerät</span></footer>
+    <div class="add-dock"><button id="addFigure" class="primary add-button">＋ Figur hinzufügen</button><button id="importFigure" class="secondary">Figur importieren</button></div>
   </main>
+  <nav class="bottom-nav" aria-label="Hauptnavigation"><button type="button" data-nav="figures" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h14v14H5zM8 2v6M16 2v6M8 12h8M8 16h5"/></svg><span>Figuren</span></button><button type="button" id="cloudButton" data-nav="cloud"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18a4 4 0 0 1-.5-8 6.5 6.5 0 0 1 12.4-1.8A5 5 0 0 1 18 18H6Z"/></svg><span>Cloud-Speicher</span></button></nav>
   <dialog id="editor" class="screen-dialog">
     <header class="screen-header"><button id="editorBack" class="back" aria-label="Zurück">‹</button><h2 id="editorHeading">Figur hinzufügen</h2></header>
     <form id="editorForm" novalidate>
@@ -51,12 +52,12 @@
     <p id="playerError" class="error" role="alert" hidden></p>
     <div class="timeline"><label for="seek" class="sr-only">Videoposition</label><input id="seek" type="range" min="0" max="1" step="0.01" value="0"><div class="time-labels"><span id="position">0:00</span><span id="duration">0:00</span></div></div>
     <div class="player-controls"><button id="rewind" aria-label="5 Sekunden zurück">−5 s</button><button id="playPause" aria-label="Abspielen">▶</button><label class="sr-only" for="speed">Geschwindigkeit</label><select id="speed" aria-label="Geschwindigkeit"><option value="0.25">0,25×</option><option value="0.5">0,5×</option><option value="0.75">0,75×</option><option value="1" selected>1×</option></select><button id="fitCrop" aria-pressed="false">Fit</button><button id="fullLoop" aria-pressed="false">Loop</button><button id="markA">A</button><button id="markB" disabled>B</button><button id="clearAB" disabled>A–B löschen</button><button id="fullscreen">Vollbild</button></div>
-    <p id="abStatus" class="ab-status" aria-live="polite"></p><div id="playerDescription" class="player-description"></div>
+    <p id="abStatus" class="ab-status" aria-live="polite"></p><div id="playerDescription" class="player-description"></div><nav class="bottom-nav" aria-label="Hauptnavigation"><button type="button" data-nav="figures" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h14v14H5zM8 2v6M16 2v6M8 12h8M8 16h5"/></svg><span>Figuren</span></button><button type="button" data-nav="cloud"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18a4 4 0 0 1-.5-8 6.5 6.5 0 0 1 12.4-1.8A5 5 0 0 1 18 18H6Z"/></svg><span>Cloud-Speicher</span></button></nav>
   </section>
   <dialog id="cloudDialog" class="screen-dialog">
-    <header class="screen-header"><button id="cloudBack" class="back" aria-label="Zurück aus der Cloud">‹</button><h2>Cloud-Bibliotheken</h2></header>
+    <header class="screen-header"><button id="cloudBack" class="back" aria-label="Zurück aus der Cloud">‹</button><h2>Cloud-Speicher</h2></header>
     <div class="cloud-scroll"><p id="cloudError" class="error" role="alert" hidden></p><div id="cloudBody"></div></div>
-    <footer class="save-footer"><p id="cloudStatus" role="status"></p><button id="cloudCancelUpload" class="secondary" hidden>Upload abbrechen</button></footer>
+    <footer class="save-footer"><p id="cloudStatus" role="status"></p><button id="cloudCancelUpload" class="secondary" hidden>Upload abbrechen</button></footer><nav class="bottom-nav" aria-label="Hauptnavigation"><button type="button" data-nav="figures"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h14v14H5zM8 2v6M16 2v6M8 12h8M8 16h5"/></svg><span>Figuren</span></button><button type="button" data-nav="cloud" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18a4 4 0 0 1-.5-8 6.5 6.5 0 0 1 12.4-1.8A5 5 0 0 1 18 18H6Z"/></svg><span>Cloud-Speicher</span></button></nav>
   </dialog>
   <dialog id="importChoiceDialog" class="small-dialog">
     <h2>Figur importieren</h2>
@@ -82,11 +83,23 @@
   <dialog id="confirmDialog" class="small-dialog"><h2 id="confirmTitle"></h2><p id="confirmMessage"></p><div class="dialog-actions"><button id="confirmCancel" class="secondary">Abbrechen</button><button id="confirmOK" class="primary">Bestätigen</button></div></dialog>
   <dialog id="tagsDialog" class="small-dialog"><h2>Tags</h2><div id="tagOptions" class="tag-options"></div><button id="closeTags" class="secondary">Schließen</button></dialog>
   <dialog id="backupDialog" class="small-dialog info-dialog"><h2 id="backupTitle">Vollständiges Backup</h2><div id="backupBody" class="backup-body"></div><p id="backupStatus" role="status" style="white-space:pre-wrap"></p><button id="backupCancel" class="secondary" hidden>Abbrechen</button><button id="backupClose" class="primary">Schließen</button></dialog>
-  <dialog id="infoDialog" class="small-dialog info-dialog">
-    <h2 id="infoTitle" tabindex="-1" autofocus>Dein Salsa Trainer Cloud</h2>
+  <dialog id="infoDialog" class="screen-dialog settings-screen">
+    <header class="settings-heading"><button id="closeInfoTop" class="back" aria-label="Zurück aus den Einstellungen">‹</button><div><p class="brand-caption">Step by Step</p><h2 id="infoTitle" tabindex="-1" autofocus>Installation &amp; Speicher</h2></div></header>
     <p id="appVersion" class="small muted"></p>
-    <p>Verwalte deine Salsa-Figuren, lerne offline und teile ausgewählte Inhalte über Cloud-Bibliotheken. Deine Videos werden nur hochgeladen, wenn du dies ausdrücklich auswählst.</p>
-    <h3>Android: Chrome empfohlen</h3>
+    <section class="settings-section"><h3>Erscheinungsbild</h3><label for="themeChoice">Farbschema</label><select id="themeChoice"><option value="dark">Klar · Dunkel (Standard)</option><option value="light">Terrakotta · Hell</option></select><p id="themeStatus" class="small muted" role="status">Die Auswahl wird auf diesem Gerät gespeichert.</p></section>
+    <section class="settings-section">    <h3>Speicherort</h3>
+    <p>Standardmäßig werden neue Figuren im internen Browser-/App-Speicher gespeichert.</p>
+    <p>Auf unterstützten Geräten kannst du stattdessen einen Geräteordner auswählen. Die App speichert dort Videos, Figurenangaben und Lernstände im Unterordner „SalsaTrainer“ und spielt die Videos direkt daraus ab.</p>
+    <p>Die Speicherwahl gilt für neue Importe und aus der Cloud übernommene Figuren. Bestehende Figuren bleiben an ihrem bisherigen Speicherort. Über das Optionen-Menü einer Figur kannst du sie übertragen. Die bisherige Kopie wird erst nach erfolgreicher Prüfung und deiner zusätzlichen Bestätigung entfernt.</p>
+    <p id="deviceStorageActive"></p>
+    <div id="deviceStorageControls" class="cloud-card"></div>
+    <p id="deviceStorageStatus" role="status"></p>
+    <h3>App-Speicher</h3>
+    <p id="storageDetails"></p>
+    <button id="persistStorage" class="secondary">Dauerhaften Speicher anfragen</button>
+    <p id="persistenceResult" role="status"></p>
+</section>
+    <details class="settings-section"><summary>Installation &amp; Browser</summary>    <h3>Android: Chrome empfohlen</h3>
     <p>Für den möglichst vollständigen Funktionsumfang empfehlen wir eine aktuelle Version von Google Chrome. Damit kannst du auch einen Geräteordner als Speicherort auswählen und Videos direkt daraus abspielen. Den Ordnerzugriff musst du ausdrücklich erlauben.</p>
     <p>Andere Browser können Funktionen einschränken. Nicht unterstützte Speicheroptionen werden nicht angeboten. In Brave muss der Ordnerzugriff gegebenenfalls zuerst in den Browser-Einstellungen freigeschaltet werden.</p>
     <p>Zum Installieren öffnest du die App in Chrome und wählst im Browsermenü „App installieren“ beziehungsweise „Zum Startbildschirm hinzufügen“. Starte sie anschließend über das neue App-Symbol.</p>
@@ -98,26 +111,19 @@
     <p>Lade die App zunächst einmal vollständig mit Internetverbindung. Danach kannst du lokal gespeicherte Figuren und Videos auch ohne Internet verwenden. Für Inhalte im Geräteordner muss der Ordnerzugriff weiterhin erlaubt sein.</p>
     <p>Das Öffnen von Cloud-Bibliotheken sowie das Hoch- und Herunterladen von Videos benötigen eine Internetverbindung.</p>
     <p id="offlineDetails" role="status">Die App wird nach dem ersten Online-Aufruf für die Offline-Nutzung vorbereitet.</p>
-    <h3>Speicherort wählen</h3>
-    <p>Standardmäßig werden neue Figuren im internen Browser-/App-Speicher gespeichert.</p>
-    <p>Auf unterstützten Geräten kannst du stattdessen einen Geräteordner auswählen. Die App speichert dort Videos, Figurenangaben und Lernstände im Unterordner „SalsaTrainer“ und spielt die Videos direkt daraus ab.</p>
-    <p>Die Speicherwahl gilt für neue Importe und aus der Cloud übernommene Figuren. Bestehende Figuren bleiben an ihrem bisherigen Speicherort. Über das Optionen-Menü einer Figur kannst du sie übertragen. Die bisherige Kopie wird erst nach erfolgreicher Prüfung und deiner zusätzlichen Bestätigung entfernt.</p>
-    <p id="deviceStorageActive"></p>
-    <div id="deviceStorageControls" class="cloud-card"></div>
-    <p id="deviceStorageStatus" role="status"></p>
-    <h3>App-Speicher</h3>
-    <p id="storageDetails"></p>
-    <button id="persistStorage" class="secondary">Dauerhaften Speicher anfragen</button>
-    <p id="persistenceResult" role="status"></p>
-    <h3>Daten erhalten und sichern</h3>
+</details>
+    <details class="settings-section"><summary>Daten erhalten &amp; ZIP-Export</summary>    <h3>Daten erhalten und sichern</h3>
     <p>Wenn du den Browser-/App-Speicher beziehungsweise die Website-Daten löschst, werden die dort gespeicherten Figuren, Videokopien und Lernstände gelöscht. Auch gewährter „dauerhafter Speicher“ schützt nicht vor diesem bewussten Löschen.</p>
     <p>Dateien in einem ausgewählten Geräteordner bleiben erhalten. Wähle den Ordner anschließend erneut aus, um die Bibliothek mit ihren Figuren und Lernständen wieder einzulesen. Die Ordnerauswahl bleibt gespeichert. Der Browser kann die Zugriffsberechtigung nach dem Schließen oder längerer Inaktivität erneut verlangen, besonders unter Android. Tippe dann bei einer Figur oder hier unter Speicherort auf „Ordnerzugriff erlauben“. Die Dateien bleiben erhalten; du musst den Ordner nicht neu auswählen.</p>
     <p>Sichere deine Figuren regelmäßig per ZIP-Export. Dieser enthält die Videos, Figurennamen, Beschreibungen und Tags, aber keine persönlichen Lernstände.</p>
     <p>Wenn du einen Geräteordner als Speicherort eingerichtet hast, kannst du zusätzlich den dort angelegten Unterordner „SalsaTrainer“ vollständig kopieren. Diese Sicherung enthält auch deine Lernstände.</p>
-    <p>Verwendest du den internen Browser-/App-Speicher, gibt es keinen sichtbaren Bibliotheksordner. Nutze in diesem Fall den ZIP-Export zur Sicherung deiner Figuren.</p>
+    <p>Verwendest du den internen Browser-/App-Speicher, gibt es keinen sichtbaren Bibliotheksordner. Nutze in diesem Fall das vollständige Backup unten, um auch deine persönlichen Lernstände zu sichern. Der ZIP-Export bleibt für den Figurenaustausch verfügbar.</p>
     <p>Deine ursprünglichen Importdateien außerhalb der App und bereits hochgeladene Cloud-Inhalte bleiben beim Löschen des Browser-/App-Speichers erhalten. Lokale Änderungen werden nicht automatisch mit der Cloud synchronisiert.</p>
-    <h3>Vollständiges Backup</h3><p>Sichere alle lokalen Figuren samt Videos und persönlichen Lernständen. Der bisherige ZIP-Export bleibt für den Figurenaustausch verfügbar.</p><div class="backup-actions"><button id="createBackup" class="secondary">Vollständiges Backup erstellen</button><button id="restoreBackup" class="secondary">Backup wiederherstellen</button></div><p id="backupLastCreated" class="small muted"></p>
+</details>
+    <section class="settings-section backup-section">    <h3>Vollständiges Backup</h3><p>Sichere alle lokalen Figuren samt Videos und persönlichen Lernständen. Der bisherige ZIP-Export bleibt für den Figurenaustausch verfügbar.</p><div class="backup-actions"><button id="createBackup" class="secondary">Vollständiges Backup erstellen</button><button id="restoreBackup" class="secondary">Backup wiederherstellen</button></div><p id="backupLastCreated" class="small muted"></p>
+</section>
     <button id="closeInfo" class="primary">Schließen</button>
+    <nav class="bottom-nav" aria-label="Hauptnavigation"><button type="button" data-nav="figures"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h14v14H5zM8 2v6M16 2v6M8 12h8M8 16h5"/></svg><span>Figuren</span></button><button type="button" data-nav="cloud"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18a4 4 0 0 1-.5-8 6.5 6.5 0 0 1 12.4-1.8A5 5 0 0 1 18 18H6Z"/></svg><span>Cloud-Speicher</span></button></nav>
   </dialog>
   <div id="toast" class="toast" role="status" hidden></div>
   <noscript>Für die lokale Videobibliothek muss JavaScript aktiviert sein.</noscript>

@@ -19,9 +19,9 @@ function checkbox(form, label, checked = false) { const wrap = node('label', und
 function section(title) { const s = node('section', undefined, 'cloud-card'); s.append(node('h3', title)); body.append(s); return s; }
 async function run(message, work, errorTarget = errorBox) {
   if (busy) return; busy = true; errorBox.hidden = true; errorTarget.hidden = true; statusBox.textContent = message;
-  body.inert = true; document.getElementById('cloudBack').disabled = true;
+  body.inert = true; document.getElementById('cloudBack').disabled = true; dialog.querySelectorAll('[data-nav]').forEach(button => { button.disabled = true; });
   try { return await work(); } catch (error) { report(error, errorTarget); }
-  finally { busy = false; body.inert = false; document.getElementById('cloudBack').disabled = false; statusBox.textContent = ''; }
+  finally { busy = false; body.inert = false; document.getElementById('cloudBack').disabled = false; dialog.querySelectorAll('[data-nav]').forEach(button => { button.disabled = false; }); statusBox.textContent = ''; }
 }
 function close() { if (busy) return; dialog.close(); body.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); }); source = null; }
 async function navigate(next, library = null) {
@@ -37,14 +37,17 @@ async function load(library = current) {
     if (cleaned?.cleaned) state = await cloudCall('state');
   }
   clearPreviews(body); body.replaceChildren();
-  const toolbar = node('div', undefined, 'cloud-actions');
-  for (const [key, label] of [['libraries', 'Bibliotheken'], ...(state.me ? [['figures', 'Meine Cloud-Figuren']] : []), ...(state.me?.is_admin ? [['admin', 'Verwaltung']] : [])]) {
-    const button = action(label, () => navigate(key)); button.setAttribute('aria-pressed', String(area === key && !current && !source)); toolbar.append(button);
+  const toolbar = node('div', undefined, 'cloud-tabs');
+  toolbar.setAttribute('aria-label', 'Cloud-Bereiche');
+  for (const [key, label] of [...(state.me ? [['figures', 'Meine Figuren']] : []), ['libraries', 'Bibliotheken']]) {
+    const button = action(label, () => navigate(key)); if (key === 'figures') button.setAttribute('aria-label', 'Meine Cloud-Figuren'); button.setAttribute('aria-pressed', String(area === key && !current && !source)); toolbar.append(button);
   }
-  toolbar.append(action('Aktualisieren', () => run('Laden …', () => load(current))));
-  if (signedIn()) toolbar.append(action('Abmelden', async () => { await logout(); await run('Laden …', () => load(null)); }));
-  body.append(toolbar);
-  if (state.me) body.append(node('p', `${state.me.email} · ${MB(state.me.used)} / ${MB(state.me.quota)} belegt${state.me.upload_enabled ? '' : ' · Lesen erlaubt, Uploads gesperrt'}`));
+  const utilities = node('div', undefined, 'cloud-utilities');
+  if (state.me?.is_admin) utilities.append(action('Verwaltung', () => navigate('admin')));
+  utilities.append(action('Aktualisieren', () => run('Laden …', () => load(current))));
+  if (signedIn()) utilities.append(action('Abmelden', async () => { await logout(); await run('Laden …', () => load(null)); }));
+  body.append(toolbar, utilities);
+  if (state.me) body.append(node('p', `${state.me.email} · ${MB(state.me.used)} / ${MB(state.me.quota)} belegt${state.me.upload_enabled ? '' : ' · Lesen erlaubt, Uploads gesperrt'}`, 'cloud-account'));
   else {
     body.append(node('p', 'Öffentliche Bibliotheken sind ohne Anmeldung lesbar. Für private Bibliotheken und Beiträge erhältst du einen persönlichen Anmeldelink vom Administrator.'));
     body.append(node('p', 'Du bist derzeit nicht angemeldet. Bibliotheken erstellen und Verwaltung erscheinen nach der Anmeldung mit einem berechtigten Konto.'));
@@ -62,7 +65,7 @@ async function load(library = current) {
   }
   if (area === 'admin' && state.me?.is_admin) { adminForm(); return; }
   body.append(node('h3', 'Bibliotheken'));
-  if (state.me?.upload_enabled) body.append(action('Bibliothek erstellen', () => navigate('create')));
+  if (state.me?.upload_enabled) { const create = action('Bibliothek erstellen', () => navigate('create')); create.className = 'primary'; body.append(create); }
   for (const lib of state.libraries) {
     const box = section(lib.title); box.append(node('p', `${lib.visibility === 'public' ? 'Öffentlich' : 'Privat'} · ${lib.collaborative ? 'Mitwirkende erlaubt' : 'Nur Besitzer'} · ${lib.moderated ? 'Mit Freigabe' : 'Sofort veröffentlichen'}`));
     box.append(action('Öffnen', () => run('Laden …', () => load(lib.id))));
@@ -171,11 +174,11 @@ function ownFigures() {
     })));
     box.append(node('p', 'Die Freigabe gilt für alle Versionen dieser Figur und alle öffentlichen Bibliotheken, denen sie zugeordnet ist. Ohne Freigabe bleibt sie dort für Lesende verborgen. Private Bibliotheken bleiben unverändert.'));
     if (latest) {
-      box.append(action('Einer Bibliothek zuordnen', () => attachForm(latest)));
+      const assign = action('Einer Bibliothek zuordnen', () => attachForm(latest)); assign.className = 'primary'; box.append(assign);
       const history = node('details', undefined, 'cloud-history');
       history.append(node('summary', `Versionsverlauf · ${revisions.length} ${revisions.length === 1 ? 'Version' : 'Versionen'}`));
       for (const revision of revisions) {
-        const entry = node('article', undefined, 'cloud-card');
+        const entry = node('article', undefined, 'version-entry');
         entry.append(node('h4', `${versionLabel(revision)}${revision.id === latest.id ? ' · Neueste Version' : ''}`), node('p', revision.title));
         for (const video of revision.videos) entry.append(action(`Video: ${video.name || 'Ohne Namen'}`, () => previewVideo(entry, revision, video)));
         if (revision.id !== latest.id) entry.append(action('Diese Version einer Bibliothek zuordnen', () => attachForm(revision)));
@@ -197,29 +200,31 @@ async function publishForm() {
   if (!me?.upload_enabled) { body.append(node('p', 'Für Cloud-Uploads brauchst du die Freischaltung des Administrators.')); return; }
   const local = source, records = await figureVideos(local), libs = state.libraries.filter(l => l.contribute);
   const box = section(`„${local.title}“ hochladen`), selected = [];
-  for (const record of records) selected.push([checkbox(box, `${record.name || 'Video'} · ${MB(record.blob.size)}`, true), record]);
-  box.append(node('p', 'Maximal 50 MB pro Video. Während eines Uploads wird vorübergehend der maximale Platz pro Video reserviert. Alte Versionen zählen weiterhin zum Speicher.'));
-  const library = select(box, 'Bibliothek', [['', 'Nur in Meine Cloud-Figuren hochladen'], ...libs.map(l => [l.id, l.title])]);
+  const step = (number, title) => { const group = node('div', undefined, 'upload-step'); group.append(node('h4', `${number} · ${title}`)); box.append(group); return group; };
+  const videoStep = step(1, 'Video'), targetStep = step(2, 'Ziel'), optionsStep = step(3, 'Hochladen');
+  for (const record of records) selected.push([checkbox(videoStep, `${record.name || 'Video'} · ${MB(record.blob.size)}`, true), record]);
+  videoStep.append(node('p', 'Maximal 50 MB pro Video. Während eines Uploads wird vorübergehend der maximale Platz pro Video reserviert. Alte Versionen zählen weiterhin zum Speicher.'));
+  const library = select(targetStep, 'Bibliothek', [['', 'Nur in Meine Cloud-Figuren hochladen'], ...libs.map(l => [l.id, l.title])]);
   // Reservations can create a figure before any revision exists. They are not
   // valid version targets until the first upload has completed.
   const targets = state.own_figures.filter(f => f.revisions?.length);
   const names = new Map();
   for (const f of targets) { const title = f.revisions[0].title; names.set(title, (names.get(title) ?? 0) + 1); }
-  const figure = select(box, 'Neue Figur oder neue Version', [['', 'Neue Cloud-Figur'], ...targets.map(f => {
+  const figure = select(optionsStep, 'Neue Figur oder neue Version', [['', 'Neue Cloud-Figur'], ...targets.map(f => {
     const latest = f.revisions[0], title = latest.title;
     return [f.id, names.get(title) > 1 ? `${title} · ${new Date(latest.created_at).toLocaleString('de')}` : title];
   })]);
-  box.append(node('p', 'Hier stehen deine vorhandenen Cloud-Figuren. Lokales Löschen oder Entfernen aus einer Bibliothek löscht die Cloud-Figur nicht. Dauerhaft löschen kannst du sie unter „Meine Cloud-Figuren“ mit „Cloud-Figur samt Videos löschen“.'));
-  const allowed = checkbox(box, 'Öffentliche Veröffentlichung dieser Figur erlauben');
-  box.append(node('p', 'Mit Häkchen darf diese Figur in öffentlichen Bibliotheken ohne Anmeldung sichtbar sein. Ohne Häkchen ist sie nur in privaten Bibliotheken nutzbar. Das Häkchen allein veröffentlicht die Figur noch nicht.'));
-  const visibilityHint = node('p'); visibilityHint.setAttribute('role', 'status'); box.append(visibilityHint);
+  optionsStep.append(node('p', 'Hier stehen deine vorhandenen Cloud-Figuren. Lokales Löschen oder Entfernen aus einer Bibliothek löscht die Cloud-Figur nicht. Dauerhaft löschen kannst du sie unter „Meine Cloud-Figuren“ mit „Cloud-Figur samt Videos löschen“.'));
+  const allowed = checkbox(optionsStep, 'Öffentliche Veröffentlichung dieser Figur erlauben');
+  optionsStep.append(node('p', 'Mit Häkchen darf diese Figur in öffentlichen Bibliotheken ohne Anmeldung sichtbar sein. Ohne Häkchen ist sie nur in privaten Bibliotheken nutzbar. Das Häkchen allein veröffentlicht die Figur noch nicht.'));
+  const visibilityHint = node('p'); visibilityHint.setAttribute('role', 'status'); targetStep.append(visibilityHint);
   const uploadError = node('p', undefined, 'error'); uploadError.setAttribute('role', 'alert'); uploadError.hidden = true;
   const updateVisibility = () => {
     const isPublic = state.libraries.find(l => l.id === library.value)?.visibility === 'public';
     visibilityHint.textContent = !library.value
       ? 'Die Figur wird in „Meine Cloud-Figuren“ gespeichert und keiner weiteren Bibliothek zugeordnet. Du kannst sie später einer Bibliothek zuordnen.'
       : isPublic
-      ? allowed.checked ? 'Öffentliche Bibliothek: Diese Figur darf für alle sichtbar werden.' : 'Diese Bibliothek ist öffentlich. Zum Hochladen musst du oben die öffentliche Veröffentlichung dieser Figur erlauben. Alternativ wähle eine private Bibliothek.'
+      ? allowed.checked ? 'Öffentliche Bibliothek: Diese Figur darf für alle sichtbar werden.' : 'Diese Bibliothek ist öffentlich. Zum Hochladen musst du die öffentliche Veröffentlichung dieser Figur erlauben. Alternativ wähle eine private Bibliothek.'
       : 'Private Bibliothek: Die Figur ist nur für berechtigte Personen sichtbar.';
     if (figure.value) visibilityHint.textContent += ' Bei einer neuen Version gelten bestehende Bibliothekszuordnungen und deren Freigaberegeln weiterhin.';
     uploadError.hidden = true;
@@ -227,7 +232,7 @@ async function publishForm() {
   library.onchange = updateVisibility; allowed.onchange = updateVisibility;
   figure.onchange = () => { allowed.checked = state.own_figures.find(f => f.id === figure.value)?.public_allowed ?? false; updateVisibility(); };
   updateVisibility();
-  box.append(action('Ausgewählte Figur hochladen', () => run('Upload vorbereiten …', async () => {
+  const upload = action('Ausgewählte Figur hochladen', () => run('Upload vorbereiten …', async () => {
     const videos = selected.filter(([check]) => check.checked).map(([, v]) => v);
     if (!videos.length) throw new Error('Bitte mindestens ein Video auswählen.');
     if (videos.some(v => v.blob.size > CLOUD_FILE_LIMIT)) throw new Error('Ein Video überschreitet 50 MB. Bitte ein kleineres Originalvideo auswählen.');
@@ -248,8 +253,8 @@ async function publishForm() {
       if (job) await cloudCall('abort', { job }).catch(() => {});
       throw error;
     } finally { controller = null; document.getElementById('cloudCancelUpload').hidden = true; }
-  }, uploadError)));
-  box.append(uploadError);
+  }, uploadError));
+  upload.className = 'primary'; box.append(upload, uploadError);
 }
 function adminForm() {
   const box = section('Plattform verwalten'); box.append(node('p', `${MB(state.settings.used)} / ${MB(state.settings.total_limit)} insgesamt belegt`));
@@ -266,6 +271,8 @@ function adminForm() {
 export function initCloud(callbacks) {
   hooks = callbacks; dialog = document.getElementById('cloudDialog'); body = document.getElementById('cloudBody'); errorBox = document.getElementById('cloudError'); statusBox = document.getElementById('cloudStatus');
   document.getElementById('cloudBack').onclick = close;
+  dialog.querySelector('[data-nav=figures]').onclick = close;
+  dialog.querySelector('[data-nav=cloud]').onclick = () => { if (!busy) navigate('libraries'); };
   document.getElementById('cloudCancelUpload').onclick = () => controller?.abort();
   dialog.addEventListener('cancel', e => { e.preventDefault(); close(); });
   document.getElementById('cloudButton').onclick = () => openCloud();

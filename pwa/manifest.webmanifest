@@ -1,14 +1,14 @@
 {
   "id": "./",
-  "name": "Salsa Trainer Cloud",
-  "short_name": "Salsa Cloud",
+  "name": "Step by Step",
+  "short_name": "Step by Step",
   "lang": "de",
-  "description": "Salsa-Videos offline lernen und ausgewählte Figuren über Cloud-Bibliotheken teilen.",
+  "description": "Tanzfiguren verwalten, offline lernen und ausgewählte Inhalte über Cloud-Bibliotheken teilen.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#17141f",
-  "theme_color": "#17141f",
+  "background_color": "#17121f",
+  "theme_color": "#17121f",
   "icons": [
     {
       "src": "./icons/icon-192.png",
