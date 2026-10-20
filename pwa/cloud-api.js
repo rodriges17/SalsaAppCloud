@@ -1,7 +1,8 @@
 import { CLOUD_URL, CLOUD_KEY } from './cloud-config.js';
 const SESSION_KEY = `salsa-cloud-session:${new URL('./', import.meta.url).pathname}:v1`;
 let session = null, refreshing = null;
-try { session = JSON.parse(localStorage.getItem(SESSION_KEY) ?? 'null'); } catch { /* no session */ }
+function storedSession() { try { return JSON.parse(localStorage.getItem(SESSION_KEY) ?? 'null'); } catch { return session; } }
+session = storedSession();
 // Capture Supabase's callback before the local player replaces the hash route.
 const callback = new URLSearchParams(location.hash.slice(1));
 if (callback.has('access_token') && callback.has('refresh_token')) {
@@ -12,25 +13,46 @@ if (callback.has('access_token') && callback.has('refresh_token')) {
 async function parse(response) {
   const data = await response.json().catch(() => ({}));
   if (response.status === 404) throw new Error('Cloud ist noch nicht eingerichtet. Bitte den Administrator um die Supabase-Einrichtung bitten.');
-  if (!response.ok || data.error) throw new Error(data.error?.message ?? data.error ?? data.message ?? 'Cloud ist noch nicht eingerichtet oder derzeit nicht erreichbar.');
+  if (!response.ok || data.error) {
+    const error = new Error(data.error?.message ?? data.error_description ?? data.msg ?? data.message ?? (typeof data.error === 'string' ? data.error : 'Cloud ist noch nicht eingerichtet oder derzeit nicht erreichbar.'));
+    error.status = response.status; error.code = data.code ?? data.error_code ?? data.error; throw error;
+  }
   return data;
 }
-export function signedIn() { return !!session; }
-export async function accessToken() {
+export function signedIn() { session = storedSession(); return !!session; }
+async function refreshSession() {
+  // Re-read after acquiring the cross-tab lock: another tab may have rotated tokens.
+  session = storedSession();
   if (!session) return null;
-  if (session.expires_at < Date.now() + 60000) {
-    refreshing ??= (async () => {
-      try {
-        const data = await parse(await fetch(`${CLOUD_URL}/auth/v1/token?grant_type=refresh_token`, { method: 'POST', headers: { apikey: CLOUD_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: session.refresh_token }), signal: AbortSignal.timeout(30000) }));
-        session = { ...data, expires_at: Date.now() + data.expires_in * 1000 }; localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-      } catch (error) {
-        if (navigator.onLine) { session = null; localStorage.removeItem(SESSION_KEY); }
-        throw error;
-      } finally { refreshing = null; }
-    })();
-    await refreshing;
+  if (Number.isFinite(session.expires_at) && session.expires_at >= Date.now() + 60000) return session.access_token;
+  const previous = session;
+  try {
+    const data = await parse(await fetch(`${CLOUD_URL}/auth/v1/token?grant_type=refresh_token`, { method: 'POST', headers: { apikey: CLOUD_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: previous.refresh_token }), signal: AbortSignal.timeout(30000) }));
+    if (!data.access_token || !data.refresh_token || !(data.expires_in > 0)) throw new Error('Anmeldung konnte nicht vollständig erneuert werden. Bitte erneut versuchen.');
+    const current = storedSession();
+    if (current?.refresh_token !== previous.refresh_token) { session = current; return current?.access_token ?? null; }
+    const renewed = { ...data, expires_at: Date.now() + data.expires_in * 1000 };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(renewed)); session = renewed;
+    return session.access_token;
+  } catch (error) {
+    const invalid = ['refresh_token_not_found', 'refresh_token_already_used', 'session_not_found', 'session_expired', 'user_not_found', 'user_banned', 'invalid_grant'].includes(error.code);
+    if (invalid && [400, 401, 403].includes(error.status) && storedSession()?.refresh_token === previous.refresh_token) {
+      session = null; localStorage.removeItem(SESSION_KEY);
+      throw new Error('Deine Anmeldung ist abgelaufen oder wurde widerrufen. Bitte mit einem neuen persönlichen Link anmelden.');
+    }
+    // Timeouts, network failures and server errors must never erase the session.
+    throw error;
   }
-  return session?.access_token ?? null;
+}
+export async function accessToken() {
+  session = storedSession();
+  if (!session) return null;
+  if (Number.isFinite(session.expires_at) && session.expires_at >= Date.now() + 60000) return session.access_token;
+  if (!refreshing) {
+    const work = () => refreshSession();
+    refreshing = (navigator.locks ? navigator.locks.request(`${SESSION_KEY}:refresh`, work) : work()).finally(() => { refreshing = null; });
+  }
+  return refreshing;
 }
 export async function cloudCall(action, payload = {}) {
   if (!navigator.onLine) throw new Error('Cloud-Bibliotheken benötigen eine Internetverbindung. Deine lokalen Figuren bleiben offline verfügbar.');

@@ -100,3 +100,14 @@ test('assignment without a permitted target explains how to proceed',async({page
  await expect(page.getByRole('button',{name:'Figur zuordnen',exact:true})).toHaveCount(0);
  await page.getByRole('button',{name:'Bibliothek erstellen',exact:true}).tap();await expect(page.getByLabel('Name',{exact:true})).toBeVisible();
 });
+
+test('temporary auth refresh failure preserves login and restores admin and library creation on retry',async({page})=>{
+ await page.addInitScript(()=>{const key='salsa-cloud-session:/pwa/:v1';if(!localStorage.getItem(key))localStorage.setItem(key,JSON.stringify({access_token:'expired-user-jwt',refresh_token:'test-refresh',expires_at:Date.now()-1000}));});
+ const calls=await mock(page,true);let attempts=0;
+ await page.route(`${host}/auth/v1/token?grant_type=refresh_token`,r=>r.fulfill({status:++attempts===1?503:200,contentType:'application/json',body:JSON.stringify(attempts===1?{error:'Temporary auth outage'}:{access_token:'test-user-jwt',refresh_token:'rotated-refresh',expires_in:3600})}));
+ await start(page);await page.locator('#cloudButton').tap();await expect(page.locator('#cloudError')).toContainText('Temporary auth outage');
+ expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('salsa-cloud-session:/pwa/:v1')).refresh_token)).toBe('test-refresh');
+ await page.locator('#cloudBack').tap();await page.locator('#cloudButton').tap();await expect(page.getByRole('button',{name:'Verwaltung',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Bibliothek erstellen',exact:true})).toBeVisible();
+ await page.reload();await page.locator('#cloudButton').tap();await expect(page.getByRole('button',{name:'Verwaltung',exact:true})).toBeVisible();expect(attempts).toBe(2);
+ expect(calls.filter(c=>c.action==='state').every(c=>c.authorization==='Bearer test-user-jwt')).toBe(true);
+});

@@ -44,6 +44,7 @@ async function load(library = current) {
   if (state.me) body.append(node('p', `${state.me.email} · ${MB(state.me.used)} / ${MB(state.me.quota)} belegt${state.me.upload_enabled ? '' : ' · Lesen erlaubt, Uploads gesperrt'}`));
   else {
     body.append(node('p', 'Öffentliche Bibliotheken sind ohne Anmeldung lesbar. Für private Bibliotheken und Beiträge erhältst du einen persönlichen Anmeldelink vom Administrator.'));
+    body.append(node('p', 'Du bist derzeit nicht angemeldet. Bibliotheken erstellen und Verwaltung erscheinen nach der Anmeldung mit einem berechtigten Konto.'));
     const box = section('Mit persönlichem Link anmelden'), form = node('form'); box.append(form);
     const link = field(form, 'Anmeldelink einfügen', '', 'password'); link.autocomplete = 'off';
     box.append(node('p', 'In einer installierten iPhone-App den Link hier einfügen, damit die Anmeldung in dieser App erfolgt.'));
