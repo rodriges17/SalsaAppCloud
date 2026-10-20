@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-20-cloud-thumbnails-v1';
+const APP_VERSION = '2026-10-20-shared-posters-v1';
 import { initBackup } from './backup-ui.js';
 import { initCloud, openCloud } from './cloud.js';
 import { exportFigure, importFigure, packageSize, packageFilename, MAX_PACKAGE_BYTES } from './package.js';

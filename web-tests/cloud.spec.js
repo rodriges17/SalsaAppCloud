@@ -213,3 +213,25 @@ test('direct public permission actions preserve state on failure and toggle only
  expect(calls.filter(c=>c.action==='public_permission').map(c=>c.payload)).toEqual([{figure:'figure-1',allowed:true},{figure:'figure-1',allowed:true},{figure:'figure-1',allowed:false}]);
  await expect(page.locator('#cloudBody')).toContainText('Private Bibliotheken bleiben unverändert.');
 });
+
+test('cloud reuses the exact local poster and remembers it after the local copy is removed',async({page},info)=>{
+ await signIn(page);const calls=await mock(page,true,true);await start(page);
+ const expected=await page.evaluate(async()=>{
+  const storage=await import('/pwa/storage.js');
+  const blob=await(await fetch('/web-tests/fixtures/clip.mp4')).blob();
+  const canvas=document.createElement('canvas');canvas.width=90;canvas.height=90;const context=canvas.getContext('2d');context.fillStyle='#df703f';context.fillRect(0,0,90,90);context.fillStyle='#ffffff';context.fillRect(25,25,40,40);
+  const poster=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',0.8));
+  await storage.saveFigure({id:'same-poster',title:'Cloud Drehung',description:'Aus der Cloud',tags:['Salsa'],status:'Neu'},[{id:'local-video',name:'Führung',blob:blob.slice(0,blob.size,'video/mp4'),confirmed:true,duration:6,width:320,height:180,poster}]);
+  window.dispatchEvent(new Event('focus'));
+  return Array.from(new Uint8Array(await poster.arrayBuffer()));
+ });
+ const bytes=async()=>page.locator('.cloud-thumbnail').evaluate(async image=>Array.from(new Uint8Array(await(await fetch(image.src)).arrayBuffer())));
+ await expect(page.locator('.card-thumb')).toHaveAttribute('src',/^blob:/);
+ await page.locator('#cloudButton').tap();await expect(page.locator('.cloud-thumbnail')).toHaveAttribute('src',/^blob:/);
+ expect(await bytes()).toEqual(expected);expect(calls.filter(c=>c.action==='media_url')).toHaveLength(0);
+ await page.screenshot({path:info.outputPath('same-local-cloud-poster.png')});
+ await page.locator('#cloudBack').tap();
+ await page.evaluate(async()=>{const s=await import('/pwa/storage.js');await s.deleteFigure((await s.listFigures()).find(f=>f.id==='same-poster'));});
+ await page.reload();await page.locator('#cloudButton').tap();await expect(page.locator('.cloud-thumbnail')).toHaveAttribute('src',/^blob:/);
+ expect(await bytes()).toEqual(expected);expect(calls.filter(c=>c.action==='media_url')).toHaveLength(0);
+});

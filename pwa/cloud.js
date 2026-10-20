@@ -1,6 +1,6 @@
 import { cloudCall, signedIn, uploadMedia, logout, loginWithLink, finishLogin } from './cloud-api.js';
 import { CLOUD_FILE_LIMIT } from './cloud-config.js';
-import { figureVideos } from './storage.js';
+import { figureVideos, listFigures } from './storage.js';
 const node = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
 const MB = value => `${(Number(value ?? 0) / 1000000).toFixed(1)} MB`;
 const action = (label, work) => { const b = node('button', label, 'secondary'); b.type = 'button'; b.onclick = () => Promise.resolve().then(work).catch(report); return b; };
@@ -154,7 +154,7 @@ function revisionCard(box, rev) {
   })));
 }
 function attachForm(revision) {
-  clearPreviews(body); body.replaceChildren();
+  cancelThumbnails(); clearPreviews(body); body.replaceChildren();
   body.append(action('Zurück zu Meine Cloud-Figuren', () => navigate('figures')));
   const box = section(`„${revision.title}“ zuordnen`);
   box.append(node('p', versionLabel(revision)));
@@ -164,7 +164,42 @@ function attachForm(revision) {
   const choice = select(box, 'Zielbibliothek', libs.map(l => [l.id, l.title]));
   box.append(action('Figur zuordnen', () => run('Zuordnen …', async () => { await cloudCall('attach', { library: choice.value, revision: revision.id }); await load(choice.value); })));
 }
-let thumbnailJobs = new Set();
+let thumbnailJobs = new Set(), localPosters;
+const posterDB = () => new Promise((resolve, reject) => {
+  const request = indexedDB.open(`step-cloud-posters:${new URL('./', import.meta.url).pathname}:v1`, 1);
+  request.onupgradeneeded = () => request.result.createObjectStore('posters');
+  request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+});
+async function revisionPoster(revision, blob) {
+  const db = await posterDB();
+  try { return await new Promise((resolve, reject) => {
+    const tx = db.transaction('posters', blob ? 'readwrite' : 'readonly');
+    const store = tx.objectStore('posters'), key = `${state.me.id}:${revision}`;
+    const request = blob ? store.put(blob, key) : store.get(key);
+    let result; request.onsuccess = () => { result = request.result; };
+    tx.oncomplete = () => resolve(blob ?? result); tx.onabort = () => reject(tx.error); tx.onerror = () => {};
+  }); } finally { db.close(); }
+}
+async function localRevisionPoster(revision) {
+  const cached = await revisionPoster(revision.id).catch(() => null);
+  if (cached) return cached;
+  localPosters ??= listFigures().catch(() => []);
+  const matches = [];
+  for (const figure of await localPosters) {
+    if (!figure.poster) continue;
+    if (figure.importFingerprint === `cloud:${revision.id}:${revision.videos.map(v => v.id).join(',')}`) { matches.push(figure); continue; }
+    if (figure.title !== revision.title || (figure.description ?? '') !== (revision.description ?? '') || JSON.stringify(figure.tags) !== JSON.stringify(revision.tags)) continue;
+    try {
+      // Folder catalogs retain their poster and media metadata even while permission is absent.
+      const records = figure.videos ?? await figureVideos(figure);
+      if (revision.videos.every(media => records.some(v => v.name === media.name && (v.size ?? v.blob?.size) === media.size && (v.type ?? v.blob?.type) === media.type))) matches.push(figure);
+    } catch { /* An unavailable local copy must never prevent opening cloud figures. */ }
+  }
+  if (matches.length !== 1) return null;
+  const poster = matches[0].poster;
+  await revisionPoster(revision.id, poster).catch(() => {});
+  return poster;
+}
 function cancelThumbnails() {
   for (const cancel of thumbnailJobs) cancel();
   thumbnailJobs.clear();
@@ -181,6 +216,9 @@ function thumbnail(heading, revision, media) {
     observer.disconnect();
     (async () => {
       try {
+        const local = await localRevisionPoster(revision);
+        if (cancelled || !heading.isConnected) return;
+        if (local) { objectURL = URL.createObjectURL(local); image.src = objectURL; return; }
         const signed = await cloudCall('media_url', { revision: revision.id, media: media.id });
         if (cancelled || !heading.isConnected) return;
         player = document.createElement('video');
@@ -188,12 +226,9 @@ function thumbnail(heading, revision, media) {
         await new Promise((resolve, reject) => {
           rejectLoad = reject;
           timer = setTimeout(() => reject(new Error('Thumbnail timeout')), 15000);
-          player.onloadedmetadata = () => { if (Number.isFinite(player.duration) && player.duration > 0.1) player.currentTime = Math.min(0.1, player.duration / 2); };
+          player.onloadedmetadata = () => { player.currentTime = Number.isFinite(player.duration) && player.duration > 0 ? Math.min(1, player.duration / 2) : 0; };
           player.onerror = reject;
-          player.onloadeddata = () => {
-            if (player.currentTime > 0 || !Number.isFinite(player.duration) || player.duration <= 0.1) resolve();
-            else player.currentTime = Math.min(0.1, player.duration / 2);
-          };
+          player.onloadeddata = () => { if (player.duration === 0) resolve(); };
           player.onseeked = resolve; player.src = signed.url;
         });
         if (cancelled || !heading.isConnected || !player?.videoWidth) return;
@@ -209,6 +244,7 @@ function thumbnail(heading, revision, media) {
   observer.observe(heading);
 }
 function ownFigures() {
+  localPosters = null;
   if (!state.own_figures.length) body.append(node('p', 'Noch keine eigenen Cloud-Figuren. Lade eine lokale Figur über „In Cloud veröffentlichen“ hoch.'));
   for (const f of state.own_figures) {
     const revisions = [...f.revisions].sort((a, b) => (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0));
@@ -293,6 +329,7 @@ async function publishForm() {
       }
       controller.signal.throwIfAborted();
       const saved = await cloudCall('commit', { job, public_allowed: allowed.checked, title: local.title, description: local.description, tags: local.tags, videos: reserved.media.map((m, i) => ({ id: m.id, name: videos[i].name })) }); job = null;
+      if (local.poster) await revisionPoster(saved.revision, local.poster).catch(() => {});
       if (library.value) await cloudCall('attach', { library: library.value, revision: saved.revision });
       source = null; area = library.value ? 'libraries' : 'figures'; await load(library.value || null);
     } catch (error) {
