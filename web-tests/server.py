@@ -20,7 +20,7 @@ class Handler(SimpleHTTPRequestHandler):
             return super().do_GET()
         scenario, name = match.groups()
         name = name or 'index.html'
-        if name not in {'index.html', 'app.js', 'cloud.js', 'cloud-api.js', 'cloud-config.js', 'styles.css', 'sw.js', 'storage.js', 'app-storage.js', 'folder-storage.js', 'logic.js', 'package.js', 'backup-format.js', 'backup-ui.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'}:
+        if name not in {'index.html', 'app.js', 'cloud.js', 'cloud-api.js', 'cloud-config.js', 'styles.css', 'sw.js', 'storage.js', 'app-storage.js', 'folder-storage.js', 'logic.js', 'package.js', 'backup-format.js', 'backup-ui.js', 'backup-workflow.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'}:
             return self.send_error(404)
         body = (Path('pwa') / name).read_bytes()
         legacy = versions.get(scenario) != 'current'
