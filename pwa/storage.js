@@ -1,6 +1,7 @@
+import { createBackup, figureSignature, sourceKey } from './backup-format.js';
 import { checksum } from './package.js';
 import * as app from './app-storage.js';
-import { folderSupported, selectDirectory, permission, readLibrary, hydrateFolder, readFolderVideo, writeFolderFigure, deleteFolderFigure, cleanupFolder } from './folder-storage.js';
+import { folderSupported, selectDirectory, permission, readLibrary, hydrateFolder, readFolderVideo, writeFolderFigure, deleteFolderFigure, cleanupFolder, restoreFolderBatch } from './folder-storage.js';
 export { database, DB_NAME, MEDIA_CACHE, storageMessage, cleanupInterruptedImports } from './app-storage.js';
 export { folderSupported } from './folder-storage.js';
 const scope = new URL('./', import.meta.url).pathname;
@@ -112,5 +113,60 @@ export async function transferFigure(figure, targetFolder) {
     }
     const folder = await entries(targetFolder); if (!folder) throw new Error('Bitte zuerst einen Geräteordner auswählen.');
     return writeFolderFigure(folder, copy, drafts, null, mirror(folder));
+  });
+}
+
+const revisionSnapshot = figures => JSON.stringify(figures.map(f=>[sourceKey(f),f.revision]).sort((a,b)=>a[0].localeCompare(b[0])));
+async function collectBackupSources(signal, progress = () => {}) {
+  const figures = await listFigures(), sources = [], problems = [];
+  for (let i=0;i<figures.length;i++) {
+    signal?.throwIfAborted(); const figure = figures[i];
+    try { sources.push({ figure, records: await figureVideos(figure) }); }
+    catch(e) { problems.push(`„${figure.title}“: ${e.message}`); }
+    progress({ phase:'scan',done:i+1,total:figures.length });
+  }
+  signal?.throwIfAborted();
+  if(problems.length) { const error=new Error('Keine vollständige Sicherung möglich:\n'+problems.join('\n'));error.problems=problems;throw error; }
+  if(!sources.length)throw new Error('Es sind keine lokalen Figuren vorhanden.');
+  return { sources,snapshot:revisionSnapshot(figures) };
+}
+export async function inspectLocalBackup(options={}) { return locked(()=>collectBackupSources(options.signal,options.progress)); }
+export async function exportLocalBackup(expectedSnapshot,options={}) {
+  return locked(async()=>{
+    const inventory=await collectBackupSources(options.signal,options.progress);
+    if(inventory.snapshot!==expectedSnapshot)throw new Error('Der lokale Bestand wurde inzwischen geändert. Bitte erneut prüfen.');
+    const backup=await createBackup(inventory.sources,options);
+    if(revisionSnapshot(await listFigures())!==inventory.snapshot)throw new Error('Der lokale Bestand wurde während der Sicherung geändert. Bitte erneut prüfen.');
+    return backup;
+  });
+}
+export async function planBackupRestore(archive,targetFolder=null,{signal,progress=()=>{}}={}) {
+  return locked(async()=>{
+    if(targetFolder){if(!folderSupported())throw new Error('Geräteordner werden hier nicht unterstützt.');const folder=await entries(targetFolder);if(!folder)throw new Error('Zielordner fehlt.');await permission(folder.handle);}
+    const existing=(await listFigures()).filter(f=>(f.storageFolder??null)===targetFolder),signatures=new Map();
+    for(let i=0;i<existing.length;i++){signal?.throwIfAborted();const f=existing[i];try{signatures.set(f.id,await figureSignature(f,await figureVideos(f),archive.manifest.chunkBytes,signal));}catch(e){if(e.name==='AbortError')throw e;signatures.set(f.id,null);}progress({phase:'compare',done:i+1,total:existing.length});}
+    const rows=archive.sources.map(source=>{
+      const identity=existing.filter(f=>sourceKey(f)===source.figure.source||f.backupOrigin===source.figure.source);
+      const identical=existing.filter(f=>signatures.get(f.id)===source.signature);
+      const candidates=identity.length?identity:identical;
+      const same=candidates.some(f=>signatures.get(f.id)===source.signature);
+      return {source,candidates,kind:same?'identical':candidates.length?'conflict':'new',choice:same||candidates.length?'keep':'add'};
+    });
+    return {archive,targetFolder,existing:existing.map(f=>({id:f.id,revision:f.revision})),rows};
+  });
+}
+export async function restoreBackupPlan(plan,choices,{signal,progress=()=>{}}={}) {
+  return locked(async()=>{
+    signal?.throwIfAborted();if(choices.length!==plan.rows.length)throw new Error('Bitte die Wiederherstellung erneut prüfen.');
+    const used=new Set(),items=[];
+    for(let i=0;i<plan.rows.length;i++){
+      const row=plan.rows[i],choice=choices[i];if(choice==='keep')continue;
+      let id;if(choice==='add'||choice==='copy')id=crypto.randomUUID();else if(choice.startsWith('replace:')){id=choice.slice(8);if(!row.candidates.some(f=>f.id===id))throw new Error('Ungültige Konfliktauswahl.');}else throw new Error('Ungültige Wiederherstellungsauswahl.');
+      if(used.has(id))throw new Error('Mehrere Sicherungsfiguren würden dieselbe vorhandene Figur ersetzen. Bitte zusätzliche Kopien wählen.');used.add(id);items.push({id,figure:row.source.figure,records:row.source.records});
+    }
+    if(!items.length)return 0;
+    if(!plan.targetFolder)return app.restoreAppBatch(items,plan.existing,{signal,progress});
+    const folder=await entries(plan.targetFolder);if(!folder||!folderSupported())throw new Error('Geräteordner nicht verfügbar.');
+    return restoreFolderBatch(folder,items,plan.existing,mirror(folder),{signal,progress});
   });
 }

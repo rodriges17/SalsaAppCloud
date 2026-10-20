@@ -1,4 +1,5 @@
-const APP_VERSION = '2026-10-20-info-v1';
+const APP_VERSION = '2026-10-20-backup-v1';
+import { initBackup } from './backup-ui.js';
 import { initCloud, openCloud } from './cloud.js';
 import { exportFigure, importFigure, packageSize, packageFilename, MAX_PACKAGE_BYTES } from './package.js';
 import { checksum } from './package.js';
@@ -477,6 +478,8 @@ $('packageFile').onchange = async () => {
     if (packageImport === controller) { packageImport = null; $('importProgressDialog').close(); $('packageFile').value = ''; }
   }
 };
+
+initBackup({ confirm: confirmAction, changed, refresh });
 
 // Register interaction handlers before storage recovery, which may wait for another tab.
 $('appVersion').textContent = `Version ${APP_VERSION}`;

@@ -113,3 +113,8 @@ Einrichtung und Bedienung: [CLOUD-EINRICHTUNG.md](CLOUD-EINRICHTUNG.md). Validie
 ## Geräteordner
 
 Optionale lokale Ordnerbibliothek: [Bedienung, Wiederherstellung und Grenzen](GERAETEORDNER.md).
+
+
+## Vollständiges Backup
+
+Lokale Sicherung inklusive Videos und Lernständen: [Bedienung und Wiederherstellung](BACKUP.md). Das vollständige Backup ist vom Figur-ZIP-Austausch getrennt.

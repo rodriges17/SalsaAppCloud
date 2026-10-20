@@ -50,3 +50,13 @@ test('folder: reject traversal, duplicate media and invalid learning metadata',a
  const {folder,mirror}=setup();await writeFolderFigure(folder,figure(),[draft()],null,mirror);const base=await readLibrary(folder.handle);
  for(const mutate of [d=>d.figures[0].videos[0].file='../original.mp4',d=>d.figures[0].status='arbitrary',d=>d.figures.push(structuredClone(d.figures[0])),d=>d.garbage.push(d.figures[0].videos[0].file)]) {const data=structuredClone(base);mutate(data);assert.throws(()=>validateLibrary(data));}
 });
+
+test('folder restore: a failed batch or cancellation keeps the complete previous catalog',async()=>{
+ const {restoreFolderBatch}=await import('../pwa/folder-storage.js');const {folder,mirror}=setup();const old=await writeFolderFigure(folder,figure(),[draft()],null,mirror),before=JSON.stringify(await readLibrary(folder.handle));const media=await folder.handle.getDirectoryHandle('media');
+ const item=()=>({id:crypto.randomUUID(),figure:{...figure(),source:'backup-source',createdAt:1700000000000,poster:null},records:[draft()]});
+ media.failMedia=2;await assert.rejects(restoreFolderBatch(folder,[item(),item()],[old],mirror),/full/);assert.equal(JSON.stringify(await readLibrary(folder.handle)),before);assert.equal(media.files.size,1);
+ media.failMedia=0;const c=new AbortController();await assert.rejects(restoreFolderBatch(folder,[item(),item()],[old],mirror,{signal:c.signal,progress:()=>c.abort()}),{name:'AbortError'});assert.equal(JSON.stringify(await readLibrary(folder.handle)),before);assert.equal(media.files.size,1);
+});
+test('folder restore: one batch preserves original dates and learning states and rejects stale plans',async()=>{
+ const {restoreFolderBatch}=await import('../pwa/folder-storage.js');const {folder,mirror}=setup();const a={id:crypto.randomUUID(),figure:{...figure(),source:'backup-source',createdAt:1700000000000,poster:null},records:[draft()]};await restoreFolderBatch(folder,[a],[],mirror);const f=(await readLibrary(folder.handle)).figures[0];assert.equal(f.createdAt,1700000000000);assert.equal(f.status,'Am Üben');assert.equal(f.backupOrigin,'backup-source');await assert.rejects(restoreFolderBatch(folder,[{...a,id:crypto.randomUUID()}],[],mirror),/inzwischen/);assert.equal((await readLibrary(folder.handle)).figures.length,1);
+});
