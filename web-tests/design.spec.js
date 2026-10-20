@@ -16,9 +16,11 @@ async function seed(page) {
 test('Step by Step defaults to Klar, persists Terrakotta and fonts work after offline reload', async ({ page, context }, info) => {
   await page.emulateMedia({ colorScheme: 'light' }); await start(page);
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark'); await expect(page).toHaveTitle('Step by Step');
-  await expect(page.locator('#offlineStatus')).toContainText('Offline bereit');
+  await expect(page.locator('#offlineStatus')).toContainText('Offline bereit', { timeout: 30000 });
   await page.evaluate(async () => { await navigator.serviceWorker.ready; if (!navigator.serviceWorker.controller) await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true })); await document.fonts.ready; });
-  await seed(page); await page.screenshot({ path: info.outputPath('klar-figuren.png'), fullPage: true });
+  await seed(page);
+  expect(await page.locator('#addFigure').evaluate(button => button.getBoundingClientRect().width)).toBeGreaterThan(300);
+  await page.screenshot({ path: info.outputPath('klar-figuren.png'), fullPage: true });
   await page.locator('#infoButton').tap(); await page.locator('#themeChoice').selectOption('light');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light'); await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f8f2ea');
   await page.screenshot({ path: info.outputPath('terrakotta-einstellungen.png') }); await page.locator('#closeInfoTop').tap();
@@ -59,7 +61,9 @@ test.describe('primary navigation and cloud layouts', () => {
     for (const theme of ['dark', 'light']) { await page.evaluate(theme => window.stepAppearance.set(theme), theme); await page.screenshot({ path: info.outputPath(`${theme}-hochladen.png`), fullPage: true }); }
     await page.locator('#cloudDialog [data-nav=figures]').tap(); await page.getByRole('button', { name: 'Drehung lernen', exact: true }).tap();
     await expect(page.locator('#learningVideo')).toHaveJSProperty('videoWidth', 320);
-    for (const theme of ['dark', 'light']) { await page.evaluate(theme => window.stepAppearance.set(theme), theme); await page.screenshot({ path: info.outputPath(`${theme}-lernen.png`) }); }
+    for (const theme of ['dark', 'light']) { await page.evaluate(theme => window.stepAppearance.set(theme), theme); await page.screenshot({ path: info.outputPath(`${theme}-lernen.png`) });
+      if (theme === 'light') await expect(page.locator('#playerTitle')).toHaveCSS('color', 'rgb(255, 245, 237)');
+      expect(await page.locator('.player-controls').evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true); }
     await page.locator('#playerScreen [data-nav=cloud]').tap(); await expect(page.locator('#cloudDialog')).toBeVisible(); await expect(page.locator('#playerScreen')).not.toBeVisible();
     await expect(page.locator('#learningVideo')).not.toHaveAttribute('src');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

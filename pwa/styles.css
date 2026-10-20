@@ -103,7 +103,7 @@ details.settings-section{display:block}details.settings-section[open]>:not(summa
 .player-controls #playPause{background:var(--purple);color:var(--primary-text);border-color:var(--purple)}
 .player-description{margin:6px 14px 12px;padding:12px;background:var(--surface);border-radius:12px;color:var(--text)}
 .player-screen.is-landscape .bottom-nav{display:none}.player-screen:fullscreen .bottom-nav{display:none}
-:root[data-theme=light] .player-screen{--bg:#271e19;--surface:#40332b;--text:#fff5ed;--muted:#d5c5b9;--border:#796457;--purple:#e4a086;--primary-text:#301a12;--lavender:#efb39b;--peach:#f7be91}
+:root[data-theme=light] .player-screen{--bg:#271e19;--surface:#40332b;--text:#fff5ed;--muted:#d5c5b9;--border:#796457;--purple:#e4a086;--primary-text:#301a12;--lavender:#efb39b;--peach:#f7be91;--danger:#ffb4ab}
 .toast{bottom:calc(90px + env(safe-area-inset-bottom));background:var(--elevated);border-color:var(--border)}
 @media(min-width:760px){.overview{padding-top:28px}.figure-card{padding:14px}.card-thumb{width:94px;height:90px}.card-title{font-size:18px}.cloud-scroll{padding-inline:max(20px,calc((100% - 680px)/2))}}
 @media(max-width:360px){.overview{padding-inline:14px}.chips{gap:5px}.chips button{padding-inline:10px}.card-thumb{width:68px;height:74px}.card-title{font-size:15px}}
@@ -113,3 +113,14 @@ details.settings-section{display:block}details.settings-section[open]>:not(summa
 .cloud-card:has(.cloud-history)>h3{display:flex;align-items:center;gap:12px}
 .cloud-card:has(.cloud-history)>h3::before{content:'▷';display:grid;place-items:center;min-width:52px;height:52px;border-radius:10px;background:var(--surface);color:var(--lavender);font-size:26px}
 .cloud-card:has(.cloud-history)>p{font-size:12px;color:var(--muted)}
+
+.add-dock{grid-template-columns:minmax(0,1fr);justify-content:stretch}
+.player-screen{color:var(--text)}
+.player-controls{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));overflow:visible}
+.player-controls #rewind,.player-controls #playPause,.player-controls #speed{grid-column:span 2}
+.player-controls button,.player-controls select{min-width:0;width:100%;font-size:12px;padding:7px 4px;min-height:44px}
+.player-controls #playPause{font-size:21px}
+.player-screen.is-landscape .player-controls{display:flex;overflow-x:auto}
+.player-screen.is-landscape .player-controls button,.player-screen.is-landscape .player-controls select{width:auto;padding:6px 10px}
+.settings-heading h2:focus{outline:none}
+.storage-help summary{font-size:14px;color:var(--lavender)}.storage-help p{margin-top:12px}

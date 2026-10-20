@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#17121f"><meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Step by Step"><meta name="application-name" content="Step by Step">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="description" content="Deine Tanzfiguren und Videos. Schritt für Schritt offline lernen und ausgewählte Inhalte teilen.">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; media-src 'self' blob: https://tzaprobvauikssnpiucl.supabase.co; connect-src 'self' https://tzaprobvauikssnpiucl.supabase.co; object-src 'none'; base-uri 'self'; form-action 'none'">
@@ -88,9 +89,6 @@
     <p id="appVersion" class="small muted"></p>
     <section class="settings-section"><h3>Erscheinungsbild</h3><label for="themeChoice">Farbschema</label><select id="themeChoice"><option value="dark">Klar · Dunkel (Standard)</option><option value="light">Terrakotta · Hell</option></select><p id="themeStatus" class="small muted" role="status">Die Auswahl wird auf diesem Gerät gespeichert.</p></section>
     <section class="settings-section">    <h3>Speicherort</h3>
-    <p>Standardmäßig werden neue Figuren im internen Browser-/App-Speicher gespeichert.</p>
-    <p>Auf unterstützten Geräten kannst du stattdessen einen Geräteordner auswählen. Die App speichert dort Videos, Figurenangaben und Lernstände im Unterordner „SalsaTrainer“ und spielt die Videos direkt daraus ab.</p>
-    <p>Die Speicherwahl gilt für neue Importe und aus der Cloud übernommene Figuren. Bestehende Figuren bleiben an ihrem bisherigen Speicherort. Über das Optionen-Menü einer Figur kannst du sie übertragen. Die bisherige Kopie wird erst nach erfolgreicher Prüfung und deiner zusätzlichen Bestätigung entfernt.</p>
     <p id="deviceStorageActive"></p>
     <div id="deviceStorageControls" class="cloud-card"></div>
     <p id="deviceStorageStatus" role="status"></p>
@@ -98,6 +96,10 @@
     <p id="storageDetails"></p>
     <button id="persistStorage" class="secondary">Dauerhaften Speicher anfragen</button>
     <p id="persistenceResult" role="status"></p>
+    <details class="storage-help"><summary>So funktioniert die Speicherwahl</summary>    <p>Standardmäßig werden neue Figuren im internen Browser-/App-Speicher gespeichert.</p>
+    <p>Auf unterstützten Geräten kannst du stattdessen einen Geräteordner auswählen. Die App speichert dort Videos, Figurenangaben und Lernstände im Unterordner „SalsaTrainer“ und spielt die Videos direkt daraus ab.</p>
+    <p>Die Speicherwahl gilt für neue Importe und aus der Cloud übernommene Figuren. Bestehende Figuren bleiben an ihrem bisherigen Speicherort. Über das Optionen-Menü einer Figur kannst du sie übertragen. Die bisherige Kopie wird erst nach erfolgreicher Prüfung und deiner zusätzlichen Bestätigung entfernt.</p>
+</details>
 </section>
     <details class="settings-section"><summary>Installation &amp; Browser</summary>    <h3>Android: Chrome empfohlen</h3>
     <p>Für den möglichst vollständigen Funktionsumfang empfehlen wir eine aktuelle Version von Google Chrome. Damit kannst du auch einen Geräteordner als Speicherort auswählen und Videos direkt daraus abspielen. Den Ordnerzugriff musst du ausdrücklich erlauben.</p>
