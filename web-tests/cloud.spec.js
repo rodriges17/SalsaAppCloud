@@ -17,7 +17,7 @@ async function mock(page,admin=false, own=false, contribute=true, options={}){
   if(req.url().includes('/storage/'))return route.fulfill({status:200,contentType:'video/mp4',body:clip,headers:{'Access-Control-Allow-Origin':'*'}});
   if(req.method()==='OPTIONS')return route.fulfill({status:204,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type','Access-Control-Allow-Methods':'POST, GET, OPTIONS'}});
   const {action,payload}=req.postDataJSON();calls.push({action,payload,authorization:req.headers().authorization});let result={ok:true};
-  if(action==='state')result={me:admin&&req.headers().authorization?{id:'admin',email:'admin@example.test',is_admin:true,upload_enabled:true,used:0,quota:500000000}:null,settings:{used:0,total_limit:900000000},people:[],libraries:[{...library,contribute,visibility:options.visibility??library.visibility}],own_figures:Array.isArray(own)?own:own?[{id:'figure-1',public_allowed:true,revisions:[{...rev,created_at:'2026-10-19T00:00:00Z'}]}]:[]};
+  if(action==='state')result={me:admin&&req.headers().authorization?{id:'admin',email:'admin@example.test',is_admin:true,upload_enabled:true,used:0,quota:500000000}:null,settings:{used:0,total_limit:900000000},people:[],libraries:options.noLibraries?[]:[{...library,contribute,visibility:options.visibility??library.visibility}],own_figures:Array.isArray(own)?own:own?[{id:'figure-1',public_allowed:true,revisions:[{...rev,created_at:'2026-10-19T00:00:00Z'}]}]:[]};
   if(action==='library')result={library,manage:false,contribute:false,members:[],entries:[{figure_id:'figure-1',owner_id:'owner',public_allowed:true,published:rev,pending:null}]};
   if(action==='reserve')result={job:'job-1',media:payload.videos.map((v,i)=>({id:'uploaded-'+i,path:'test/'+i+'.mp4'}))};
   if(action==='commit')result={revision:'uploaded-revision'};
@@ -135,6 +135,7 @@ async function localUpload(page, folder=false) {
 for(const folder of [false,true])test(`upload from ${folder?'device folder':'app storage'} shows public consent errors beside the button and uploads selected bytes`,async({page,browserName})=>{
  test.skip(folder&&browserName!=='chromium','Native directory handles covered in Chromium.');
  await signIn(page);const calls=await mock(page,true,false,true);const bytes=await localUpload(page,folder);
+ await page.getByRole('combobox',{name:'Bibliothek',exact:true}).selectOption('lib-1');
  const upload=page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true});await upload.tap();
  const error=page.locator('#cloudBody [role=alert]');await expect(error).toContainText('öffentlichen Veröffentlichung zustimmen');await expect(error).toBeInViewport();expect(calls.some(c=>c.action==='reserve')).toBe(false);
  await page.getByLabel('Öffentliche Veröffentlichung dieser Figur erlauben',{exact:true}).check();await expect(error).toBeHidden();await upload.tap();
@@ -148,6 +149,7 @@ for(const folder of [false,true])test(`upload from ${folder?'device folder':'app
 });
 test('private upload needs no public consent and failed transfer is visible and retryable',async({page})=>{
  await signIn(page);const options={visibility:'private',failUpload:true},calls=await mock(page,true,false,true,options);await localUpload(page);
+ await page.getByRole('combobox',{name:'Bibliothek',exact:true}).selectOption('lib-1');
  const upload=page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true});await upload.tap();const error=page.locator('#cloudBody [role=alert]');await expect(error).toContainText('Upload unterbrochen');await expect(error).toBeInViewport();
  expect(calls.some(c=>c.action==='abort')).toBe(true);expect(calls.some(c=>c.action==='commit')).toBe(false);await expect(upload).toBeEnabled();
  options.failUpload=false;await upload.tap();await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();expect(calls.find(c=>c.action==='commit').payload.public_allowed).toBe(false);
@@ -164,4 +166,16 @@ test('upload targets exclude unfinished reservations and distinguish duplicate c
  await expect(options).toHaveCount(3);const labels=await options.allTextContents();expect(labels[1]).not.toBe(labels[2]);expect(labels.slice(1).every(s=>s.startsWith('Doppelte Figur ·'))).toBe(true);
  await expect(page.locator('#cloudBody')).not.toContainText('pending-upload-id');
  await expect(page.locator('#cloudBody')).toContainText('Lokales Löschen oder Entfernen aus einer Bibliothek löscht die Cloud-Figur nicht.');
+});
+
+for(const existing of [false,true])test(`upload ${existing?'a new version':'a new figure'} to own cloud figures without a library`,async({page})=>{
+ await signIn(page);const calls=await mock(page,true,existing,true,{noLibraries:true});await localUpload(page);
+ const target=page.getByRole('combobox',{name:'Bibliothek',exact:true});await expect(target).toHaveValue('');await expect(target.locator('option')).toHaveCount(1);
+ await expect(target.locator('option')).toHaveText('Nur in Meine Cloud-Figuren hochladen');
+ if(existing){await page.getByRole('combobox',{name:'Neue Figur oder neue Version',exact:true}).selectOption('figure-1');await expect(page.locator('#cloudBody')).toContainText('bestehende Bibliothekszuordnungen');}
+ await page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true}).tap();
+ await expect(page.getByRole('heading',{name:'Meine Cloud-Figuren',exact:true})).toBeVisible();
+ expect(calls.filter(c=>['reserve','upload','finalize','commit','attach'].includes(c.action)).map(c=>c.action)).toEqual(['reserve','upload','finalize','commit']);
+ expect(calls.find(c=>c.action==='reserve').payload.figure).toBe(existing?'figure-1':null);
+ expect(calls.find(c=>c.action==='commit').payload.public_allowed).toBe(existing);
 });

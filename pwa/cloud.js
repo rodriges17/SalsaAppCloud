@@ -168,11 +168,10 @@ async function publishForm() {
   const me = state.me;
   if (!me?.upload_enabled) { body.append(node('p', 'Für Cloud-Uploads brauchst du die Freischaltung des Administrators.')); return; }
   const local = source, records = await figureVideos(local), libs = state.libraries.filter(l => l.contribute);
-  if (!libs.length) { body.append(node('p', 'Erstelle zuerst eine Bibliothek oder lass dich als Mitwirkender einladen.')); body.append(action('Zur Cloud-Übersicht', async () => { source = null; await run('Laden …', () => load(null)); })); return; }
-  const box = section(`„${local.title}“ veröffentlichen`), selected = [];
+  const box = section(`„${local.title}“ hochladen`), selected = [];
   for (const record of records) selected.push([checkbox(box, `${record.name || 'Video'} · ${MB(record.blob.size)}`, true), record]);
   box.append(node('p', 'Maximal 50 MB pro Video. Während eines Uploads wird vorübergehend der maximale Platz pro Video reserviert. Alte Versionen zählen weiterhin zum Speicher.'));
-  const library = select(box, 'Bibliothek', libs.map(l => [l.id, l.title]));
+  const library = select(box, 'Bibliothek', [['', 'Nur in Meine Cloud-Figuren hochladen'], ...libs.map(l => [l.id, l.title])]);
   // Reservations can create a figure before any revision exists. They are not
   // valid version targets until the first upload has completed.
   const targets = state.own_figures.filter(f => f.revisions?.length);
@@ -189,9 +188,12 @@ async function publishForm() {
   const uploadError = node('p', undefined, 'error'); uploadError.setAttribute('role', 'alert'); uploadError.hidden = true;
   const updateVisibility = () => {
     const isPublic = state.libraries.find(l => l.id === library.value)?.visibility === 'public';
-    visibilityHint.textContent = isPublic
+    visibilityHint.textContent = !library.value
+      ? 'Die Figur wird in „Meine Cloud-Figuren“ gespeichert und keiner weiteren Bibliothek zugeordnet. Du kannst sie später einer Bibliothek zuordnen.'
+      : isPublic
       ? allowed.checked ? 'Öffentliche Bibliothek: Diese Figur darf für alle sichtbar werden.' : 'Diese Bibliothek ist öffentlich. Zum Hochladen musst du oben die öffentliche Veröffentlichung dieser Figur erlauben. Alternativ wähle eine private Bibliothek.'
       : 'Private Bibliothek: Die Figur ist nur für berechtigte Personen sichtbar.';
+    if (figure.value) visibilityHint.textContent += ' Bei einer neuen Version gelten bestehende Bibliothekszuordnungen und deren Freigaberegeln weiterhin.';
     uploadError.hidden = true;
   };
   library.onchange = updateVisibility; allowed.onchange = updateVisibility;
@@ -212,8 +214,8 @@ async function publishForm() {
       }
       controller.signal.throwIfAborted();
       const saved = await cloudCall('commit', { job, public_allowed: allowed.checked, title: local.title, description: local.description, tags: local.tags, videos: reserved.media.map((m, i) => ({ id: m.id, name: videos[i].name })) }); job = null;
-      await cloudCall('attach', { library: library.value, revision: saved.revision });
-      source = null; await load(library.value);
+      if (library.value) await cloudCall('attach', { library: library.value, revision: saved.revision });
+      source = null; area = library.value ? 'libraries' : 'figures'; await load(library.value || null);
     } catch (error) {
       if (job) await cloudCall('abort', { job }).catch(() => {});
       throw error;
