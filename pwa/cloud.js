@@ -171,13 +171,14 @@ const posterDB = () => new Promise((resolve, reject) => {
   request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
 });
 async function revisionPoster(revision, blob) {
+  const bytes = blob ? await blob.arrayBuffer() : null;
   const db = await posterDB();
   try { return await new Promise((resolve, reject) => {
     const tx = db.transaction('posters', blob ? 'readwrite' : 'readonly');
     const store = tx.objectStore('posters'), key = `${state.me.id}:${revision}`;
-    const request = blob ? store.put(blob, key) : store.get(key);
+    const request = blob ? store.put(bytes, key) : store.get(key);
     let result; request.onsuccess = () => { result = request.result; };
-    tx.oncomplete = () => resolve(blob ?? result); tx.onabort = () => reject(tx.error); tx.onerror = () => {};
+    tx.oncomplete = () => resolve(blob ?? (result instanceof ArrayBuffer ? new Blob([result], { type: 'image/jpeg' }) : result)); tx.onabort = () => reject(tx.error); tx.onerror = () => {};
   }); } finally { db.close(); }
 }
 async function localRevisionPoster(revision) {
