@@ -5,7 +5,7 @@ const node = (tag, text, cls) => { const n = document.createElement(tag); if (te
 const MB = value => `${(Number(value ?? 0) / 1000000).toFixed(1)} MB`;
 const action = (label, work) => { const b = node('button', label, 'secondary'); b.type = 'button'; b.onclick = () => Promise.resolve().then(work).catch(report); return b; };
 let dialog, body, errorBox, statusBox, hooks, state, current, busy = false, controller, source = null, area = 'libraries';
-function report(error) { errorBox.textContent = error?.message ?? 'Cloud-Aufruf fehlgeschlagen.'; errorBox.hidden = false; }
+function report(error, target = errorBox) { target.textContent = error?.message ?? 'Cloud-Aufruf fehlgeschlagen.'; target.hidden = false; target.scrollIntoView({ block: 'nearest' }); }
 function field(form, label, value = '', type = 'text') {
   const wrap = node('label', label), input = node(type === 'textarea' ? 'textarea' : 'input');
   if (type !== 'textarea') input.type = type; input.value = value; wrap.append(input); form.append(wrap); return input;
@@ -17,10 +17,10 @@ function select(form, label, options, selected) {
 }
 function checkbox(form, label, checked = false) { const wrap = node('label', undefined, 'cloud-check'), input = node('input'); input.type = 'checkbox'; input.checked = checked; wrap.append(input, node('span', label)); form.append(wrap); return input; }
 function section(title) { const s = node('section', undefined, 'cloud-card'); s.append(node('h3', title)); body.append(s); return s; }
-async function run(message, work) {
-  if (busy) return; busy = true; errorBox.hidden = true; statusBox.textContent = message;
+async function run(message, work, errorTarget = errorBox) {
+  if (busy) return; busy = true; errorBox.hidden = true; errorTarget.hidden = true; statusBox.textContent = message;
   body.inert = true; document.getElementById('cloudBack').disabled = true;
-  try { return await work(); } catch (error) { report(error); }
+  try { return await work(); } catch (error) { report(error, errorTarget); }
   finally { busy = false; body.inert = false; document.getElementById('cloudBack').disabled = false; statusBox.textContent = ''; }
 }
 function close() { if (busy) return; dialog.close(); body.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); }); source = null; }
@@ -173,7 +173,18 @@ async function publishForm() {
   const figure = select(box, 'Neue Figur oder neue Version', [['', 'Neue Cloud-Figur'], ...state.own_figures.map(f => [f.id, f.revisions[0]?.title ?? f.id])]);
   const allowed = checkbox(box, 'Öffentliche Veröffentlichung dieser Figur erlauben');
   box.append(node('p', 'Mit Häkchen darf diese Figur in öffentlichen Bibliotheken ohne Anmeldung sichtbar sein. Ohne Häkchen ist sie nur in privaten Bibliotheken nutzbar. Das Häkchen allein veröffentlicht die Figur noch nicht.'));
-  figure.onchange = () => { allowed.checked = state.own_figures.find(f => f.id === figure.value)?.public_allowed ?? false; };
+  const visibilityHint = node('p'); visibilityHint.setAttribute('role', 'status'); box.append(visibilityHint);
+  const uploadError = node('p', undefined, 'error'); uploadError.setAttribute('role', 'alert'); uploadError.hidden = true;
+  const updateVisibility = () => {
+    const isPublic = state.libraries.find(l => l.id === library.value)?.visibility === 'public';
+    visibilityHint.textContent = isPublic
+      ? allowed.checked ? 'Öffentliche Bibliothek: Diese Figur darf für alle sichtbar werden.' : 'Diese Bibliothek ist öffentlich. Zum Hochladen musst du oben die öffentliche Veröffentlichung dieser Figur erlauben. Alternativ wähle eine private Bibliothek.'
+      : 'Private Bibliothek: Die Figur ist nur für berechtigte Personen sichtbar.';
+    uploadError.hidden = true;
+  };
+  library.onchange = updateVisibility; allowed.onchange = updateVisibility;
+  figure.onchange = () => { allowed.checked = state.own_figures.find(f => f.id === figure.value)?.public_allowed ?? false; updateVisibility(); };
+  updateVisibility();
   box.append(action('Ausgewählte Figur hochladen', () => run('Upload vorbereiten …', async () => {
     const videos = selected.filter(([check]) => check.checked).map(([, v]) => v);
     if (!videos.length) throw new Error('Bitte mindestens ein Video auswählen.');
@@ -195,7 +206,8 @@ async function publishForm() {
       if (job) await cloudCall('abort', { job }).catch(() => {});
       throw error;
     } finally { controller = null; document.getElementById('cloudCancelUpload').hidden = true; }
-  })));
+  }, uploadError)));
+  box.append(uploadError);
 }
 function adminForm() {
   const box = section('Plattform verwalten'); box.append(node('p', `${MB(state.settings.used)} / ${MB(state.settings.total_limit)} insgesamt belegt`));
