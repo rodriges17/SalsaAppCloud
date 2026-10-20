@@ -1,10 +1,10 @@
-const APP_VERSION = '2026-10-20-backup-access-v1';
+const APP_VERSION = '2026-10-20-folder-access-v2';
 import { initBackup } from './backup-ui.js';
 import { initCloud, openCloud } from './cloud.js';
 import { exportFigure, importFigure, packageSize, packageFilename, MAX_PACKAGE_BYTES } from './package.js';
 import { checksum } from './package.js';
 import { STATUSES, cleanTags, timeLabel, filterFigures, ABLoop } from './logic.js';
-import { listFigures, figureVideos, saveFigure, deleteFigure, storageMessage, cleanupInterruptedImports, folderSupported, storageSettings, chooseFolder, connectFolder, reconnectFolder, setStorageFolder, transferFigure } from './storage.js';
+import { listFigures, figureVideos, saveFigure, deleteFigure, storageMessage, cleanupInterruptedImports, folderSupported, storageSettings, chooseFolder, connectFolder, allowFolderAccess, setStorageFolder, transferFigure } from './storage.js';
 
 const $ = id => document.getElementById(id);
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
@@ -74,7 +74,7 @@ function renderOverview() {
       const allow = button('Ordnerzugriff erlauben', async () => {
         if (deviceBusy) return;
         deviceBusy = true; allow.disabled = true; allow.textContent = 'Zugriff wird angefragt …';
-        try { await reconnectFolder(figure.storageFolder); changed(); await refresh(); toast('Ordnerzugriff erlaubt. Die Figuren sind wieder verfügbar.'); }
+        try { await allowFolderAccess(figure.storageFolder); changed(); await refresh(); toast('Ordnerzugriff erlaubt. Die Figuren sind wieder verfügbar.'); }
         catch (error) { toast(storageMessage(error)); }
         finally { deviceBusy = false; allow.disabled = false; allow.textContent = 'Ordnerzugriff erlauben'; }
       }, 'secondary folder-access-action');
@@ -331,15 +331,15 @@ async function renderDeviceStorage() {
     controls.append(button('Geräteordner auswählen', async () => {
       // Open the OS picker directly in the click handler, before any other async work.
       let candidate; try { candidate = await chooseFolder(); } catch (e) { if (e.name !== 'AbortError') $('deviceStorageStatus').textContent = storageMessage(e); return; }
-      const count = candidate.library.figures.length;
+      const count = candidate.figureCount;
       if (!await confirmAction({ title: count ? 'Bibliotheksordner öffnen?' : 'Geräteordner verwenden?', message: `„${candidate.name}“ enthält ${count} Figuren. Videos, Angaben und Lernstände werden eingelesen. Neue Figuren werden hier gespeichert. Vorhandene App-Figuren werden nicht verschoben.`, ok: count ? 'Bibliothek öffnen' : 'Ordner verwenden' })) return;
       await deviceWork(() => connectFolder(candidate));
     }, 'secondary'));
   } else controls.append(el('p', 'muted', 'Geräteordner werden in diesem Browser nicht unterstützt. Verwende aktuelles Chrome auf Android oder Desktop. Auf iPhone/Safari bleibt der App-Speicher mit ZIP-Sicherung verfügbar.'));
   for (const folder of settings.folders) {
-    const row = el('div', 'cloud-card'); row.append(el('strong', '', `${folder.name} · ${folder.library.figures.length} Figuren${folder.id === settings.activeFolder ? ' · aktiv' : ''}`));
-    if (settings.supported) row.append(button('Ordnerzugriff erlauben', () => deviceWork(() => reconnectFolder(folder.id)), 'secondary'), button('Für neue Figuren verwenden', () => deviceWork(async () => { await reconnectFolder(folder.id); await setStorageFolder(folder.id); }), 'secondary'));
-    if (folder.library.garbage.length) row.append(el('p', 'error', 'Dateibereinigung ausstehend. Bitte Ordner erneut verbinden.'));
+    const row = el('div', 'cloud-card'); row.append(el('strong', '', `${folder.name} · ${folder.figureCount} Figuren${folder.id === settings.activeFolder ? ' · aktiv' : ''}`));
+    if (settings.supported) row.append(button('Ordnerzugriff erlauben', () => deviceWork(() => allowFolderAccess(folder.id)), 'secondary'), button('Für neue Figuren verwenden', () => deviceWork(async () => { await allowFolderAccess(folder.id); await setStorageFolder(folder.id); }), 'secondary'));
+    if (folder.pendingCleanup) row.append(el('p', 'error', 'Dateibereinigung ausstehend. Sie wird beim nächsten Speichern oder Löschen erneut versucht.'));
     controls.append(row);
   }
 }

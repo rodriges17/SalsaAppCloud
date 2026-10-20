@@ -1,7 +1,7 @@
 import { createBackup, figureSignature, sourceKey } from './backup-format.js';
 import { checksum } from './package.js';
 import * as app from './app-storage.js';
-import { folderSupported, selectDirectory, permission, readLibrary, hydrateFolder, readFolderVideo, writeFolderFigure, deleteFolderFigure, cleanupFolder, restoreFolderBatch } from './folder-storage.js';
+import { folderSupported, selectDirectory, permission, readLibrary, hydrateFolder, readFolderVideo, writeFolderFigure, deleteFolderFigure, restoreFolderBatch } from './folder-storage.js';
 export { database, DB_NAME, MEDIA_CACHE, storageMessage, cleanupInterruptedImports } from './app-storage.js';
 export { folderSupported } from './folder-storage.js';
 const scope = new URL('./', import.meta.url).pathname;
@@ -23,35 +23,79 @@ async function entries(key) {
 async function put(value) {
   const db = await settings(); return new Promise((resolve, reject) => { const tx = db.transaction('entries', 'readwrite'); tx.objectStore('entries').put(value); tx.oncomplete = resolve; tx.onabort = () => reject(tx.error); tx.onerror = () => {}; });
 }
-const folders = async () => (await entries()).filter(e => e.id !== 'config');
+const knownFolders = new Map();
+const chosenFolders = new WeakMap();
+const folders = async () => {
+  const all = (await entries()).filter(e => e.id !== 'config');
+  knownFolders.clear(); all.forEach(folder => knownFolders.set(folder.id, folder));
+  return all;
+};
+const folderSummary = folder => ({ id: folder.id, name: folder.name, figureCount: folder.library.figures.length, pendingCleanup: folder.library.garbage.length > 0 });
 const mirror = folder => async library => { folder.library = library; await put(folder); };
 const locked = work => navigator.locks ? navigator.locks.request(`salsa-storage:${scope}`, work) : work();
 export async function storageSettings() {
-  const config = await entries('config') ?? { id: 'config', activeFolder: null }; return { ...config, folders: await folders(), supported: folderSupported() };
+  const config = await entries('config') ?? { id: 'config', activeFolder: null }; return { ...config, folders: (await folders()).map(folderSummary), supported: folderSupported() };
 }
-export async function chooseFolder() { return selectDirectory(); }
-export async function connectFolder(folder) {
+// The UI sees folder summaries, not persisted handles or catalog internals.
+export async function chooseFolder() {
+  const folder = await selectDirectory(), choice = folderSummary(folder);
+  chosenFolders.set(choice, folder);
+  return choice;
+}
+async function readRegisteredFolder(folder) {
+  await permission(folder.handle);
+  const library = await readLibrary(folder.handle);
+  if (library.id !== folder.id) throw new Error('Der Ordner enthält eine andere Bibliothek.');
+  await mirror(folder)(library);
+  return library;
+}
+async function folderAvailability(folder) {
+  try { await readRegisteredFolder(folder); return { problem: '', accessRequired: false }; }
+  catch (error) { return { problem: error.message, accessRequired: error.code === 'folder-permission-required' }; }
+}
+export async function connectFolder(choice) {
+  const folder = chosenFolders.get(choice);
+  if (!folder) throw new Error('Bitte den Bibliotheksordner neu auswählen.');
   return locked(async () => {
-    await permission(folder.handle, true); const library = await readLibrary(folder.handle);
-    if (library.id !== folder.id) throw new Error('Falscher Bibliotheksordner.');
-    await put({ ...folder, library }); await put({ id: 'config', activeFolder: folder.id });
+    await permission(folder.handle, true);
+    await readRegisteredFolder(folder);
+    await put({ id: 'config', activeFolder: folder.id });
+    knownFolders.set(folder.id, folder); chosenFolders.delete(choice);
   });
 }
 export async function setStorageFolder(id = null) {
   if (id && (!folderSupported() || !await entries(id))) throw new Error('Kein verfügbarer Geräteordner.');
   await put({ id: 'config', activeFolder: id });
 }
-export async function reconnectFolder(id) {
-  const folder = await entries(id); if (!folder) throw new Error('Bitte den Bibliotheksordner neu auswählen.');
+export async function allowFolderAccess(id, { signal } = {}) {
+  signal?.throwIfAborted();
+  // Views preload summaries; use the remembered handle in the click task.
+  const folder = knownFolders.get(id) ?? await entries(id);
+  if (!folder) throw new Error('Bitte den Bibliotheksordner neu auswählen.');
   await permission(folder.handle, true);
-  return locked(async () => { const library = await readLibrary(folder.handle); if (library.id !== id) throw new Error('Der Ordner enthält eine andere Bibliothek.'); await mirror(folder)(library); await cleanupFolder(folder, library, mirror(folder)); });
+  signal?.throwIfAborted();
+  return locked(async () => {
+    signal?.throwIfAborted();
+    const current = await entries(id);
+    if (!current) throw new Error('Bitte den Bibliotheksordner neu auswählen.');
+    await readRegisteredFolder(current);
+    return folderSummary(current);
+  });
+}
+export async function backupFoldersNeedingAccess() {
+  const missing = [];
+  for (const folder of await folders()) {
+    if (!folder.library.figures.length) continue;
+    const state = await folderAvailability(folder);
+    if (state.accessRequired) missing.push(folderSummary(folder));
+    else if (state.problem) throw new Error(state.problem);
+  }
+  return missing;
 }
 export async function listFigures() {
   const result = await app.listFigures();
   for (const folder of await folders()) {
-    let problem = '', accessRequired = false;
-    try { await permission(folder.handle); const library = await readLibrary(folder.handle); if (library.id !== folder.id) throw new Error('Andere Bibliothek im Ordner.'); await mirror(folder)(library); }
-    catch (e) { problem = e.message; accessRequired = e.code === 'folder-permission-required'; }
+    const { problem, accessRequired } = await folderAvailability(folder);
     for (const f of folder.library.figures) {
       let fileProblem = problem;
       if (!fileProblem) try {

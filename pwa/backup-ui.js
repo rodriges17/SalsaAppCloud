@@ -1,5 +1,4 @@
-import { inspectLocalBackup, exportLocalBackup, storageSettings, planBackupRestore, restoreBackupPlan } from './storage.js';
-import { permission } from './folder-storage.js';
+import { inspectLocalBackup, exportLocalBackup, storageSettings, backupFoldersNeedingAccess, allowFolderAccess, planBackupRestore, restoreBackupPlan } from './storage.js';
 import { readBackup, partLayout } from './backup-format.js';
 const scope=new URL('./',import.meta.url).pathname,LAST=`salsa-last-backup:${scope}:v1`;
 const n=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
@@ -14,17 +13,13 @@ async function run(work){if(busy)return;busy=true;controller=new AbortController
 function open(title){if(busy)return false;release();body.replaceChildren();status.textContent='';document.getElementById('backupTitle').textContent=title;if(!dialog.open)dialog.showModal();return true;}
 function summary(sources){const videos=sources.flatMap(s=>s.records),bytes=videos.reduce((n,v)=>n+v.blob.size,0);return {figures:sources.length,videos:videos.length,bytes};}
 async function requireBackupAccess(resume){
- const settings=await storageSettings(),missing=[];
- for(const folder of settings.folders){
-   if(!folder.library.figures.length)continue;
-   try{await permission(folder.handle);}catch(error){if(error.code!=='folder-permission-required')throw error;missing.push(folder);}
- }
+ const missing=await backupFoldersNeedingAccess();
  if(!missing.length)return true;
  body.replaceChildren(n('p','Für ein vollständiges Backup benötigt die App Zugriff auf alle Geräteordner mit gespeicherten Figuren. Die Ordnerauswahl ist gespeichert. Bitte erlaube den Zugriff; anschließend geht es automatisch weiter.'));
  for(const folder of missing){
-   const box=n('section',undefined,'cloud-card');box.append(n('h3',folder.name),n('p',`${folder.library.figures.length} Figur(en) im Geräteordner`));
+   const box=n('section',undefined,'cloud-card');box.append(n('h3',folder.name),n('p',`${folder.figureCount} Figur(en) im Geräteordner`));
    box.append(action('Ordnerzugriff erlauben',async()=>{
-     const granted=await run(async({signal})=>{await permission(folder.handle,true);signal.throwIfAborted();return true;});
+     const granted=await run(async({signal})=>{await allowFolderAccess(folder.id,{signal});signal.throwIfAborted();return true;});
      if(granted){hooks.changed();await hooks.refresh();await resume();}
    }));body.append(box);
  }

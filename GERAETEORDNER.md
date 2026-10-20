@@ -16,7 +16,7 @@ App- und Ordnerfiguren werden gemeinsam angezeigt. Für neue Figuren gilt der ak
 
 Figur → Optionen → In Geräteordner übertragen beziehungsweise In App-Speicher übertragen. Die neue Kopie wird geschrieben und byteweise über eine gestückelte CRC-Prüfsumme geprüft. Erst danach kann die bisherige verwaltete Kopie ausdrücklich entfernt werden. Ursprüngliche Importdateien werden nie verändert. Beide behalten ist ebenfalls möglich. Bei Übertragung entsteht eine eigenständige Figur mit eigenem internen Schlüssel; Lernstand und Beschreibungen bleiben erhalten.
 
-Fehlende oder extern veränderte Videos werden gekennzeichnet. Beim Bearbeiten bleiben Figurenangaben erhalten, Speichern ist bis zum Ersetzen und Bestätigen der Vorschau gesperrt. Neue Dateien werden zuerst geschrieben und geprüft, danach wird die Bibliotheksdatei über einen geschlossenen Schreibstream ersetzt. Bei zweifelhaftem Schreibabschluss werden möglicherweise referenzierte Dateien nicht gelöscht. Nicht mehr verwendete Dateien stehen in einer Bereinigungsliste und werden nach erfolgreichem Metadatenabschluss entfernt. Fehlgeschlagene Bereinigung wird beim erneuten Verbinden wiederholt. Fremde Dateien außerhalb dieser Liste werden nicht gelöscht.
+Fehlende oder extern veränderte Videos werden gekennzeichnet. Beim Bearbeiten bleiben Figurenangaben erhalten, Speichern ist bis zum Ersetzen und Bestätigen der Vorschau gesperrt. Neue Dateien werden zuerst geschrieben und geprüft, danach wird die Bibliotheksdatei über einen geschlossenen Schreibstream ersetzt. Bei zweifelhaftem Schreibabschluss werden möglicherweise referenzierte Dateien nicht gelöscht. Nicht mehr verwendete Dateien stehen in einer Bereinigungsliste und werden nach erfolgreichem Metadatenabschluss entfernt. Fehlgeschlagene Bereinigung wird beim nächsten Speichern oder Löschen wiederholt; eine reine Zugriffsfreigabe bereinigt keine Dateien. Fremde Dateien außerhalb dieser Liste werden nicht gelöscht.
 
 ## Grenzen
 
@@ -34,3 +34,9 @@ Entwicklungsprüfung: https://github.com/rodriges17/SalsaAppCloud/actions/runs/3
 Veröffentlichung und erfolgreiche Live-Importprüfungen: https://github.com/rodriges17/SalsaAppCloud/actions/runs/39354451557
 
 app.js, index.html, folder-storage.js und app-storage.js live mit HTTP 200 und neuen Versions-/Funktionskennungen geprüft. Die Offline-App SalsaAppIOS bleibt auf 84d21e7405bd3656206a3ccb5c27f7bb2e5836d9. Der physische Android-Ordnerdialog und langfristige OS-Berechtigungen sind hier nicht getestet; die Dateihandles wurden im Browser über OPFS bei simuliertem Picker und Berechtigung geprüft.
+
+## Gemeinsame Zugriffslogik
+
+Figurenansicht, Speichereinstellungen und Backup verwenden dieselbe Zugriffsprüfung in `storage.js`. Die Oberfläche erhält nur Ordnerzusammenfassungen. Gespeicherte Handles und Bibliothekskataloge bleiben intern.
+
+„Ordnerzugriff erlauben“ fragt die Berechtigung an, prüft die Bibliotheksidentität und aktualisiert ausschließlich die interne Metadatenkopie. Es schreibt keine Dateien im Geräteordner, löscht keine ausstehenden Dateien und ändert das Ziel für neue Figuren nicht. „Für neue Figuren verwenden“ setzt dieses Ziel weiterhin ausdrücklich. Ausstehende Dateibereinigung bleibt Bestandteil der Speicher- und Löschvorgänge.

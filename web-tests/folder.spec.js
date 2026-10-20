@@ -3,10 +3,11 @@ import path from 'node:path';
 async function start(page) { await page.goto('/pwa/'); await expect(page.getByRole('heading',{name:'Salsa Cloud',exact:true})).toBeVisible(); }
 async function enablePicker(page, name) {
  await page.addInitScript(name=>{
+  window.registeredFolder=async()=>{const name=`salsa-folders:${new URL('./',location.href).pathname}:v1`;const db=await new Promise((resolve,reject)=>{const r=indexedDB.open(name);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});try{return await new Promise((resolve,reject)=>{const r=db.transaction('entries').objectStore('entries').getAll();r.onsuccess=()=>resolve(r.result.find(f=>f.id!=='config'));r.onerror=()=>reject(r.error);});}finally{db.close();}};
   window.__denyFolder=sessionStorage.getItem('test-folder-prompt')==='1';
   window.showDirectoryPicker=async()=>{const root=await navigator.storage.getDirectory();return root.getDirectoryHandle(name,{create:true});};
   FileSystemDirectoryHandle.prototype.queryPermission=async()=>window.__denyFolder?'prompt':'granted';
-  FileSystemDirectoryHandle.prototype.requestPermission=async()=>{if(window.__cancelFolder)return 'denied';window.__denyFolder=false;return 'granted';};
+  FileSystemDirectoryHandle.prototype.requestPermission=async()=>{window.__folderActivation=navigator.userActivation.isActive;if(window.__cancelFolder)return 'denied';window.__denyFolder=false;return 'granted';};
  },name);
 }
 async function choose(page) {
@@ -19,7 +20,7 @@ async function seed(page, title='Ordner Ocho') {
   return saveFigure({id:crypto.randomUUID(),title,description:'Sicher wiederherstellen',tags:['Salsa'],status:'Am Üben'},[{id:crypto.randomUUID(),name:'Führung',blob:blob.slice(0,blob.size,'video/mp4'),duration:6,width:320,height:180,confirmed:true,existing:false}]);
  },title);
 }
-async function disk(page) {return page.evaluate(async()=>{const {storageSettings}=await import('/pwa/storage.js');const s=await storageSettings();const f=s.folders[0];return {folderId:f.id,figure:f.library.figures[0],count:f.library.figures.length};});}
+async function disk(page) {return page.evaluate(async()=>{const f=await registeredFolder();return {folderId:f.id,figure:f.library.figures[0],count:f.library.figures.length};});}
 test('unsupported browser offers no device-folder action',async({page})=>{
  await page.addInitScript(()=>{window.showDirectoryPicker=undefined;});await start(page);await page.locator('#infoButton').tap();
  await expect(page.getByRole('button',{name:'Geräteordner auswählen',exact:true})).toHaveCount(0);
@@ -57,7 +58,7 @@ test('revoked access keeps figure metadata and explicit reconnect restores acces
 });
 test('missing folder video can be repaired through confirmed replacement without losing learning data',async({page,browserName},info)=>{
  test.skip(browserName!=='chromium');await enablePicker(page,'repair-'+info.testId.replace(/\W/g,''));await start(page);await choose(page);await seed(page);
- await page.evaluate(async()=>{const {storageSettings}=await import('/pwa/storage.js');const f=(await storageSettings()).folders[0];await(await f.handle.getDirectoryHandle('media')).removeEntry(f.library.figures[0].videos[0].file);});
+ await page.evaluate(async()=>{const f=await registeredFolder();await(await f.handle.getDirectoryHandle('media')).removeEntry(f.library.figures[0].videos[0].file);});
  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await page.getByRole('button',{name:'Optionen für Ordner Ocho',exact:true}).tap();await page.getByRole('button',{name:'Bearbeiten',exact:true}).tap();
  await expect(page.locator('#figureTitle')).toHaveValue('Ordner Ocho');await expect(page.locator('#figureStatus')).toHaveValue('Am Üben');await expect(page.locator('#saveFigure')).toBeDisabled();
  const picker=page.waitForEvent('filechooser');await page.getByRole('button',{name:'Ersetzen',exact:true}).tap();await(await picker).setFiles(path.resolve('web-tests/fixtures/clip.mp4'));
@@ -70,4 +71,49 @@ test('explicit transfer in both directions verifies copy before removing the old
  await move('In Geräteordner übertragen');expect((await disk(page)).count).toBe(1);
  expect(await page.evaluate(async()=>{const {database}=await import('/pwa/storage.js');const db=await database();return new Promise(r=>{const q=db.transaction('figures').objectStore('figures').count();q.onsuccess=()=>r(q.result);});})).toBe(0);
  await move('In App-Speicher übertragen');expect((await disk(page)).count).toBe(0);await page.reload();await page.getByRole('button',{name:'Umzug lernen',exact:true}).tap();await expect(page.locator('#learningVideo')).toHaveJSProperty('videoWidth',320);
+});
+
+
+test('all folder grant views preserve files, pending cleanup and the selected import target',async({page,browserName},info)=>{
+ test.skip(browserName!=='chromium');await enablePicker(page,'grant-contract-'+info.testId.replace(/\W/g,''));await start(page);await choose(page);await seed(page);
+ const before=await page.evaluate(async()=>{
+  const s=await import('/pwa/storage.js');await s.setStorageFolder(null);
+  const f=await registeredFolder(),library=JSON.parse(await(await(await f.handle.getFileHandle('library.json')).getFile()).text());
+  const orphan=crypto.randomUUID()+'.mp4',media=await f.handle.getDirectoryHandle('media');let w=await(await media.getFileHandle(orphan,{create:true})).createWritable();await w.write('pending cleanup bytes');await w.close();
+  library.garbage.push(orphan);w=await(await f.handle.getFileHandle('library.json')).createWritable();await w.write(JSON.stringify(library));await w.close();
+  await s.listFigures();window.__denyFolder=true;
+  window.__grantWrites=0;window.__grantDeletes=0;
+  const write=FileSystemFileHandle.prototype.createWritable,remove=FileSystemDirectoryHandle.prototype.removeEntry;
+  FileSystemFileHandle.prototype.createWritable=function(...args){window.__grantWrites++;return write.apply(this,args);};
+  FileSystemDirectoryHandle.prototype.removeEntry=function(...args){window.__grantDeletes++;return remove.apply(this,args);};
+  return {catalog:JSON.stringify(library),orphan};
+ });
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+ await page.getByRole('button',{name:'Ordnerzugriff erlauben für Ordner Ocho',exact:true}).tap();
+ await expect(page.getByText('Ordner gespeichert – Zugriff erneut erlauben',{exact:true})).toHaveCount(0);
+ expect(await page.evaluate(()=>window.__folderActivation)).toBe(true);
+ await page.evaluate(()=>{window.__denyFolder=true;});await page.locator('#infoButton').tap();
+ await page.locator('#deviceStorageControls').getByRole('button',{name:'Ordnerzugriff erlauben',exact:true}).tap();
+ await expect(page.locator('#deviceStorageStatus')).toHaveText('Gespeichert.');expect(await page.evaluate(()=>window.__folderActivation)).toBe(true);
+ await page.evaluate(()=>{window.__denyFolder=true;});await page.getByRole('button',{name:'Vollständiges Backup erstellen',exact:true}).tap();
+ await page.locator('#backupBody').getByRole('button',{name:'Ordnerzugriff erlauben',exact:true}).tap();
+ await expect(page.getByRole('button',{name:'Backup jetzt erstellen',exact:true})).toBeVisible();expect(await page.evaluate(()=>window.__folderActivation)).toBe(true);
+ const after=await page.evaluate(async()=>{
+  const s=await import('/pwa/storage.js'),settings=await s.storageSettings(),f=await registeredFolder();
+  return {catalog:await(await(await f.handle.getFileHandle('library.json')).getFile()).text(),writes:window.__grantWrites,deletes:window.__grantDeletes,settings,files:await Array.fromAsync((await f.handle.getDirectoryHandle('media')).keys())};
+ });
+ expect(after.catalog).toBe(before.catalog);expect(after.writes).toBe(0);expect(after.deletes).toBe(0);expect(after.files).toContain(before.orphan);expect(after.settings.activeFolder).toBeNull();
+ expect(after.settings.folders[0]).toMatchObject({figureCount:1,pendingCleanup:true});expect(after.settings.folders[0]).not.toHaveProperty('handle');expect(after.settings.folders[0]).not.toHaveProperty('library');
+});
+
+test('folder access rejects a replaced library without accepting its catalog',async({page,browserName},info)=>{
+ test.skip(browserName!=='chromium');await enablePicker(page,'identity-'+info.testId.replace(/\W/g,''));await start(page);await choose(page);await seed(page);
+ const result=await page.evaluate(async()=>{
+  const s=await import('/pwa/storage.js'),f=await registeredFolder(),file=await f.handle.getFileHandle('library.json');
+  const library=JSON.parse(await(await file.getFile()).text()),other={...library,id:'different-library'};
+  const writer=await file.createWritable();await writer.write(JSON.stringify(other));await writer.close();
+  let message='';try{await s.allowFolderAccess(f.id);}catch(e){message=e.message;}
+  const stored=await registeredFolder();return {message,original:library.id,mirrored:stored.library.id,settings:await s.storageSettings()};
+ });
+ expect(result.message).toContain('andere Bibliothek');expect(result.mirrored).toBe(result.original);expect(result.settings.activeFolder).toBe(result.original);
 });
