@@ -68,7 +68,7 @@ async function signIn(page) {
 test('libraries and own cloud figures are separate; creation is explicit and cancellable',async({page})=>{
  await signIn(page);const calls=await mock(page,true,true);await start(page);await page.locator('#cloudButton').tap();
  await expect(page.getByLabel('Name',{exact:true})).toHaveCount(0);
- await expect(page.getByRole('button',{name:/Version zuordnen:/})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Einer Bibliothek zuordnen',exact:true})).toHaveCount(0);
  await expect(page.getByLabel('Person: E-Mail-Adresse',{exact:true})).toHaveCount(0);
  await page.getByRole('button',{name:'Bibliothek erstellen',exact:true}).tap();
  await expect(page.getByLabel('Name',{exact:true})).toBeVisible();
@@ -80,25 +80,25 @@ test('libraries and own cloud figures are separate; creation is explicit and can
  await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();
  expect(calls.find(c=>c.action==='library_save').payload).toMatchObject({title:'Mein Kurs',visibility:'private',collaborative:false,moderated:true});
  await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).tap();
- await expect(page.getByRole('button',{name:/Version zuordnen:/})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Einer Bibliothek zuordnen',exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'Öffnen',exact:true})).toHaveCount(0);
  await expect(page.getByLabel('Name',{exact:true})).toHaveCount(0);
 });
 test('assigning a cloud revision opens a visible focused view and attaches to the chosen library',async({page})=>{
  await signIn(page);const calls=await mock(page,true,true);await start(page);await page.locator('#cloudButton').tap();
  await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).tap();
- await page.getByRole('button',{name:/Version zuordnen:/}).tap();
+ await page.getByRole('button',{name:'Einer Bibliothek zuordnen',exact:true}).tap();
  await expect(page.getByRole('combobox',{name:'Zielbibliothek',exact:true})).toBeInViewport();
  await expect(page.locator('#cloudBody .cloud-card')).toBeFocused();
  await page.getByRole('button',{name:'Zurück zu Meine Cloud-Figuren',exact:true}).tap();
- await page.getByRole('button',{name:/Version zuordnen:/}).tap();
+ await page.getByRole('button',{name:'Einer Bibliothek zuordnen',exact:true}).tap();
  await page.getByRole('button',{name:'Figur zuordnen',exact:true}).tap();
  await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();
  expect(calls.find(c=>c.action==='attach').payload).toEqual({library:'lib-1',revision:'rev-1'});
 });
 test('assignment without a permitted target explains how to proceed',async({page})=>{
  await signIn(page);await mock(page,true,true,false);await start(page);await page.locator('#cloudButton').tap();
- await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).tap();await page.getByRole('button',{name:/Version zuordnen:/}).tap();
+ await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).tap();await page.getByRole('button',{name:'Einer Bibliothek zuordnen',exact:true}).tap();
  await expect(page.getByText('Keine Bibliothek mit Beitragsberechtigung.',{exact:false})).toBeInViewport();
  await expect(page.getByRole('button',{name:'Figur zuordnen',exact:true})).toHaveCount(0);
  await page.getByRole('button',{name:'Bibliothek erstellen',exact:true}).tap();await expect(page.getByLabel('Name',{exact:true})).toBeVisible();
@@ -178,4 +178,22 @@ for(const existing of [false,true])test(`upload ${existing?'a new version':'a ne
  expect(calls.filter(c=>['reserve','upload','finalize','commit','attach'].includes(c.action)).map(c=>c.action)).toEqual(['reserve','upload','finalize','commit']);
  expect(calls.find(c=>c.action==='reserve').payload.figure).toBe(existing?'figure-1':null);
  expect(calls.find(c=>c.action==='commit').payload.public_allowed).toBe(existing);
+});
+
+test('one primary assignment uses newest revision; history previews and assigns an older revision',async({page})=>{
+ await signIn(page);const bytes=await readFile('web-tests/fixtures/clip.mp4');
+ const revision=(id,date)=>({id,title:'Cloud Drehung',created_at:date,description:'',tags:[],videos:[{id:'video-'+id,name:'Führung',type:'video/mp4',size:bytes.length}]});
+ const calls=await mock(page,true,[{id:'figure-1',public_allowed:true,revisions:[revision('old','2026-10-20T00:08:13Z'),revision('latest','2026-10-20T00:11:45Z')]}]);
+ await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).tap();
+ const assign=page.getByRole('button',{name:'Einer Bibliothek zuordnen',exact:true});await expect(assign).toHaveCount(1);
+ const history=page.locator('.cloud-history');await expect(history).not.toHaveAttribute('open','');
+ await expect(page.getByRole('button',{name:'Diese Version einer Bibliothek zuordnen',exact:true})).toHaveCount(0);
+ await assign.tap();await expect(page.locator('#cloudBody')).toContainText('11:45');
+ await page.getByRole('button',{name:'Figur zuordnen',exact:true}).tap();await expect.poll(()=>calls.filter(c=>c.action==='attach').length).toBe(1);expect(calls.find(c=>c.action==='attach').payload.revision).toBe('latest');
+ await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).tap();
+ await page.getByText('Versionsverlauf · 2 Versionen',{exact:true}).tap();const older=page.locator('.cloud-history article').nth(1);await expect(older).toContainText('08:13');
+ await older.getByRole('button',{name:'Video: Führung',exact:true}).tap();await expect(older.locator('video')).toHaveJSProperty('videoWidth',320);expect(calls.find(c=>c.action==='media_url').payload).toEqual({revision:'old',media:'video-old'});
+ await page.getByText('Versionsverlauf · 2 Versionen',{exact:true}).tap();await expect(history.locator('video')).toHaveCount(0);
+ await page.getByText('Versionsverlauf · 2 Versionen',{exact:true}).tap();await older.getByRole('button',{name:'Diese Version einer Bibliothek zuordnen',exact:true}).tap();
+ await expect(page.locator('#cloudBody')).toContainText('08:13');await page.getByRole('button',{name:'Figur zuordnen',exact:true}).tap();await expect.poll(()=>calls.filter(c=>c.action==='attach').length).toBe(2);expect(calls.filter(c=>c.action==='attach')[1].payload.revision).toBe('old');
 });

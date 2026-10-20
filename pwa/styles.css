@@ -37,3 +37,7 @@
 
 .figure-card.needs-folder-access { flex-wrap:wrap; }
 .folder-access-action { flex-basis:100%; margin-top:4px; }
+
+.cloud-history summary { cursor: pointer; padding: 12px 0; font-weight: 600; }
+.cloud-history > .cloud-card { margin-top: 12px; }
+.cloud-history h4 { margin: 0; }

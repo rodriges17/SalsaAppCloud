@@ -36,7 +36,7 @@ async function load(library = current) {
     const cleaned = await cloudCall(state.me.is_admin ? 'admin_cleanup' : 'cleanup').catch(() => null);
     if (cleaned?.cleaned) state = await cloudCall('state');
   }
-  body.replaceChildren();
+  clearPreviews(body); body.replaceChildren();
   const toolbar = node('div', undefined, 'cloud-actions');
   for (const [key, label] of [['libraries', 'Bibliotheken'], ...(state.me ? [['figures', 'Meine Cloud-Figuren']] : []), ...(state.me?.is_admin ? [['admin', 'Verwaltung']] : [])]) {
     const button = action(label, () => navigate(key)); button.setAttribute('aria-pressed', String(area === key && !current && !source)); toolbar.append(button);
@@ -115,15 +115,23 @@ async function libraryView(id) {
     form.append(action('Mitglied speichern', () => { if (form.reportValidity()) return run('Speichern …', async () => { await cloudCall('member', { library: id, email: email.value, role: role.value }); await load(id); }); })); form.onsubmit = e => e.preventDefault();
   }
 }
+function versionLabel(revision) {
+  const date = new Date(revision.created_at);
+  return Number.isFinite(date.getTime()) ? `Version vom ${date.toLocaleString('de', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Version ohne Datumsangabe';
+}
+function clearPreviews(root) { root.querySelectorAll('video').forEach(player => { player.pause(); player.removeAttribute('src'); player.load(); player.remove(); }); }
+async function previewVideo(box, revision, video) {
+  const signed = await cloudCall('media_url', { revision: revision.id, media: video.id });
+  if (!box.isConnected || box.closest('details')?.open === false) return;
+  clearPreviews(box);
+  const player = node('video'); player.controls = true; player.playsInline = true; player.src = signed.url; box.append(player);
+}
 function revisionCard(box, rev) {
   box.append(node('p', rev.description), node('p', rev.tags.join(' · ')));
   const chosen = [];
   for (const v of rev.videos) {
     const check = checkbox(box, `${v.name || 'Video'} · ${MB(v.size)}`, true); chosen.push([check, v]);
-    box.append(action(`Video: ${v.name || 'Ohne Namen'}`, async () => {
-      const signed = await cloudCall('media_url', { revision: rev.id, media: v.id });
-      box.querySelectorAll('video').forEach(n => n.remove()); const player = node('video'); player.controls = true; player.playsInline = true; player.src = signed.url; box.append(player);
-    }));
+    box.append(action(`Video: ${v.name || 'Ohne Namen'}`, () => previewVideo(box, rev, v)));
   }
   box.append(action('In meine Figuren übernehmen', () => run('Videos herunterladen …', async () => {
     const selected = chosen.filter(([check]) => check.checked).map(([, v]) => v);
@@ -142,9 +150,10 @@ function revisionCard(box, rev) {
   })));
 }
 function attachForm(revision) {
-  body.replaceChildren();
+  clearPreviews(body); body.replaceChildren();
   body.append(action('Zurück zu Meine Cloud-Figuren', () => navigate('figures')));
   const box = section(`„${revision.title}“ zuordnen`);
+  box.append(node('p', versionLabel(revision)));
   focusSection(box);
   const libs = state.libraries.filter(l => l.contribute);
   if (!libs.length) { box.append(node('p', 'Keine Bibliothek mit Beitragsberechtigung. Erstelle eine Bibliothek oder lass dich zum Mitwirken einladen.')); if (state.me?.upload_enabled) box.append(action('Bibliothek erstellen', () => navigate('create'))); return; }
@@ -154,10 +163,26 @@ function attachForm(revision) {
 function ownFigures() {
   if (!state.own_figures.length) body.append(node('p', 'Noch keine eigenen Cloud-Figuren. Lade eine lokale Figur über „In Cloud veröffentlichen“ hoch.'));
   for (const f of state.own_figures) {
-    const box = section(f.revisions[0]?.title ?? 'Noch nicht fertig hochgeladene Figur');
+    const revisions = [...f.revisions].sort((a, b) => (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0));
+    const latest = revisions[0], box = section(latest?.title ?? 'Noch nicht fertig hochgeladene Figur');
     const allowed = checkbox(box, 'Öffentliche Veröffentlichung erlauben', f.public_allowed);
     box.append(action('Sichtbarkeit speichern', () => run('Speichern …', async () => { await cloudCall('public_permission', { figure: f.id, allowed: allowed.checked }); await load(null); })));
-    for (const revision of f.revisions) box.append(action(`Version zuordnen: ${revision.title} (${new Date(revision.created_at).toLocaleDateString('de')})`, () => attachForm(revision)));
+    if (latest) {
+      box.append(action('Einer Bibliothek zuordnen', () => attachForm(latest)));
+      const history = node('details', undefined, 'cloud-history');
+      history.append(node('summary', `Versionsverlauf · ${revisions.length} ${revisions.length === 1 ? 'Version' : 'Versionen'}`));
+      for (const revision of revisions) {
+        const entry = node('article', undefined, 'cloud-card');
+        entry.append(node('h4', `${versionLabel(revision)}${revision.id === latest.id ? ' · Neueste Version' : ''}`), node('p', revision.title));
+        for (const video of revision.videos) entry.append(action(`Video: ${video.name || 'Ohne Namen'}`, () => previewVideo(entry, revision, video)));
+        if (revision.id !== latest.id) entry.append(action('Diese Version einer Bibliothek zuordnen', () => attachForm(revision)));
+        history.append(entry);
+      }
+      history.addEventListener('toggle', () => {
+        if (!history.open) clearPreviews(history);
+      });
+      box.append(history);
+    }
     box.append(action('Cloud-Figur samt Videos löschen', async () => {
       if (!await hooks.confirm({ title: 'Cloud-Figur löschen?', message: 'Alle Cloud-Versionen und Verknüpfungen in Bibliotheken werden entfernt. Bereits lokal heruntergeladene Kopien bleiben bestehen.', ok: 'Cloud-Figur löschen' })) return;
       await run('Cloud-Figur löschen …', async () => { await cloudCall('delete_figure', { figure: f.id }); await load(null); });
