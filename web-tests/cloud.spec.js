@@ -11,6 +11,7 @@ const library={id:'lib-1',owner_id:'owner',title:'Cloud Kurs',description:'Getei
 async function mock(page,admin=false, own=false, contribute=true, options={}){
  const clip=await readFile('web-tests/fixtures/clip.mp4');
  const rev={id:'rev-1',figure_id:'figure-1',title:'Cloud Drehung',description:'Aus der Cloud',tags:['Salsa'],videos:[{id:'video-1',name:'Führung',type:'video/mp4',size:clip.length}]},calls=[];
+ if(options.videos)rev.videos=options.videos.map(video=>({...rev.videos[0],...video}));
  await page.route(new RegExp('^'+host+'/(functions|storage)/'),async route=>{
   const req=route.request();
   if(req.url().includes('/storage/') && req.method()==='POST') { calls.push({action:'upload',bytes:req.postDataBuffer()?.length,type:req.headers()['content-type']}); return route.fulfill({status:options.failUpload?500:200,contentType:'application/json',body:JSON.stringify(options.failUpload?{error:'Test: Upload unterbrochen'}:{ok:true})}); }
@@ -31,7 +32,7 @@ async function mock(page,admin=false, own=false, contribute=true, options={}){
 async function start(page){await page.goto('/pwa/');await expect(page.getByRole('heading',{name:'Step by Step',exact:true})).toBeVisible();}
 test('public cloud download requires confirmed previews and becomes an offline copy',async({page,context})=>{
  await mock(page);await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Öffnen',exact:true}).tap();
- await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();await page.getByRole('button',{name:'In meine Figuren übernehmen',exact:true}).tap();
+ await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();await expect(page.locator('#cloudBody input[type=checkbox]')).toHaveCount(0);await page.getByRole('button',{name:'In meine Figuren übernehmen',exact:true}).tap();
  await expect(page.locator('#editor')).toBeVisible();await expect(page.locator('#figureTitle')).toHaveValue('Cloud Drehung');await expect(page.locator('#saveFigure')).toBeDisabled();
  await page.locator('#reviewAll').tap();await expect(page.locator('#acceptVideo')).toBeEnabled();await page.locator('#acceptVideo').tap();await page.locator('#saveFigure').tap();await expect(page.locator('#editor')).not.toBeVisible();
  await context.setOffline(true);await page.getByRole('button',{name:'Cloud Drehung lernen',exact:true}).tap();await expect(page.locator('#learningVideo')).toHaveJSProperty('videoWidth',320);
@@ -234,4 +235,16 @@ test('cloud reuses the exact local poster and remembers it after the local copy 
  await page.evaluate(async()=>{const s=await import('/pwa/storage.js');await s.deleteFigure((await s.listFigures()).find(f=>f.id==='same-poster'));});
  await page.reload();await page.locator('#cloudButton').tap();await expect(page.locator('.cloud-thumbnail')).toHaveAttribute('src',/^blob:/);
  expect(await pixels()).toEqual(expected);expect(calls.filter(c=>c.action==='media_url')).toHaveLength(0);
+});
+
+
+test('multiple cloud videos have an explicit download selection and only selected videos are imported',async({page})=>{
+ const calls=await mock(page,false,false,true,{videos:[{id:'video-1',name:'Führung'},{id:'video-2',name:'Folgen'}]});
+ await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Öffnen',exact:true}).tap();
+ await expect(page.getByRole('heading',{name:'Videos zum Herunterladen auswählen',exact:true})).toBeVisible();
+ const checks=page.locator('#cloudBody input[type=checkbox]');await expect(checks).toHaveCount(2);await checks.nth(0).uncheck();await checks.nth(1).uncheck();
+ const download=page.getByRole('button',{name:'Ausgewählte Videos in meine Figuren übernehmen',exact:true});await download.tap();await expect(page.locator('#cloudError')).toContainText('Bitte mindestens ein Video auswählen');
+ expect(calls.filter(call=>call.action==='media_url')).toHaveLength(0);
+ await checks.nth(1).check();await download.tap();await expect(page.locator('#editor')).toBeVisible();await expect(page.locator('.draft-card')).toHaveCount(1);
+ expect(calls.filter(call=>call.action==='media_url').map(call=>call.payload.media)).toEqual(['video-2']);
 });

@@ -132,13 +132,17 @@ async function previewVideo(box, revision, video) {
 }
 function revisionCard(box, rev) {
   box.append(node('p', rev.description), node('p', rev.tags.join(' · ')));
-  const chosen = [];
+  const chosen = [], multiple = rev.videos.length > 1;
+  if (multiple) box.append(node('h4', 'Videos zum Herunterladen auswählen'));
   for (const v of rev.videos) {
-    const check = checkbox(box, `${v.name || 'Video'} · ${MB(v.size)}`, true); chosen.push([check, v]);
+    const label = `${v.name || 'Video'} · ${MB(v.size)}`;
+    const check = multiple ? checkbox(box, label, true) : null;
+    if (!multiple) box.append(node('p', label));
+    chosen.push([check, v]);
     box.append(action(`Video: ${v.name || 'Ohne Namen'}`, () => previewVideo(box, rev, v)));
   }
-  box.append(action('In meine Figuren übernehmen', () => run('Videos herunterladen …', async () => {
-    const selected = chosen.filter(([check]) => check.checked).map(([, v]) => v);
+  box.append(action(multiple ? 'Ausgewählte Videos in meine Figuren übernehmen' : 'In meine Figuren übernehmen', () => run('Videos herunterladen …', async () => {
+    const selected = chosen.filter(([check]) => !check || check.checked).map(([, v]) => v);
     if (!selected.length) throw new Error('Bitte mindestens ein Video auswählen.');
     if (selected.reduce((n, v) => n + v.size, 0) > 250 * 1024 * 1024) throw new Error('Bitte weniger Videos wählen: maximal 250 MB pro Übernahme.');
     const drafts = [];
