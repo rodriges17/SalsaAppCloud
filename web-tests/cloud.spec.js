@@ -122,6 +122,7 @@ async function localUpload(page, folder=false) {
  });
  await start(page);
  const bytes=await page.evaluate(async folder=>{
+  const nativeFetch=window.fetch;window.fetch=async function(input,init){if(String(input).includes('/storage/v1/object/')&&init?.method==='POST')window.__sentCloudVideo={bytes:init.body.size,type:init.body.type};return nativeFetch.call(this,input,init);};
   const s=await import('/pwa/storage.js');if(folder)await s.connectFolder(await s.chooseFolder());
   const blob=await(await fetch('/web-tests/fixtures/clip.mp4')).blob();
   await s.saveFigure({id:'upload-source',title:'Lokale Drehung',description:'Beschreibung',tags:['Tanz'],status:'Neu'},[{id:crypto.randomUUID(),name:'Video',blob:blob.slice(0,blob.size,'video/mp4'),confirmed:true,duration:6,width:320,height:180}]);return blob.size;
@@ -139,7 +140,9 @@ for(const folder of [false,true])test(`upload from ${folder?'device folder':'app
  await page.getByLabel('Öffentliche Veröffentlichung dieser Figur erlauben',{exact:true}).check();await expect(error).toBeHidden();await upload.tap();
  await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();
  expect(calls.filter(c=>['reserve','upload','finalize','commit','attach'].includes(c.action)).map(c=>c.action)).toEqual(['reserve','upload','finalize','commit','attach']);
- expect(calls.find(c=>c.action==='upload')).toMatchObject({bytes,type:'video/mp4'});
+ // WebKit's request inspector omits Blob postData; verify the fetch body there.
+ expect(await page.evaluate(()=>window.__sentCloudVideo)).toEqual({bytes,type:'video/mp4'});
+ if(browserName!=='webkit')expect(calls.find(c=>c.action==='upload')).toMatchObject({bytes,type:'video/mp4'});
  expect(calls.find(c=>c.action==='commit').payload).toMatchObject({title:'Lokale Drehung',public_allowed:true,videos:[{id:'uploaded-0',name:'Video'}]});
  expect(calls.find(c=>c.action==='attach').payload).toEqual({library:'lib-1',revision:'uploaded-revision'});
 });
