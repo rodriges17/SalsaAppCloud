@@ -49,9 +49,9 @@ export async function reconnectFolder(id) {
 export async function listFigures() {
   const result = await app.listFigures();
   for (const folder of await folders()) {
-    let problem = '';
+    let problem = '', accessRequired = false;
     try { await permission(folder.handle); const library = await readLibrary(folder.handle); if (library.id !== folder.id) throw new Error('Andere Bibliothek im Ordner.'); await mirror(folder)(library); }
-    catch (e) { problem = e.message; }
+    catch (e) { problem = e.message; accessRequired = e.code === 'folder-permission-required'; }
     for (const f of folder.library.figures) {
       let fileProblem = problem;
       if (!fileProblem) try {
@@ -61,7 +61,7 @@ export async function listFigures() {
           if (file.size !== v.size || (v.modifiedAt != null && file.lastModified !== v.modifiedAt)) { fileProblem = 'Videodatei wurde verändert. Bitte bearbeiten und ersetzen.'; break; }
         }
       } catch { fileProblem = 'Videodatei fehlt. Bitte bearbeiten und ersetzen.'; }
-      result.push({ ...hydrateFolder(f, folder.id), folderName: folder.name, storageProblem: fileProblem });
+      result.push({ ...hydrateFolder(f, folder.id), folderName: folder.name, storageProblem: fileProblem, folderAccessRequired: accessRequired });
     }
   }
   return result;

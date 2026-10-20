@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-20-backup-v2';
+const APP_VERSION = '2026-10-20-folder-access-v1';
 import { initBackup } from './backup-ui.js';
 import { initCloud, openCloud } from './cloud.js';
 import { exportFigure, importFigure, packageSize, packageFilename, MAX_PACKAGE_BYTES } from './package.js';
@@ -54,7 +54,7 @@ function renderOverview() {
     else { thumb = el('span', 'card-thumb thumb-placeholder', '▷'); thumb.setAttribute('aria-hidden', 'true'); }
     const copy = el('span', 'card-copy'); copy.append(el('span', 'card-title', figure.title), el('span', 'card-status', figure.status));
     if (figure.tags.length) copy.append(el('span', 'card-tags', figure.tags.join(' · ')));
-    if (figure.storageFolder) copy.append(el('span', 'card-meta', figure.storageProblem ? `Geräteordner nicht verfügbar · erneut verbinden · ${figure.storageProblem}` : `Geräteordner · ${figure.folderName || 'SalsaTrainer'}`));
+    if (figure.storageFolder) copy.append(el('span', 'card-meta', figure.folderAccessRequired ? 'Ordner gespeichert – Zugriff erneut erlauben' : figure.storageProblem ? `Geräteordner: ${figure.storageProblem}` : `Geräteordner · ${figure.folderName || 'SalsaTrainer'}`));
     copy.append(el('span', 'card-meta', `${timeLabel(figure.duration)} · ${figure.videoIds.length} Video${figure.videoIds.length === 1 ? '' : 's'}`)); main.append(thumb, copy);
     const options = button('⋮', event => { event.stopPropagation(); const wasOpen = options.getAttribute('aria-expanded') === 'true'; closeMenus(); if (!wasOpen) showMenu(); }, 'card-options');
     options.setAttribute('aria-label', `Optionen für ${figure.title}`); options.setAttribute('aria-expanded', 'false');
@@ -68,7 +68,19 @@ function renderOverview() {
       card.append(menu);
     }
     main.addEventListener('contextmenu', event => { event.preventDefault(); closeMenus(); showMenu(); });
-    card.append(main, options); $('figureList').append(card);
+    card.append(main, options);
+    if (figure.folderAccessRequired && folderSupported()) {
+      card.classList.add('needs-folder-access');
+      const allow = button('Ordnerzugriff erlauben', async () => {
+        if (deviceBusy) return;
+        deviceBusy = true; allow.disabled = true; allow.textContent = 'Zugriff wird angefragt …';
+        try { await reconnectFolder(figure.storageFolder); changed(); await refresh(); toast('Ordnerzugriff erlaubt. Die Figuren sind wieder verfügbar.'); }
+        catch (error) { toast(storageMessage(error)); }
+        finally { deviceBusy = false; allow.disabled = false; allow.textContent = 'Ordnerzugriff erlauben'; }
+      }, 'secondary folder-access-action');
+      allow.setAttribute('aria-label', `Ordnerzugriff erlauben für ${figure.title}`); card.append(allow);
+    }
+    $('figureList').append(card);
   }
 }
 function renderFilters() {
@@ -326,7 +338,7 @@ async function renderDeviceStorage() {
   } else controls.append(el('p', 'muted', 'Geräteordner werden in diesem Browser nicht unterstützt. Verwende aktuelles Chrome auf Android oder Desktop. Auf iPhone/Safari bleibt der App-Speicher mit ZIP-Sicherung verfügbar.'));
   for (const folder of settings.folders) {
     const row = el('div', 'cloud-card'); row.append(el('strong', '', `${folder.name} · ${folder.library.figures.length} Figuren${folder.id === settings.activeFolder ? ' · aktiv' : ''}`));
-    if (settings.supported) row.append(button('Ordner erneut verbinden', () => deviceWork(() => reconnectFolder(folder.id)), 'secondary'), button('Für neue Figuren verwenden', () => deviceWork(async () => { await reconnectFolder(folder.id); await setStorageFolder(folder.id); }), 'secondary'));
+    if (settings.supported) row.append(button('Ordnerzugriff erlauben', () => deviceWork(() => reconnectFolder(folder.id)), 'secondary'), button('Für neue Figuren verwenden', () => deviceWork(async () => { await reconnectFolder(folder.id); await setStorageFolder(folder.id); }), 'secondary'));
     if (folder.library.garbage.length) row.append(el('p', 'error', 'Dateibereinigung ausstehend. Bitte Ordner erneut verbinden.'));
     controls.append(row);
   }

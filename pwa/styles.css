@@ -34,3 +34,6 @@
 
 .backup-actions { display:grid; gap:12px; margin-block:16px; }
 .backup-actions button { width:100%; }
+
+.figure-card.needs-folder-access { flex-wrap:wrap; }
+.folder-access-action { flex-basis:100%; margin-top:4px; }

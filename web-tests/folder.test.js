@@ -37,7 +37,7 @@ test('folder: ambiguous manifest close never removes media referenced on disk',a
 });
 test('folder: revoked permission and changed or missing files preserve metadata for repair',async()=>{
  const {folder,mirror}=setup(),f=figure();await writeFolderFigure(folder,f,[draft()],null,mirror);const disk=await readLibrary(folder.handle),v=disk.figures[0].videos[0];
- folder.handle.deny=true;await assert.rejects(permission(folder.handle),/Ordnerzugriff/);folder.handle.deny=false;
+ folder.handle.deny=true;await assert.rejects(permission(folder.handle),{code:'folder-permission-required'});folder.handle.deny=false;
  const media=await folder.handle.getDirectoryHandle('media');media.files.set(v.file,new Blob(['other bytes']));await assert.rejects(readFolderVideo(folder,f,v),/verändert/);
  media.files.delete(v.file);await assert.rejects(readFolderVideo(folder,f,v),/nicht verfügbar/);assert.equal((await readLibrary(folder.handle)).figures[0].status,'Am Üben');
 });

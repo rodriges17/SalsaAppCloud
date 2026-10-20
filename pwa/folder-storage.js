@@ -23,7 +23,7 @@ export async function permission(handle, request = false) {
   if (typeof handle.queryPermission !== 'function') return; // Native OPFS handles used by browser tests have implicit grants.
   let state = await handle.queryPermission({ mode: 'readwrite' });
   if (state !== 'granted' && request) state = await handle.requestPermission({ mode: 'readwrite' });
-  if (state !== 'granted') throw new Error('Ordnerzugriff fehlt. Unter Speicherort „Ordner erneut verbinden“ wählen.');
+  if (state !== 'granted') { const error = new Error('Ordner gespeichert – Zugriff erneut erlauben.'); error.code = 'folder-permission-required'; throw error; }
 }
 export async function readLibrary(handle) {
   const file = await (await handle.getFileHandle('library.json')).getFile();

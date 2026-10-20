@@ -3,9 +3,10 @@ import path from 'node:path';
 async function start(page) { await page.goto('/pwa/'); await expect(page.getByRole('heading',{name:'Salsa Cloud',exact:true})).toBeVisible(); }
 async function enablePicker(page, name) {
  await page.addInitScript(name=>{
+  window.__denyFolder=sessionStorage.getItem('test-folder-prompt')==='1';
   window.showDirectoryPicker=async()=>{const root=await navigator.storage.getDirectory();return root.getDirectoryHandle(name,{create:true});};
-  FileSystemDirectoryHandle.prototype.queryPermission=async()=>window.__denyFolder?'denied':'granted';
-  FileSystemDirectoryHandle.prototype.requestPermission=async()=>{window.__denyFolder=false;return 'granted';};
+  FileSystemDirectoryHandle.prototype.queryPermission=async()=>window.__denyFolder?'prompt':'granted';
+  FileSystemDirectoryHandle.prototype.requestPermission=async()=>{if(window.__cancelFolder)return 'denied';window.__denyFolder=false;return 'granted';};
  },name);
 }
 async function choose(page) {
@@ -39,10 +40,19 @@ test('device folder persists real files, plays offline and can be restored after
 });
 test('revoked access keeps figure metadata and explicit reconnect restores access',async({page,browserName},info)=>{
  test.skip(browserName!=='chromium');await enablePicker(page,'permission-'+info.testId.replace(/\W/g,''));await start(page);await choose(page);await seed(page);
- await page.evaluate(()=>{window.__denyFolder=true;});await page.locator('#infoButton').tap();await page.locator('#closeInfo').tap();await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
- await expect(page.getByText('Geräteordner nicht verfügbar · erneut verbinden',{exact:false})).toBeVisible();
+ await page.evaluate(()=>sessionStorage.setItem('test-folder-prompt','1'));await page.reload();
+ await expect(page.getByText('Ordner gespeichert – Zugriff erneut erlauben',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Ordner Ocho lernen',exact:true}).tap();await expect(page.locator('#playerScreen')).not.toBeVisible();
- await page.locator('#infoButton').tap();await page.getByRole('button',{name:'Ordner erneut verbinden',exact:true}).tap();await expect(page.locator('#deviceStorageStatus')).toHaveText('Gespeichert.');await page.locator('#closeInfo').tap();
+ const before=await disk(page);
+ await page.evaluate(()=>{window.__cancelFolder=true;});
+ await page.getByRole('button',{name:'Ordnerzugriff erlauben für Ordner Ocho',exact:true}).tap();
+ await expect(page.getByRole('button',{name:'Ordnerzugriff erlauben für Ordner Ocho',exact:true})).toBeEnabled();
+ await expect(page.getByText('Ordner gespeichert – Zugriff erneut erlauben',{exact:true})).toBeVisible();
+ await page.evaluate(()=>{window.__cancelFolder=false;});
+ await page.getByRole('button',{name:'Ordnerzugriff erlauben für Ordner Ocho',exact:true}).tap();
+ await expect(page.getByText('Ordner gespeichert – Zugriff erneut erlauben',{exact:true})).toHaveCount(0);
+ expect((await disk(page)).folderId).toBe(before.folderId);
+ expect(await page.evaluate(async()=>{const {storageSettings}=await import('/pwa/storage.js');return (await storageSettings()).activeFolder;})).toBe(before.folderId);
  await page.getByRole('button',{name:'Ordner Ocho lernen',exact:true}).tap();await expect(page.locator('#learningVideo')).toHaveJSProperty('videoWidth',320);
 });
 test('missing folder video can be repaired through confirmed replacement without losing learning data',async({page,browserName},info)=>{
