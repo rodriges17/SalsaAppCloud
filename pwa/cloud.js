@@ -116,7 +116,7 @@ function revisionCard(box, rev) {
   const chosen = [];
   for (const v of rev.videos) {
     const check = checkbox(box, `${v.name || 'Video'} · ${MB(v.size)}`, true); chosen.push([check, v]);
-    box.append(action(`Vorschau: ${v.name || 'Video'}`, async () => {
+    box.append(action(`Video: ${v.name || 'Ohne Namen'}`, async () => {
       const signed = await cloudCall('media_url', { revision: rev.id, media: v.id });
       box.querySelectorAll('video').forEach(n => n.remove()); const player = node('video'); player.controls = true; player.playsInline = true; player.src = signed.url; box.append(player);
     }));
