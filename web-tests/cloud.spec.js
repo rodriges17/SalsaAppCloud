@@ -17,7 +17,7 @@ async function mock(page,admin=false, own=false, contribute=true, options={}){
   if(req.url().includes('/storage/'))return route.fulfill({status:200,contentType:'video/mp4',body:clip,headers:{'Access-Control-Allow-Origin':'*'}});
   if(req.method()==='OPTIONS')return route.fulfill({status:204,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type','Access-Control-Allow-Methods':'POST, GET, OPTIONS'}});
   const {action,payload}=req.postDataJSON();calls.push({action,payload,authorization:req.headers().authorization});let result={ok:true};
-  if(action==='state')result={me:admin&&req.headers().authorization?{id:'admin',email:'admin@example.test',is_admin:true,upload_enabled:true,used:0,quota:500000000}:null,settings:{used:0,total_limit:900000000},people:[],libraries:[{...library,contribute,visibility:options.visibility??library.visibility}],own_figures:own?[{id:'figure-1',public_allowed:true,revisions:[{...rev,created_at:'2026-10-19T00:00:00Z'}]}]:[]};
+  if(action==='state')result={me:admin&&req.headers().authorization?{id:'admin',email:'admin@example.test',is_admin:true,upload_enabled:true,used:0,quota:500000000}:null,settings:{used:0,total_limit:900000000},people:[],libraries:[{...library,contribute,visibility:options.visibility??library.visibility}],own_figures:Array.isArray(own)?own:own?[{id:'figure-1',public_allowed:true,revisions:[{...rev,created_at:'2026-10-19T00:00:00Z'}]}]:[]};
   if(action==='library')result={library,manage:false,contribute:false,members:[],entries:[{figure_id:'figure-1',owner_id:'owner',public_allowed:true,published:rev,pending:null}]};
   if(action==='reserve')result={job:'job-1',media:payload.videos.map((v,i)=>({id:'uploaded-'+i,path:'test/'+i+'.mp4'}))};
   if(action==='commit')result={revision:'uploaded-revision'};
@@ -152,4 +152,16 @@ test('private upload needs no public consent and failed transfer is visible and 
  expect(calls.some(c=>c.action==='abort')).toBe(true);expect(calls.some(c=>c.action==='commit')).toBe(false);await expect(upload).toBeEnabled();
  options.failUpload=false;await upload.tap();await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();expect(calls.find(c=>c.action==='commit').payload.public_allowed).toBe(false);
  expect(await page.evaluate(async()=>(await(await import('/pwa/storage.js')).listFigures()).length)).toBe(1);
+});
+
+test('upload targets exclude unfinished reservations and distinguish duplicate cloud names',async({page})=>{
+ await signIn(page);await mock(page,true,[
+  {id:'pending-upload-id',public_allowed:false,revisions:[]},
+  {id:'duplicate-a',public_allowed:true,revisions:[{id:'r-a',title:'Doppelte Figur',created_at:'2026-10-19T03:47:43Z'}]},
+  {id:'duplicate-b',public_allowed:true,revisions:[{id:'r-b',title:'Doppelte Figur',created_at:'2026-10-20T07:36:33Z'}]}
+ ]);await localUpload(page);
+ const options=page.getByRole('combobox',{name:'Neue Figur oder neue Version',exact:true}).locator('option');
+ await expect(options).toHaveCount(3);const labels=await options.allTextContents();expect(labels[1]).not.toBe(labels[2]);expect(labels.slice(1).every(s=>s.startsWith('Doppelte Figur ·'))).toBe(true);
+ await expect(page.locator('#cloudBody')).not.toContainText('pending-upload-id');
+ await expect(page.locator('#cloudBody')).toContainText('Lokales Löschen oder Entfernen aus einer Bibliothek löscht die Cloud-Figur nicht.');
 });

@@ -32,7 +32,10 @@ function focusSection(box) {
 }
 async function load(library = current) {
   await finishLogin(); state = await cloudCall('state'); current = library;
-  if (state.me) await cloudCall(state.me.is_admin ? 'admin_cleanup' : 'cleanup').catch(() => {});
+  if (state.me) {
+    const cleaned = await cloudCall(state.me.is_admin ? 'admin_cleanup' : 'cleanup').catch(() => null);
+    if (cleaned?.cleaned) state = await cloudCall('state');
+  }
   body.replaceChildren();
   const toolbar = node('div', undefined, 'cloud-actions');
   for (const [key, label] of [['libraries', 'Bibliotheken'], ...(state.me ? [['figures', 'Meine Cloud-Figuren']] : []), ...(state.me?.is_admin ? [['admin', 'Verwaltung']] : [])]) {
@@ -170,7 +173,16 @@ async function publishForm() {
   for (const record of records) selected.push([checkbox(box, `${record.name || 'Video'} · ${MB(record.blob.size)}`, true), record]);
   box.append(node('p', 'Maximal 50 MB pro Video. Während eines Uploads wird vorübergehend der maximale Platz pro Video reserviert. Alte Versionen zählen weiterhin zum Speicher.'));
   const library = select(box, 'Bibliothek', libs.map(l => [l.id, l.title]));
-  const figure = select(box, 'Neue Figur oder neue Version', [['', 'Neue Cloud-Figur'], ...state.own_figures.map(f => [f.id, f.revisions[0]?.title ?? f.id])]);
+  // Reservations can create a figure before any revision exists. They are not
+  // valid version targets until the first upload has completed.
+  const targets = state.own_figures.filter(f => f.revisions?.length);
+  const names = new Map();
+  for (const f of targets) { const title = f.revisions[0].title; names.set(title, (names.get(title) ?? 0) + 1); }
+  const figure = select(box, 'Neue Figur oder neue Version', [['', 'Neue Cloud-Figur'], ...targets.map(f => {
+    const latest = f.revisions[0], title = latest.title;
+    return [f.id, names.get(title) > 1 ? `${title} · ${new Date(latest.created_at).toLocaleString('de')}` : title];
+  })]);
+  box.append(node('p', 'Hier stehen deine vorhandenen Cloud-Figuren. Lokales Löschen oder Entfernen aus einer Bibliothek löscht die Cloud-Figur nicht. Dauerhaft löschen kannst du sie unter „Meine Cloud-Figuren“ mit „Cloud-Figur samt Videos löschen“.'));
   const allowed = checkbox(box, 'Öffentliche Veröffentlichung dieser Figur erlauben');
   box.append(node('p', 'Mit Häkchen darf diese Figur in öffentlichen Bibliotheken ohne Anmeldung sichtbar sein. Ohne Häkchen ist sie nur in privaten Bibliotheken nutzbar. Das Häkchen allein veröffentlicht die Figur noch nicht.'));
   const visibilityHint = node('p'); visibilityHint.setAttribute('role', 'status'); box.append(visibilityHint);
