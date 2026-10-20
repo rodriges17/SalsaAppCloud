@@ -2,7 +2,7 @@ import { checksum } from './package.js';
 import { validateDraft, STATUSES } from './logic.js';
 const FORMAT = 'salsa-device-library', LIMIT = 8 * 1024 * 1024;
 const validId = s => typeof s === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(s);
-const validFile = s => typeof s === 'string' && /^[a-f0-9-]{36}\.media$/.test(s);
+const validFile = s => typeof s === 'string' && /^[a-f0-9-]{36}\.(mp4|mov|m4v|webm|ogv|media)$/.test(s);
 export const folderSupported = () => typeof globalThis.showDirectoryPicker === 'function' && !!globalThis.isSecureContext;
 export function validateLibrary(data) {
   if (!data || data.format !== FORMAT || data.version !== 1 || !validId(data.id) || !Array.isArray(data.figures) || data.figures.length > 10000 || !Array.isArray(data.garbage) || data.garbage.some(f => !validFile(f))) throw new Error('Keine unterstützte Salsa-Bibliothek. Vorhandene Dateien werden nicht verändert.');
@@ -77,7 +77,8 @@ export async function writeFolderFigure(folder, figure, drafts, expectedRevision
         if (!old) throw new Error('Ein gespeichertes Video gehört nicht zu dieser Figur.');
         await readFolderVideo(folder, previous, old); videos.push({ ...old, name: d.name.trim() }); continue;
       }
-      const file = crypto.randomUUID() + '.media'; staged.push(file);
+      const extension = ({ 'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/x-m4v': 'm4v', 'video/webm': 'webm', 'video/ogg': 'ogv' })[d.blob.type.split(';')[0]] ?? 'media';
+      const file = crypto.randomUUID() + '.' + extension; staged.push(file);
       const handle = await media.getFileHandle(file, { create: true }), writer = await handle.createWritable();
       try { await writer.write(d.blob); await writer.close(); } catch (e) { await writer.abort().catch(() => {}); throw e; }
       const stored = await handle.getFile(), crc = await checksum(d.blob);

@@ -8,7 +8,7 @@ class Directory {
   async getFileHandle(name, { create = false } = {}) {
     if (!this.files.has(name)) { if (!create) throw new DOMException('missing','NotFoundError'); this.files.set(name,new Blob()); }
     const dir=this;
-    return { async getFile(){return dir.files.get(name);}, async createWritable(){let next;return {async write(blob){if(name.endsWith('.media') && --dir.failMedia === 0) throw Error('full');next=blob instanceof Blob?blob:new Blob([blob]);},async close(){if(dir.failManifest==='before')throw Error('close failed');dir.files.set(name,next);if(dir.failManifest==='after')throw Error('ambiguous close');},async abort(){}};} };
+    return { async getFile(){return dir.files.get(name);}, async createWritable(){let next;return {async write(blob){if(name !== 'library.json' && --dir.failMedia === 0) throw Error('full');next=blob instanceof Blob?blob:new Blob([blob]);},async close(){if(dir.failManifest==='before')throw Error('close failed');dir.files.set(name,next);if(dir.failManifest==='after')throw Error('ambiguous close');},async abort(){}};} };
   }
   async removeEntry(name) { if(this.failDelete)throw Error('busy');if(!this.files.delete(name))throw new DOMException('missing','NotFoundError'); }
 }

@@ -8,7 +8,7 @@ Die App prüft showDirectoryPicker im sicheren Browserkontext. Ohne diese Fähig
 
 ## Dateien und Wiederherstellung
 
-In einem neuen gewählten Ordner wird SalsaTrainer/library.json und ein Unterordner media verwendet. Ein bereits gewählter SalsaTrainer-Ordner mit library.json kann direkt geöffnet werden. Die Bibliotheksdatei enthält Titel, Beschreibungen, Tags, Lernstand, Zuordnungen, Video-Eigenschaften und Prüfsummen. Videodateien haben zufällige Namen mit .media-Endung; die App kennt deren ursprüngliches Videoformat. Die ganze Bibliothek kann durch Kopieren des SalsaTrainer-Ordners gesichert und über die Ordnerwahl wieder eingelesen werden. Es findet keine automatische Cloud-Synchronisation des Ordners statt.
+In einem neuen gewählten Ordner wird SalsaTrainer/library.json und ein Unterordner media verwendet. Ein bereits gewählter SalsaTrainer-Ordner mit library.json kann direkt geöffnet werden. Die Bibliotheksdatei enthält Titel, Beschreibungen, Tags, Lernstand, Zuordnungen, Video-Eigenschaften und Prüfsummen. Videodateien haben zufällige Namen und passende Dateiendungen wie .mp4 oder .mov. Für weitere Formate wird .media verwendet; die App speichert deren ursprünglichen Videotyp. Die ganze Bibliothek kann durch Kopieren des SalsaTrainer-Ordners gesichert und über die Ordnerwahl wieder eingelesen werden. Es findet keine automatische Cloud-Synchronisation des Ordners statt.
 
 App- und Ordnerfiguren werden gemeinsam angezeigt. Für neue Figuren gilt der aktive Speicherort; vorhandene Figuren bleiben an ihrem bisherigen Ort. Eine bestehende Ordnerfigur wird beim Bearbeiten weiterhin im eigenen Ordner gespeichert. Auch bei gewähltem App-Speicher bleiben andere Ordnerfiguren zugreifbar, sofern Berechtigung besteht.
 
