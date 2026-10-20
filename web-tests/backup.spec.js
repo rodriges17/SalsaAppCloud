@@ -66,3 +66,13 @@ test('backup requests missing folder grants, retries denial and rechecks access 
  const download=page.waitForEvent('download');await page.getByRole('link',{name:'Teil 1 von 1 herunterladen',exact:true}).tap();
  const file=await download,archive=await readBackup([new Blob([await readFile(await file.path())])]);expect(archive.sources).toHaveLength(2);expect(archive.sources.every(s=>s.figure.status==='Sitzt')).toBe(true);
 });
+
+test('restore dialog keeps conflict choices after cancelling confirmation and applies the current selection',async({page})=>{
+ await start(page);await restoreDialog(page);await page.locator('#backupBody input[type=file]').setInputFiles(await backupFiles());
+ await expect(page.locator('#backupStatus')).toHaveText('Alle Sicherungsdateien sind gültig.');await page.getByRole('button',{name:'Wiederherstellung prüfen',exact:true}).tap();
+ const choice=page.getByRole('combobox',{name:'Wiederherstellung für Backup Ocho',exact:true});await choice.selectOption('keep');
+ await page.getByRole('button',{name:'Auswahl wiederherstellen',exact:true}).tap();await expect(page.locator('#confirmMessage')).toContainText('0 Figuren übernehmen');await page.locator('#confirmCancel').tap();
+ await expect(choice).toHaveValue('keep');await choice.selectOption('add');await page.getByRole('button',{name:'Auswahl wiederherstellen',exact:true}).tap();
+ await expect(page.locator('#confirmMessage')).toContainText('1 Figuren übernehmen');await page.locator('#confirmOK').tap();await expect(page.locator('#backupStatus')).toHaveText('Wiederherstellung abgeschlossen.');
+ expect(await page.evaluate(async()=>(await(await import('/pwa/storage.js')).listFigures()).length)).toBe(1);
+});

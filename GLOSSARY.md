@@ -16,3 +16,6 @@ Der interne lokale Speicher der App, der keinen vom Nutzer ausgewählten Geräte
 
 **Lernstand**:
 Der persönliche Übungsstatus einer Figur: Neu, Am Üben oder Sitzt.
+
+**Vollständiges Backup**:
+Eine Sicherung aller lokal verfügbaren Figuren einschließlich ihrer Videos, Angaben und persönlichen Lernstände. Alle zugehörigen Sicherungsteile werden für die vollständige Wiederherstellung benötigt.

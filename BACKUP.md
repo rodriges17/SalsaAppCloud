@@ -37,3 +37,9 @@ Entwicklungspruefung: https://github.com/rodriges17/SalsaAppCloud/actions/runs/3
 Veroeffentlichung und erfolgreicher Live-Importtest: https://github.com/rodriges17/SalsaAppCloud/actions/runs/39360867296
 
 index.html, app.js, backup-format.js und backup-ui.js wurden live mit HTTP 200 und den erwarteten Kennungen geprueft. Die separate Offline-App bleibt auf 84d21e7405bd3656206a3ccb5c27f7bb2e5836d9. Physische mobile Dateidialoge und das tatsaechliche Aufbewahren der Browser-Downloads sind hier nicht geprueft.
+
+## Ablauf und Darstellung
+
+`backup-workflow.js` steuert Erstellung und Wiederherstellung unabhängig vom DOM: Freigaben, Bestandsbindung, erneute Prüfung vor Export, Dateiprüfung, Zielwechsel, Konfliktauswahl, Bestätigung und Abbruch. Persistenz bleibt in `storage.js`, das Dateiformat in `backup-format.js`. `backup-ui.js` stellt Zustände dar und übernimmt Dateiauswahl, Download-Links sowie die lokale Anzeige des letzten Erstellungsdatums.
+
+Zielwechsel und neue Sicherungsdateien verwerfen den bisherigen Wiederherstellungsplan. Parallele Aktionen sind gesperrt; späte Ergebnisse nach Abbruch werden nicht als erfolgreicher Prüfstand angezeigt. Ab dem endgültigen Speicherabschluss ist Abbrechen gesperrt. Zehn direkte Ablaufprüfungen mit einem Speicher-Testadapter decken diese Regeln ab; die bestehenden Browserprüfungen sichern weiterhin Bedienung, Berechtigungsanbindung, Dateiauswahl und Downloads ab.
