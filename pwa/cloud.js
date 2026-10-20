@@ -165,8 +165,11 @@ function ownFigures() {
   for (const f of state.own_figures) {
     const revisions = [...f.revisions].sort((a, b) => (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0));
     const latest = revisions[0], box = section(latest?.title ?? 'Noch nicht fertig hochgeladene Figur');
-    const allowed = checkbox(box, 'Öffentliche Veröffentlichung erlauben', f.public_allowed);
-    box.append(action('Sichtbarkeit speichern', () => run('Speichern …', async () => { await cloudCall('public_permission', { figure: f.id, allowed: allowed.checked }); await load(null); })));
+    box.append(node('p', `Öffentliche Veröffentlichung: ${f.public_allowed ? 'Erlaubt' : 'Nicht erlaubt'}`));
+    box.append(action(f.public_allowed ? 'Öffentliche Veröffentlichung widerrufen' : 'Öffentliche Veröffentlichung erlauben', () => run('Freigabe ändern …', async () => {
+      await cloudCall('public_permission', { figure: f.id, allowed: !f.public_allowed }); await load(null);
+    })));
+    box.append(node('p', 'Die Freigabe gilt für alle Versionen dieser Figur und alle öffentlichen Bibliotheken, denen sie zugeordnet ist. Ohne Freigabe bleibt sie dort für Lesende verborgen. Private Bibliotheken bleiben unverändert.'));
     if (latest) {
       box.append(action('Einer Bibliothek zuordnen', () => attachForm(latest)));
       const history = node('details', undefined, 'cloud-history');

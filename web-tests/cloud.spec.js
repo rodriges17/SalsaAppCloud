@@ -17,7 +17,8 @@ async function mock(page,admin=false, own=false, contribute=true, options={}){
   if(req.url().includes('/storage/'))return route.fulfill({status:200,contentType:'video/mp4',body:clip,headers:{'Access-Control-Allow-Origin':'*'}});
   if(req.method()==='OPTIONS')return route.fulfill({status:204,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type','Access-Control-Allow-Methods':'POST, GET, OPTIONS'}});
   const {action,payload}=req.postDataJSON();calls.push({action,payload,authorization:req.headers().authorization});let result={ok:true};
-  if(action==='state')result={me:admin&&req.headers().authorization?{id:'admin',email:'admin@example.test',is_admin:true,upload_enabled:true,used:0,quota:500000000}:null,settings:{used:0,total_limit:900000000},people:[],libraries:options.noLibraries?[]:[{...library,contribute,visibility:options.visibility??library.visibility}],own_figures:Array.isArray(own)?own:own?[{id:'figure-1',public_allowed:true,revisions:[{...rev,created_at:'2026-10-19T00:00:00Z'}]}]:[]};
+  if(action==='state')result={me:admin&&req.headers().authorization?{id:'admin',email:'admin@example.test',is_admin:true,upload_enabled:true,used:0,quota:500000000}:null,settings:{used:0,total_limit:900000000},people:[],libraries:options.noLibraries?[]:[{...library,contribute,visibility:options.visibility??library.visibility}],own_figures:Array.isArray(own)?own:own?[{id:'figure-1',public_allowed:options.publicAllowed??true,revisions:[{...rev,created_at:'2026-10-19T00:00:00Z'}]}]:[]};
+  if(action==='public_permission'){if(options.failPermission)return route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({error:'Test: Freigabe konnte nicht gespeichert werden'})});options.publicAllowed=payload.allowed;}
   if(action==='library')result={library,manage:false,contribute:false,members:[],entries:[{figure_id:'figure-1',owner_id:'owner',public_allowed:true,published:rev,pending:null}]};
   if(action==='reserve')result={job:'job-1',media:payload.videos.map((v,i)=>({id:'uploaded-'+i,path:'test/'+i+'.mp4'}))};
   if(action==='commit')result={revision:'uploaded-revision'};
@@ -196,4 +197,14 @@ test('one primary assignment uses newest revision; history previews and assigns 
  await page.getByText('Versionsverlauf · 2 Versionen',{exact:true}).tap();await expect(history.locator('video')).toHaveCount(0);
  await page.getByText('Versionsverlauf · 2 Versionen',{exact:true}).tap();await older.getByRole('button',{name:'Diese Version einer Bibliothek zuordnen',exact:true}).tap();
  await expect(page.locator('#cloudBody')).toContainText('08:13');await page.getByRole('button',{name:'Figur zuordnen',exact:true}).tap();await expect.poll(()=>calls.filter(c=>c.action==='attach').length).toBe(2);expect(calls.filter(c=>c.action==='attach')[1].payload.revision).toBe('old');
+});
+
+test('direct public permission actions preserve state on failure and toggle only after saving',async({page})=>{
+ await signIn(page);const options={publicAllowed:false,failPermission:true},calls=await mock(page,true,true,true,options);await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).tap();
+ await expect(page.getByRole('button',{name:'Sichtbarkeit speichern',exact:true})).toHaveCount(0);await expect(page.locator('#cloudBody input[type=checkbox]')).toHaveCount(0);
+ const allow=page.getByRole('button',{name:'Öffentliche Veröffentlichung erlauben',exact:true});await allow.tap();await expect(page.locator('#cloudError')).toContainText('Freigabe konnte nicht gespeichert werden');await expect(allow).toBeEnabled();await expect(page.locator('#cloudBody')).toContainText('Öffentliche Veröffentlichung: Nicht erlaubt');
+ options.failPermission=false;await allow.tap();await expect(page.getByRole('button',{name:'Öffentliche Veröffentlichung widerrufen',exact:true})).toBeVisible();await expect(page.locator('#cloudBody')).toContainText('Öffentliche Veröffentlichung: Erlaubt');
+ await page.getByRole('button',{name:'Öffentliche Veröffentlichung widerrufen',exact:true}).tap();await expect(allow).toBeVisible();await expect(page.locator('#cloudBody')).toContainText('Öffentliche Veröffentlichung: Nicht erlaubt');
+ expect(calls.filter(c=>c.action==='public_permission').map(c=>c.payload)).toEqual([{figure:'figure-1',allowed:true},{figure:'figure-1',allowed:true},{figure:'figure-1',allowed:false}]);
+ await expect(page.locator('#cloudBody')).toContainText('Private Bibliotheken bleiben unverändert.');
 });
