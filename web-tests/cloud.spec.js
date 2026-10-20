@@ -126,7 +126,9 @@ async function localUpload(page, folder=false) {
   const blob=await(await fetch('/web-tests/fixtures/clip.mp4')).blob();
   await s.saveFigure({id:'upload-source',title:'Lokale Drehung',description:'Beschreibung',tags:['Tanz'],status:'Neu'},[{id:crypto.randomUUID(),name:'Video',blob:blob.slice(0,blob.size,'video/mp4'),confirmed:true,duration:6,width:320,height:180}]);return blob.size;
  },folder);
- await page.reload();await page.getByRole('button',{name:'Optionen für Lokale Drehung',exact:true}).tap();await page.getByRole('button',{name:'In Cloud veröffentlichen',exact:true}).tap();
+ // Refresh the list in place: this suite blocks service workers for API interception.
+ // Reload persistence is covered separately with the normal PWA service worker.
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await page.getByRole('button',{name:'Optionen für Lokale Drehung',exact:true}).tap();await page.getByRole('button',{name:'In Cloud veröffentlichen',exact:true}).tap();
  await expect(page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true})).toBeVisible();return bytes;
 }
 for(const folder of [false,true])test(`upload from ${folder?'device folder':'app storage'} shows public consent errors beside the button and uploads selected bytes`,async({page,browserName})=>{
