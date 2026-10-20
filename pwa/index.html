@@ -81,10 +81,12 @@
   <dialog id="importProgressDialog" class="small-dialog"><h2>Figur importieren</h2><p role="status">ZIP und Videos werden geprüft …</p><button id="cancelImport" class="secondary">Abbrechen</button></dialog>
   <dialog id="confirmDialog" class="small-dialog"><h2 id="confirmTitle"></h2><p id="confirmMessage"></p><div class="dialog-actions"><button id="confirmCancel" class="secondary">Abbrechen</button><button id="confirmOK" class="primary">Bestätigen</button></div></dialog>
   <dialog id="tagsDialog" class="small-dialog"><h2>Tags</h2><div id="tagOptions" class="tag-options"></div><button id="closeTags" class="secondary">Schließen</button></dialog>
+  <dialog id="backupDialog" class="small-dialog info-dialog"><h2 id="backupTitle">Vollständiges Backup</h2><div id="backupBody" class="backup-body"></div><p id="backupStatus" role="status" style="white-space:pre-wrap"></p><button id="backupCancel" class="secondary" hidden>Abbrechen</button><button id="backupClose" class="primary">Schließen</button></dialog>
   <dialog id="infoDialog" class="small-dialog info-dialog">
     <h2>Dein Salsa Trainer Cloud</h2>
     <p id="appVersion" class="small muted"></p>
     <p>Verwalte deine Salsa-Figuren, lerne offline und teile ausgewählte Inhalte über Cloud-Bibliotheken. Deine Videos werden nur hochgeladen, wenn du dies ausdrücklich auswählst.</p>
+    <h3>Vollständiges Backup</h3><p>Sichere alle lokalen Figuren samt Videos und persönlichen Lernständen. Der bisherige ZIP-Export bleibt für den Figurenaustausch verfügbar.</p><button id="createBackup" class="secondary">Vollständiges Backup erstellen</button><button id="restoreBackup" class="secondary">Backup wiederherstellen</button><p id="backupLastCreated" class="small muted"></p>
     <h3>Android: Chrome empfohlen</h3>
     <p>Für den möglichst vollständigen Funktionsumfang empfehlen wir eine aktuelle Version von Google Chrome. Damit kannst du auch einen Geräteordner als Speicherort auswählen und Videos direkt daraus abspielen. Den Ordnerzugriff musst du ausdrücklich erlauben.</p>
     <p>Andere Browser können Funktionen einschränken. Nicht unterstützte Speicheroptionen werden nicht angeboten. In Brave muss der Ordnerzugriff gegebenenfalls zuerst in den Browser-Einstellungen freigeschaltet werden.</p>

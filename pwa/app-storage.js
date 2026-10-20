@@ -79,7 +79,7 @@ export async function saveFigure(figure, drafts, expectedRevision = null) {
           for (const id of owned) if (!videoIds.includes(id)) {
             const old = videos.get(id); old.onsuccess = () => { if (old.result) obsolete.push(old.result.cacheKey); }; videos.delete(id);
           }
-          saved = { id: figure.id, title: figure.title.trim(), description: figure.description, status: figure.status, tags: figure.tags, importFingerprint: figure.importFingerprint ?? previous?.importFingerprint ?? null, createdAt: previous?.createdAt ?? Date.now(), revision: crypto.randomUUID(), videoIds, duration: prepared[0].duration, posterBytes: prepared[0].posterBytes };
+          saved = { id: figure.id, title: figure.title.trim(), description: figure.description, status: figure.status, tags: figure.tags, importFingerprint: figure.importFingerprint ?? previous?.importFingerprint ?? null, backupOrigin: previous?.backupOrigin ?? figure.backupOrigin ?? null, createdAt: previous?.createdAt ?? Date.now(), revision: crypto.randomUUID(), videoIds, duration: prepared[0].duration, posterBytes: prepared[0].posterBytes };
           figures.put(saved); imports.delete(job.id);
         };
       };
@@ -118,3 +118,50 @@ export async function cleanupInterruptedImports() {
   if (keys.length) { const cache = await caches.open(MEDIA_CACHE); await Promise.all(keys.map(key => cache.delete(key))); }
 }
 export function storageMessage(error) { return error?.name === 'QuotaExceededError' ? 'Der lokale Speicher ist voll. Bitte Speicher auf dem Gerät freigeben oder nicht mehr benötigte Figuren entfernen. Deine bisher gespeicherten Figuren bleiben erhalten.' : error?.message ?? 'Der lokale Speicher ist nicht verfügbar.'; }
+
+// One metadata transaction makes a full restore visible only after every media copy is verified.
+export async function restoreAppBatch(items, expected, { signal, progress = () => {} } = {}) {
+  const { checksum } = await import('./package.js');
+  const db = await database(), cache = await caches.open(MEDIA_CACHE), job = { id: crypto.randomUUID(), updatedAt: Date.now(), keys: [] }, prepared = [];
+  let committed = false;
+  try {
+    for (const item of items) {
+      signal?.throwIfAborted(); const videoRecords = [];
+      for (const draft of item.records) {
+        signal?.throwIfAborted(); const cacheKey = prefix + crypto.randomUUID(); job.keys.push(cacheKey); await writeImport(job);
+        await cache.put(cacheKey, new Response(draft.blob, { headers: { 'Content-Type': draft.blob.type } }));
+        const stored = await cache.match(cacheKey);
+        if (!stored || await checksum(await stored.blob(), signal) !== await checksum(draft.blob, signal)) throw new Error('Die wiederhergestellte Videokopie konnte nicht geprüft werden.');
+        videoRecords.push({ id: crypto.randomUUID(), figureId: item.id, name: draft.name, cacheKey, duration: draft.duration, width: draft.width, height: draft.height, posterBytes: draft.poster ? await draft.poster.arrayBuffer() : null });
+        progress({ phase: 'copy' });
+      }
+      const f = item.figure;
+      prepared.push({ saved: { id: item.id, title: f.title, description: f.description, tags: f.tags, status: f.status, createdAt: f.createdAt, importFingerprint: f.importFingerprint ?? null, backupOrigin: f.source, revision: crypto.randomUUID(), duration: videoRecords[0].duration, videoIds: videoRecords.map(v => v.id), posterBytes: f.poster ? await f.poster.arrayBuffer() : videoRecords[0].posterBytes }, videos: videoRecords });
+    }
+    signal?.throwIfAborted(); if (!prepared.length) return 0;
+    if (!job.keys.length) await writeImport(job);
+    const obsolete = await new Promise((resolve, reject) => {
+      const tx = db.transaction(['figures','videos','imports'],'readwrite'), figures = tx.objectStore('figures'), videos = tx.objectStore('videos'), imports = tx.objectStore('imports');
+      let error; const oldKeys = [], abort = () => { error = new DOMException('Wiederherstellung abgebrochen.','AbortError'); try { tx.abort(); } catch {} };
+      signal?.addEventListener('abort',abort,{once:true});
+      tx.onabort = () => { signal?.removeEventListener('abort',abort); reject(error ?? tx.error); }; tx.onerror = () => {};
+      tx.oncomplete = () => { signal?.removeEventListener('abort',abort); resolve(oldKeys); };
+      const request = figures.getAll(); request.onsuccess = () => {
+        const snapshot = records => JSON.stringify(records.map(f=>[f.id,f.revision]).sort((a,b)=>a[0].localeCompare(b[0])));
+        if (snapshot(request.result) !== snapshot(expected)) { error = new Error('Der Zielspeicher wurde inzwischen geändert. Bitte die Wiederherstellung erneut prüfen.'); tx.abort(); return; }
+        for (const {saved,videos:records} of prepared) {
+          const previous = request.result.find(f=>f.id===saved.id);
+          for (const id of previous?.videoIds ?? []) { const old = videos.get(id); old.onsuccess = () => { if(old.result)oldKeys.push(old.result.cacheKey); }; videos.delete(id); }
+          figures.put(saved); records.forEach(v=>videos.put(v));
+        }
+        imports.delete(job.id);
+      };
+    });
+    committed = true; await Promise.all(obsolete.map(key=>cache.delete(key).catch(()=>{}))); return prepared.length;
+  } finally {
+    if (!committed) {
+      await Promise.all(job.keys.map(key=>cache.delete(key).catch(()=>{})));
+      await new Promise(resolve=>{const tx=db.transaction('imports','readwrite');tx.objectStore('imports').delete(job.id);tx.oncomplete=tx.onabort=resolve;tx.onerror=()=>{};});
+    }
+  }
+}
