@@ -27,3 +27,13 @@ Alle neuen Videos werden zunächst geschrieben und erneut geprüft. App-Speicher
 ## Tests
 
 Node-Tests: vollständiger Rundlauf, aufgeteiltes Einzelvideo, ungeordnete Teilwahl, fehlende/doppelte/gemischte Teile, Beschädigung, Abbruch, ungültige Metadaten, Dateigrenzen und Ordner-Batch-Rollback. Browserprüfungen: Download, vollständige UI-Wiederherstellung, unveränderte Lernstände/Erstellungsdaten, Konflikte und wiederholte Wiederherstellung, Cache-Schreibfehler, Abbruch und Geräteordner-Ziel. Native Ordnerhandlungen werden mit Chromium-OPFS und simuliertem Picker geprüft. Physische Android-/iOS-Dateidialoge und die Aufbewahrung von Browser-Downloads sind hier nicht testbar.
+
+
+## Verifiziert am 20.10.2026
+
+Version 2026-10-20-backup-v1 ist veroeffentlicht. 39 Node-Pruefungen und 51 Browserpruefungen erfolgreich, insgesamt 90; fuenf native Ordnerfaelle in WebKit bewusst ausgelassen. Der erste Browserlauf hing am QA-Serverstart. Entwicklungspruefung und Veroeffentlichung bestanden danach vollstaendig.
+
+Entwicklungspruefung: https://github.com/rodriges17/SalsaAppCloud/actions/runs/39360251639
+Veroeffentlichung und erfolgreicher Live-Importtest: https://github.com/rodriges17/SalsaAppCloud/actions/runs/39360867296
+
+index.html, app.js, backup-format.js und backup-ui.js wurden live mit HTTP 200 und den erwarteten Kennungen geprueft. Die separate Offline-App bleibt auf 84d21e7405bd3656206a3ccb5c27f7bb2e5836d9. Physische mobile Dateidialoge und das tatsaechliche Aufbewahren der Browser-Downloads sind hier nicht geprueft.
