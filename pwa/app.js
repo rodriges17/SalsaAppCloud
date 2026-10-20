@@ -128,6 +128,9 @@ async function openEditor(figure = null, imported = null) {
 }
 $('openAddFigure').onclick = () => $('addChoiceDialog').showModal();
 $('closeAddChoice').onclick = () => $('addChoiceDialog').close();
+$('addChoiceDialog').addEventListener('close', () => {
+  if (!opening && !editor && !$('importChoiceDialog').open) $('openAddFigure').focus({ preventScroll: true });
+});
 $('addChoiceDialog').addEventListener('click', event => {
   if (event.target !== $('addChoiceDialog')) return;
   const rect = $('addChoiceDialog').getBoundingClientRect();
