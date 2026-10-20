@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-20-info-top-v1';
+const APP_VERSION = '2026-10-20-backup-access-v1';
 import { initBackup } from './backup-ui.js';
 import { initCloud, openCloud } from './cloud.js';
 import { exportFigure, importFigure, packageSize, packageFilename, MAX_PACKAGE_BYTES } from './package.js';

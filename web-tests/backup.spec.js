@@ -33,3 +33,36 @@ test('backup restore into a device folder preserves app figures and refuses inco
   const s=await import('/pwa/storage.js'),f=await import('/pwa/backup-format.js'),inv=await s.inspectLocalBackup(),out=await s.exportLocalBackup(inv.snapshot),archive=await f.readBackup(out.parts.map(p=>p.blob));const folder=await s.chooseFolder();await s.connectFolder(folder);const plan=await s.planBackupRestore(archive,folder.id);await s.restoreBackupPlan(plan,plan.rows.map(r=>r.choice));const all=await s.listFigures(),again=await s.planBackupRestore(archive,folder.id);const settings=await s.storageSettings(),target=settings.folders.find(f=>f.id===folder.id);await(await target.handle.getDirectoryHandle('media')).removeEntry(target.library.figures[0].videos[0].file);let blocked='';try{await s.inspectLocalBackup();}catch(e){blocked=e.message;}return {count:all.length,app:all.filter(f=>!f.storageFolder).length,folder:all.filter(f=>f.storageFolder).length,kinds:again.rows.map(r=>r.kind),dates:all.filter(f=>f.storageFolder).map(f=>f.createdAt).sort(),originalDates:archive.sources.map(s=>s.figure.createdAt).sort(),blocked};
  });expect(result.count).toBe(4);expect(result.app).toBe(2);expect(result.folder).toBe(2);expect(result.kinds).toEqual(['identical','identical']);expect(result.dates).toEqual(result.originalDates);expect(result.blocked).toContain('Keine vollständige Sicherung möglich');
 });
+
+
+test('backup requests missing folder grants, retries denial and rechecks access before export',async({page,browserName})=>{
+ test.skip(browserName!=='chromium','Native handles exercised through Chromium OPFS.');
+ await page.addInitScript(()=>{
+  window.__backupFolders=[];window.__backupDenied=[];window.__backupPromptCalls=0;window.__backupPickerCalls=0;
+  window.showDirectoryPicker=async()=>{const root=await navigator.storage.getDirectory();return root.getDirectoryHandle('grant-'+(++window.__backupPickerCalls),{create:true});};
+  const index=async handle=>{for(let i=0;i<window.__backupFolders.length;i++)if(await handle.isSameEntry(window.__backupFolders[i]))return i;return -1;};
+  FileSystemDirectoryHandle.prototype.queryPermission=async function(){return window.__backupDenied[await index(this)]?'prompt':'granted';};
+  FileSystemDirectoryHandle.prototype.requestPermission=async function(){window.__backupPromptCalls++;if(window.__backupCancel)return 'denied';window.__backupDenied[await index(this)]=false;return 'granted';};
+ });
+ await start(page);
+ await page.evaluate(async()=>{
+  const s=await import('/pwa/storage.js'),blob=await(await fetch('/web-tests/fixtures/clip.mp4')).blob();
+  for(let i=0;i<3;i++){
+   const folder=await s.chooseFolder();await s.connectFolder(folder);window.__backupFolders.push(folder.handle);
+   if(i<2)await s.saveFigure({id:'grant-source-'+i,title:'Grant '+i,description:'',status:'Sitzt',tags:[]},[{id:crypto.randomUUID(),name:'Video',blob:blob.slice(0,blob.size,'video/mp4'),confirmed:true,duration:6,width:320,height:180}]);
+  }
+  await s.setStorageFolder(null);window.__backupDenied=[true,true,true];window.__backupCancel=true;
+ });
+ await page.locator('#infoButton').tap();await page.getByRole('button',{name:'Vollständiges Backup erstellen',exact:true}).tap();
+ const allow=page.locator('#backupBody').getByRole('button',{name:'Ordnerzugriff erlauben',exact:true});
+ await expect(allow).toHaveCount(2);await expect(page.getByRole('button',{name:'Backup jetzt erstellen',exact:true})).toHaveCount(0);
+ await allow.first().tap();await expect(page.locator('#backupBody')).not.toHaveAttribute('inert','');await expect(allow).toHaveCount(2);
+ await page.evaluate(()=>{window.__backupCancel=false;});await allow.first().tap();await expect(allow).toHaveCount(1);await allow.first().tap();
+ await expect(page.locator('#backupBody')).toContainText('2 Figuren');await expect(page.getByRole('button',{name:'Backup jetzt erstellen',exact:true})).toBeVisible();
+ await page.evaluate(()=>{window.__backupDenied[0]=true;});await page.getByRole('button',{name:'Backup jetzt erstellen',exact:true}).tap();
+ await expect(allow).toHaveCount(1);await expect(page.locator('#backupBody a[download]')).toHaveCount(0);await allow.first().tap();
+ await expect(page.locator('#backupStatus')).toHaveText('Backup erstellt. Die Dateien sind zum Herunterladen bereit.');
+ expect(await page.evaluate(()=>window.__backupPromptCalls)).toBe(4);expect(await page.evaluate(()=>window.__backupPickerCalls)).toBe(3);
+ const download=page.waitForEvent('download');await page.getByRole('link',{name:'Teil 1 von 1 herunterladen',exact:true}).tap();
+ const file=await download,archive=await readBackup([new Blob([await readFile(await file.path())])]);expect(archive.sources).toHaveLength(2);expect(archive.sources.every(s=>s.figure.status==='Sitzt')).toBe(true);
+});

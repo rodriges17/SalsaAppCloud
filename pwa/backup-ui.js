@@ -1,4 +1,5 @@
 import { inspectLocalBackup, exportLocalBackup, storageSettings, planBackupRestore, restoreBackupPlan } from './storage.js';
+import { permission } from './folder-storage.js';
 import { readBackup, partLayout } from './backup-format.js';
 const scope=new URL('./',import.meta.url).pathname,LAST=`salsa-last-backup:${scope}:v1`;
 const n=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
@@ -12,11 +13,31 @@ function progress(p){if(p.phase==='commit'){cancel.disabled=true;status.textCont
 async function run(work){if(busy)return;busy=true;controller=new AbortController();cancel.hidden=false;cancel.disabled=false;close.disabled=true;body.inert=true;status.textContent='Bitte warten …';try{return await work({signal:controller.signal,progress});}catch(e){status.textContent=e.name==='AbortError'?'Abgebrochen. Der bisherige Bestand wurde nicht verändert.':e.message;}finally{busy=false;controller=null;cancel.hidden=true;close.disabled=false;body.inert=false;}}
 function open(title){if(busy)return false;release();body.replaceChildren();status.textContent='';document.getElementById('backupTitle').textContent=title;if(!dialog.open)dialog.showModal();return true;}
 function summary(sources){const videos=sources.flatMap(s=>s.records),bytes=videos.reduce((n,v)=>n+v.blob.size,0);return {figures:sources.length,videos:videos.length,bytes};}
+async function requireBackupAccess(resume){
+ const settings=await storageSettings(),missing=[];
+ for(const folder of settings.folders){
+   if(!folder.library.figures.length)continue;
+   try{await permission(folder.handle);}catch(error){if(error.code!=='folder-permission-required')throw error;missing.push(folder);}
+ }
+ if(!missing.length)return true;
+ body.replaceChildren(n('p','Für ein vollständiges Backup benötigt die App Zugriff auf alle Geräteordner mit gespeicherten Figuren. Die Ordnerauswahl ist gespeichert. Bitte erlaube den Zugriff; anschließend geht es automatisch weiter.'));
+ for(const folder of missing){
+   const box=n('section',undefined,'cloud-card');box.append(n('h3',folder.name),n('p',`${folder.library.figures.length} Figur(en) im Geräteordner`));
+   box.append(action('Ordnerzugriff erlauben',async()=>{
+     const granted=await run(async({signal})=>{await permission(folder.handle,true);signal.throwIfAborted();return true;});
+     if(granted){hooks.changed();await hooks.refresh();await resume();}
+   }));body.append(box);
+ }
+ status.textContent='Ordnerzugriff erforderlich. Ohne Freigabe wird kein unvollständiges Backup erstellt.';
+ return false;
+}
 async function createView(){if(!open('Vollständiges Backup erstellen'))return;body.append(n('p','Sichert alle lokalen Figuren aus App-Speicher und verbundenen Geräteordnern, einschließlich Videos, Angaben und Lernständen. Cloud-Inhalte werden nur gesichert, wenn sie lokal übernommen wurden. Anmeldedaten und Ordnerberechtigungen sind nicht enthalten.'));
+ if(!await requireBackupAccess(createView))return;
  const inventory=await run(options=>inspectLocalBackup(options));if(!inventory){body.append(action('Bestand erneut prüfen',createView));return;}
  const info=summary(inventory.sources),sizes=[];for(const s of inventory.sources){if(s.figure.poster?.size)sizes.push(s.figure.poster.size);for(const v of s.records){sizes.push(v.blob.size);if(v.poster?.size)sizes.push(v.poster.size);}}
  const parts=partLayout(sizes).count;body.append(n('p',`${info.figures} Figuren · ${info.videos} Videos · ${size(info.bytes)} Videodaten · ${parts} Sicherungsteil(e), jeweils höchstens 250 MiB.`),n('p','Die Sicherung ist nicht verschlüsselt. Bewahre alle Teile gemeinsam auf. Für eine vollständige Wiederherstellung werden alle Teile benötigt.'));
- body.append(action('Backup jetzt erstellen',async()=>{
+ body.append(action('Backup jetzt erstellen',async function createNow(){
+   if(!await requireBackupAccess(createNow))return;
    const result=await run(options=>exportLocalBackup(inventory.snapshot,options));if(!result)return;
    release();body.replaceChildren(n('p',`${result.manifest.figures.length} Figuren wurden vollständig in ${result.parts.length} Teil(e) verpackt. Lade jeden Teil herunter und bewahre die Dateien gemeinsam auf.`));
    for(let i=0;i<result.parts.length;i++){
