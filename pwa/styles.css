@@ -142,3 +142,6 @@ details.settings-section{display:block}details.settings-section[open]>:not(summa
 
 .brand-lockup{display:flex;align-items:center;gap:10px;white-space:nowrap}.brand-mark{width:34px;height:36px;flex:none;color:var(--lavender)}
 @media(max-width:360px){.brand-lockup{gap:8px}.brand-mark{width:30px;height:32px}}
+
+/* PWA page gestures pan content instead of magnifying the app layout. */
+html,body{touch-action:pan-x pan-y}

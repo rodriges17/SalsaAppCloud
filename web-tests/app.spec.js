@@ -254,12 +254,12 @@ test('installed shell update bypasses stale HTTP CSS and preserves offline video
   await page.locator('#editorBack').tap(); await page.locator('#confirmOK').tap();
   await expect(page.locator('#editor')).not.toBeVisible();
   await page.locator('#applyUpdate').tap();
-  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-22-nav-logo-v1');
+  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-22-fixed-zoom-v1');
   await expect(page.locator('#importFigure')).toHaveCSS('pointer-events', 'auto');
   await expect(page.locator('.figure-card')).toHaveCount(1);
   const file = await exportPackage(page, info);
   await context.setOffline(true); await page.reload();
-  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-22-nav-logo-v1');
+  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-22-fixed-zoom-v1');
   await page.getByRole('button', { name: 'Ocho lernen' }).tap();
   await expect(page.locator('#learningVideo')).toHaveJSProperty('videoWidth', 320);
   await page.locator('#playPause').tap();
@@ -281,4 +281,17 @@ test('installation and storage opens at the beginning on first open and reopen',
     await page.locator('#closeInfo').tap();
     await expect(dialog).not.toBeVisible();
   }
+});
+
+test('mobile page gestures keep app scale fixed while one-finger scrolling remains available',async({page,context,browserName})=>{
+ test.skip(browserName!=='chromium','Chromium CDP provides real synthesized touch pinch and scroll gestures.');
+ await page.goto('/pwa/');await expect(page.getByRole('heading',{name:'Step by Step',exact:true})).toBeVisible();
+ await page.evaluate(()=>{document.querySelector('#figureList').style.height='1800px';});
+ const session=await context.newCDPSession(page);
+ await session.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:180,y:500}]});
+ for(let y=480;y>=180;y-=20)await session.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:180,y}]});
+ await session.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ await expect.poll(()=>page.evaluate(()=>window.scrollY)).toBeGreaterThan(100);
+ await session.send('Input.synthesizePinchGesture',{x:180,y:450,scaleFactor:2,gestureSourceType:'touch',relativeSpeed:800});
+ await expect.poll(()=>page.evaluate(()=>window.visualViewport.scale)).toBe(1);
 });

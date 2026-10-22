@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-22-nav-logo-v1';
+const APP_VERSION = '2026-10-22-fixed-zoom-v1';
 import { initBackup } from './backup-ui.js';
 import { initCloud, openCloud } from './cloud.js';
 import { exportFigure, importFigure, packageSize, packageFilename, MAX_PACKAGE_BYTES } from './package.js';
