@@ -124,3 +124,5 @@ Eigene Cloud-Figuren lassen sich mit „Lokal übernehmen“ direkt und ohne Bib
 Beim lokalen Speichern werden Prüfsummen mit einer schnelleren indizierten Schleife berechnet. Der Speicherstatus und ein unbestimmter Fortschrittsbalken werden vor dem Kopieren sichtbar. Videokopien werden weiterhin vollständig geprüft.
 
 Suche und Lernstand-/Tagfilter bleiben beim Scrollen unter dem festen Markenheader und Seitentitel sichtbar. Die Positionen folgen den gemessenen Zeilenhöhen.
+
+Der geprüfte gemeinsame Funktionsumfang und die Plattformadapter sind in [docs/FEATURE-PARITY.md](docs/FEATURE-PARITY.md) beschrieben. Die Regressionen vom 22.10.2026 sind korrigiert: reparierbarer Cloud-Reimport, erreichbare Menüs, kompakte Querformat-Übersicht, synchroner Playerzustand und weniger doppelte Medienprüfung.

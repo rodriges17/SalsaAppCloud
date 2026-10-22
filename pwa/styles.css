@@ -160,3 +160,24 @@ html,body{touch-action:pan-x pan-y}
 /* Keep search, learning status and tag filters beneath the measured header rows. */
 .overview-filters{position:sticky;top:calc(var(--brand-header-height,73px) + var(--overview-intro-height,90px));z-index:3}
 html{scroll-padding-top:calc(var(--brand-header-height,73px) + var(--overview-intro-height,90px) + var(--overview-filters-height,150px) + 12px)}
+
+/* Shared menus remain reachable above navigation and below fixed filters. */
+.card-menu{position:fixed;z-index:7;max-width:calc(100vw - 16px);overflow-y:auto;overscroll-behavior:contain}
+.card-menu button{max-width:100%;overflow-wrap:anywhere}
+#saveIndicator{width:100%}#backupStatus{white-space:pre-wrap}
+.player-screen.is-native-fullscreen .bottom-nav{display:none}
+/* Compact fixed rows preserve room for figures in landscape and short windows. */
+@media(max-height:540px){
+ .overview>.heading{padding-block:4px}
+ .overview>.heading .brand-lockup{font-size:24px}
+ .overview>.heading .brand-mark{width:26px;height:28px}
+ .page-intro{padding-block:4px;gap:10px}
+ .page-intro h2{font-size:18px;margin:0}.page-intro p{display:none}
+ .add-trigger{width:44px;height:44px;min-width:44px;padding:8px}
+ .overview-filters{padding-block:6px}
+ .overview-filters #search{height:44px;min-height:44px;font-size:16px}
+ .filter-row{margin-top:6px}.filter-row .chips{padding:0}
+ .filter-row .chips button{min-height:40px;font-size:14px;padding:6px 10px}
+ .overview~.bottom-nav{padding-top:4px;padding-bottom:4px}
+ .overview~.bottom-nav button{min-height:48px;gap:2px;padding:3px}
+}

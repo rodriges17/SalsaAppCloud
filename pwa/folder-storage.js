@@ -54,13 +54,16 @@ export async function selectDirectory() {
   return { id: library.id, name: chosen.name, handle, library };
 }
 export const hydrateFolder = (f, folderId) => ({ ...f, storageFolder: folderId, videoIds: f.videos.map(v => v.id), poster: f.posterBytes ? new Blob([new Uint8Array(f.posterBytes)], { type: 'image/jpeg' }) : null });
+const verifiedDrafts = new WeakMap();
 export async function readFolderVideo(folder, figure, record) {
   try {
     await permission(folder.handle);
     const media = await folder.handle.getDirectoryHandle('media');
     const file = await (await media.getFileHandle(record.file)).getFile();
     if (file.size !== record.size || await checksum(file) !== record.crc) throw new Error('Video wurde außerhalb der App verändert.');
-    return { ...record, figureId: figure.id, storageFolder: folder.id, blob: file.slice(0, file.size, record.type), poster: record.posterBytes ? new Blob([new Uint8Array(record.posterBytes)], { type: 'image/jpeg' }) : null };
+    const blob = file.slice(0, file.size, record.type);
+    verifiedDrafts.set(blob, { folder: folder.id, figure: figure.id, revision: figure.revision, file: record.file, crc: record.crc, size: file.size, modifiedAt: file.lastModified });
+    return { ...record, modifiedAt: file.lastModified ?? record.modifiedAt, figureId: figure.id, storageFolder: folder.id, blob, poster: record.posterBytes ? new Blob([new Uint8Array(record.posterBytes)], { type: 'image/jpeg' }) : null };
   } catch (e) { throw new Error(`„${record.name || 'Video'}“ nicht verfügbar: ${e.message} Ordner erneut verbinden oder die Figur bearbeiten und das Video ersetzen.`); }
 }
 // File-system-specific staging preserves files referenced by the on-disk
@@ -104,7 +107,17 @@ export async function writeFolderFigure(folder, figure, drafts, expectedRevision
       if (d.existing) {
         const old = previous?.videos.find(v => v.id === d.id && v.file === d.file);
         if (!old) throw new Error('Ein gespeichertes Video gehört nicht zu dieser Figur.');
-        await readFolderVideo(folder, previous, old); videos.push({ ...old, name: d.name.trim() }); continue;
+        const proof = verifiedDrafts.get(d.blob);
+        let modifiedAt = old.modifiedAt;
+        if (proof && proof.folder === folder.id && proof.figure === previous.id && proof.revision === previous.revision && proof.file === old.file && proof.crc === old.crc && proof.size === old.size && Number.isFinite(proof.modifiedAt) && proof.modifiedAt > 0) {
+          const handle = await (await folder.handle.getDirectoryHandle('media')).getFileHandle(old.file);
+          const current = handle.getMetadata ? await handle.getMetadata() : await handle.getFile();
+          if (current.size !== proof.size || current.lastModified !== proof.modifiedAt) throw new Error('Video wurde während der Bearbeitung verändert. Bitte den Entwurf schließen und erneut öffnen.');
+          modifiedAt = proof.modifiedAt;
+        } else {
+          modifiedAt = (await readFolderVideo(folder, previous, old)).modifiedAt;
+        }
+        videos.push({ ...old, modifiedAt, name: d.name.trim() }); continue;
       }
       videos.push(await stage.video(d, { name: d.name.trim(), type: d.blob.type || 'video/mp4', width: d.width ?? 0, height: d.height ?? 0 }));
     }

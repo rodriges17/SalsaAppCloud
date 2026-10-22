@@ -149,3 +149,9 @@ test('cloud posters: optional upload poster is atomic with commit and public con
  assert.equal((await api(B,'state')).own_figures.find(f=>f.id===job.figure).public_allowed,false);
  request.poster.data=Buffer.from('ffd8ff01ffd9','hex').toString('base64');const done=await api(B,'commit',request);assert.equal((await api(B,'poster_get',{revision:done.revision})).poster,request.poster.data);
 });
+
+test('cloud foreign keys have covering indexes for figure, library, job and revision joins',async()=>{
+ const names=['cloud_entries_pending_id_idx','cloud_entries_published_id_idx','cloud_figures_owner_id_idx','cloud_jobs_figure_id_idx','cloud_jobs_owner_id_idx','cloud_libraries_owner_id_idx','cloud_media_figure_id_idx','cloud_media_job_id_idx'];
+ const {rows}=await db.query("select indexname from pg_indexes where schemaname='public'");
+ for(const name of names)assert.ok(rows.some(r=>r.indexname===name),name+' is missing');
+});

@@ -330,7 +330,7 @@ test('own cloud figure downloads directly without a library and marks identical 
  await finishCloudImport(page);
  const local=await localCloudFigures(page);expect(local).toHaveLength(1);expect(local[0].importFingerprint).toBe('cloud:rev-1:video-2');
  await page.locator('#cloudButton').tap();await page.getByLabel('Führung ·',{exact:false}).uncheck();
- await expect(page.getByRole('button',{name:'Bereits lokal vorhanden',exact:true})).toBeDisabled();
+ await expect(page.getByRole('button',{name:'Erneut lokal übernehmen',exact:true})).toBeEnabled();
  await page.getByLabel('Führung ·',{exact:false}).check();await expect(page.getByRole('button',{name:'Lokal übernehmen',exact:true})).toBeEnabled();
 });
 
@@ -354,7 +354,7 @@ test('older cloud version has its own download and can create a separate copy of
  const rev=(id,date)=>({id,title:'Cloud Drehung',description:'',tags:[],created_at:date,videos:[{id:'video-'+id,name:'Führung',type:'video/mp4',size:bytes.length}]});
  const calls=await mock(page,true,[{id:'figure-1',public_allowed:false,revisions:[rev('old','2026-10-20T00:08:13Z'),rev('latest','2026-10-20T00:11:45Z')]}],true,{noLibraries:true});
  await start(page);const before=await seedCloudLocal(page,{title:'Mein anderer Name',fingerprint:'cloud:latest:video-latest'});
- await page.locator('#cloudButton').tap();await expect(page.getByRole('button',{name:'Bereits lokal vorhanden',exact:true})).toBeDisabled();
+ await page.locator('#cloudButton').tap();await expect(page.getByRole('button',{name:'Erneut lokal übernehmen',exact:true})).toBeEnabled();
  await page.locator('.cloud-history summary').tap();const older=page.locator('.cloud-history article').nth(1);
  await older.getByRole('button',{name:'Lokal übernehmen',exact:true}).tap();await page.locator('#cloudImportConflict').getByRole('button',{name:'Als neue Figur speichern',exact:true}).tap();
  await expect(page.locator('#figureStatus')).toHaveValue('Neu');await finishCloudImport(page);

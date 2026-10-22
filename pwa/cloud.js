@@ -183,7 +183,8 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
   const update = () => {
     const selected = chosen.filter(([check]) => !check || check.checked).map(([, v]) => v);
     const exists = localFigures.some(f => f.importFingerprint === fingerprint(selected));
-    take.textContent = exists ? 'Bereits lokal vorhanden' : label; take.disabled = exists;
+    take.textContent = exists ? 'Erneut lokal übernehmen' : label; take.disabled = false;
+    take.title = exists ? 'Diese Version wurde schon übernommen. Die lokale Kopie kann ersetzt oder separat gespeichert werden.' : '';
   };
   chosen.forEach(([check]) => { if (check) check.onchange = update; }); update();
 }

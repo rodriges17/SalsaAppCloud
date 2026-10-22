@@ -81,3 +81,21 @@ test('folder staging: ambiguous restore commit keeps both newly referenced media
  assert.equal(await(await readFolderVideo(folder,disk.figures[0],disk.figures[0].videos[0])).blob.text(),'replacement bytes');
  assert.ok(disk.garbage.includes(oldFile));assert.equal(await media.files.get(oldFile).text(),'video bytes');assert.equal(media.files.size,2);
 });
+
+test('folder: verified unchanged editor media is not read again for metadata-only saves',async()=>{
+ const {folder,mirror}=setup(),saved=await writeFolderFigure(folder,figure(),[draft()],null,mirror),f=folder.library.figures[0],v=f.videos[0],media=await folder.handle.getDirectoryHandle('media'),file=media.files.get(v.file);
+ Object.defineProperty(file,'lastModified',{value:123456,writable:true});
+ const loaded=await readFolderVideo(folder,f,v),slice=file.slice;
+ file.slice=()=>{throw Error('Unnecessary second full-video read');};
+ try{
+  const result=await writeFolderFigure(folder,{...saved,status:'Sitzt'},[{...loaded,existing:true,confirmed:true}],saved.revision,mirror);
+  assert.equal(result.status,'Sitzt');assert.equal(folder.library.figures[0].videos[0].modifiedAt,123456);
+ }finally{file.slice=slice;}
+});
+test('folder: editor verification cannot hide an external media change before saving',async()=>{
+ const {folder,mirror}=setup(),saved=await writeFolderFigure(folder,figure(),[draft()],null,mirror),f=folder.library.figures[0],v=f.videos[0],media=await folder.handle.getDirectoryHandle('media'),file=media.files.get(v.file);
+ Object.defineProperty(file,'lastModified',{value:123456,writable:true});
+ const loaded=await readFolderVideo(folder,f,v);file.lastModified++;
+ await assert.rejects(writeFolderFigure(folder,{...saved,status:'Sitzt'},[{...loaded,existing:true,confirmed:true}],saved.revision,mirror),/während der Bearbeitung verändert/);
+ assert.equal(folder.library.figures[0].status,'Am Üben');assert.equal(media.files.get(v.file),file);
+});
