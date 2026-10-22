@@ -1,5 +1,5 @@
 // The same behavior contract runs against the PWA and the bundled Android UI.
-export const PARITY_CASES = ['menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change'];
+export const PARITY_CASES = ['menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change', 'cloud-cache-frame-reuse'];
 export async function runParityCase(page, { root, fixture, native = false, scenario, consoleErrors = [], browserName = 'chromium' }) {
  const assert = (value, message) => { if (!value) throw new Error(message); };
  const frame = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -18,7 +18,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   const scope=new URL(root,page.url()).pathname,key=`salsa-cloud-session:${scope}:v1`;
   await page.evaluate(key=>localStorage.setItem(key,JSON.stringify({access_token:'account-a',refresh_token:'refresh-a',expires_at:Date.now()+3600000})),key);
   const poster=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=c.height=4;c.getContext('2d').fillRect(0,0,4,4);return c.toDataURL('image/jpeg').split(',')[1]});
-  let version=1,calls=0,posterCalls=0,stall=false,fail=false,revoked=false,release;
+  let version=1,calls=0,posterCalls=0,mediaCalls=0,missingPoster=false,stall=false,fail=false,revoked=false,release;
   await page.route('**/auth/v1/logout',r=>r.fulfill({contentType:'application/json',body:'{}'}));
   await page.route('**/functions/v1/cloud',async r=>{
    const {action}=r.request().postDataJSON(),token=r.request().headers().authorization;
@@ -29,7 +29,8 @@ export async function runParityCase(page, { root, fixture, native = false, scena
     if(fail)return r.fulfill({status:503,contentType:'application/json',body:'{"error":"Test: offline"}'});
     value={me:who?{id:who,email:who+'@example.test',used:0,quota:500000000,upload_enabled:true}:null,libraries:[{id:'cache-library',title:'Cache Bibliothek',visibility:'public'}],own_figures:who?[{id:'cache-figure',public_allowed:false,revisions:[{id:'cache-revision',title:`Cache ${who} ${version}`,description:'',tags:[],created_at:'2026-10-23T00:00:00Z',videos:[{id:'cache-video',name:'Video',type:'video/mp4',size:123}]}]}]:[]};
    }
-   if(action==='poster_get'){posterCalls++;value={poster,kind:'local',can_write:false};}
+   if(action==='poster_get'){posterCalls++;value={poster:missingPoster?null:poster,kind:'local',can_write:false};}
+   if(action==='media_url'){mediaCalls++;value={url:new URL(fixture,page.url()).href};}
    if(action==='state'&&revoked){value={...value,me:{...value.me,upload_enabled:false},libraries:[],own_figures:[]};}
    if(action==='library'){
     if(revoked)return r.fulfill({status:400,contentType:'application/json',body:JSON.stringify({error:'Zugriff entzogen'})});
@@ -40,7 +41,11 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   const open=async()=>{await page.locator('#cloudButton').click();await page.getByRole('heading',{name:`Cache A ${version}`,exact:true}).waitFor();};
   await open();await page.locator('.cloud-thumbnail').waitFor();const firstCalls=calls;
   const owner=await page.evaluate(async root=>(await import(root+'cloud-api.js')).cloudIdentity(),root);
-  if(scenario==='cloud-cache-fast-reopen'){
+  if(scenario==='cloud-cache-frame-reuse'){
+   await page.evaluate(async({root,owner})=>{const c=await import(root+'cloud-cache.js');const r=await c.readCloudCache(owner,'poster:cache-revision');r.value.kind='frame';},{root,owner});
+   await page.locator('#cloudBack').click();missingPoster=true;await page.clock.setFixedTime(new Date(await page.evaluate(()=>Date.now())+61000));await open();await page.locator('.cloud-thumbnail').waitFor();
+   while(posterCalls<2)await new Promise(r=>setTimeout(r,10));await page.waitForTimeout(100);assert(mediaCalls===0,'Cached fallback frame downloaded its source video again');
+  }else if(scenario==='cloud-cache-fast-reopen'){
    await page.getByRole('button',{name:'Bibliotheken',exact:true}).click();await page.getByRole('heading',{name:'Bibliotheken',exact:true}).waitFor();
    await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).click();await page.getByRole('heading',{name:'Cache A 1',exact:true}).waitFor();
    await page.locator('#cloudBack').click();await open();await page.locator('.cloud-thumbnail').waitFor();

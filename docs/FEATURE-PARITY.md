@@ -38,3 +38,5 @@ Die Oberfläche meldet „Änderungen werden geladen …“, „Alles aktuell“
 Abmelden, Kontowechsel und eine definitiv widerrufene Sitzung entfernen deren Cache. Token-Erneuerung behält die Cache-Zuordnung und offene Formulare bei. Alte Antworten dürfen nach einem Kontowechsel keine privaten Daten zurückschreiben. Neue Server-Berechtigungen werden vor Verwaltung und Schreibvorgängen geprüft; ein Cache erteilt keine Zugriffsrechte. Erkannte Berechtigungsänderungen verwerfen alte Bibliotheksdetails und Bilder.
 
 Der identische Browservertrag prüft Wiederöffnen und Neustart ohne weiteren Listen-/Bildabruf, Offline-Anzeige, gedrosselte und zusammengeführte Hintergrundabrufe, Fehlerwiederholung, Abmeldung mit Löschung von Daten/Bildern, verspätete Kontoantworten sowie Token-Erneuerung in einem zweiten Tab ohne Entwurfsverlust.
+
+Bereits erzeugte Ersatz-Vorschaubilder bleiben wiederverwendbar, auch wenn die Cloud noch kein Bild bereitstellt. Eine erneute Bildprüfung darf deshalb nicht erneut das Quellvideo für dieselbe Version laden.

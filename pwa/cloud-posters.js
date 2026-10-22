@@ -100,11 +100,11 @@ export function createPosterView(root, user) {
           if (saved) { await show(saved.blob); if (Date.now() - saved.updatedAt < 60000 || !navigator.onLine) return; }
           if (!active()) return;
           const remote = await cloudCall('poster_get', { revision: revision.id }); if (!active()) return;
-          let blob = remote.poster ? fromBase64(remote.poster) : null, local;
-          if (!blob || (remote.kind === 'frame' && remote.can_write)) local = await localPoster(user, revision, locals);
+          let blob = remote.poster ? fromBase64(remote.poster) : saved?.blob, local;
+          if (!remote.poster || !blob || (remote.kind === 'frame' && remote.can_write)) local = await localPoster(user, revision, locals);
           if (!active()) return;
           if (local) blob = local;
-          const kind = local ? 'local' : 'frame';
+          const kind = local ? 'local' : (remote.poster ? remote.kind : saved?.value.kind) ?? 'frame';
           if (!blob) blob = await videoPoster(revision, controller.signal);
           if (!blob || !active()) return;
           if (remote.can_write && (!remote.poster || (local && remote.kind === 'frame'))) {
