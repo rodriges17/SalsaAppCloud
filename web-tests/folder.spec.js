@@ -32,6 +32,10 @@ test('device folder persists real files, plays offline and can be restored after
  test.skip(browserName!=='chromium','Native folder handle contract is exercised with Chromium OPFS; WebKit exposes the unsupported option.');
  await enablePicker(page,'restore-'+info.testId.replace(/\W/g,''));await start(page);await choose(page);await seed(page);
  await page.reload();await expect(page.getByRole('button',{name:'Ordner Ocho lernen',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Optionen für Ordner Ocho',exact:true}).tap();await page.getByRole('button',{name:'Löschen',exact:true}).tap();
+ await expect(page.locator('#confirmMessage')).toContainText('aus dem verknüpften Geräteordner gelöscht');
+ await expect(page.locator('#confirmMessage')).toContainText('ursprünglichen Importdateien bleiben erhalten');
+ await page.locator('#confirmCancel').tap();
  const data=await disk(page);expect(data.figure.status).toBe('Am Üben');expect(data.figure.tags).toEqual(['Salsa']);
  expect(await page.evaluate(async()=>{const {MEDIA_CACHE}=await import('/pwa/storage.js');return (await(await caches.open(MEDIA_CACHE)).keys()).length;})).toBe(0);
  await context.setOffline(true);await page.getByRole('button',{name:'Ordner Ocho lernen',exact:true}).tap();await expect(page.locator('#learningVideo')).toHaveJSProperty('videoWidth',320);await page.locator('#playerBack').tap();await context.setOffline(false);

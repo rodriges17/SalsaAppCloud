@@ -76,7 +76,10 @@ test('rename, reorder, preview replacement cancellation, discard and deletion', 
   await page.locator('#editorBack').click(); await page.getByRole('button', { name: 'Änderungen verwerfen', exact: true }).click();
   await expect(page.locator('#editor')).not.toBeVisible(); await openEdit(page); await expect(page.locator('.draft-card')).toHaveCount(2);
   await page.locator('#editorBack').click(); await expect(page.locator('#editor')).not.toBeVisible();
-  await page.getByRole('button', { name: 'Optionen für Ocho' }).click(); await page.getByRole('button', { name: 'Löschen', exact: true }).click(); await page.locator('#confirmOK').click();
+  await page.getByRole('button', { name: 'Optionen für Ocho' }).click(); await page.getByRole('button', { name: 'Löschen', exact: true }).click();
+  await expect(page.locator('#confirmMessage')).toContainText('aus dem App-Speicher gelöscht');
+  await expect(page.locator('#confirmMessage')).not.toContainText('Geräteordner');
+  await page.locator('#confirmOK').click();
   await expect(page.locator('#figureCount')).toHaveText('0 Figuren');
   expect(await page.evaluate(async () => {
     const { database } = await import('./storage.js'); const db = await database();
@@ -254,12 +257,12 @@ test('installed shell update bypasses stale HTTP CSS and preserves offline video
   await page.locator('#editorBack').tap(); await page.locator('#confirmOK').tap();
   await expect(page.locator('#editor')).not.toBeVisible();
   await page.locator('#applyUpdate').tap();
-  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-22-fixed-zoom-v1');
+  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-22-delete-location-v1');
   await expect(page.locator('#importFigure')).toHaveCSS('pointer-events', 'auto');
   await expect(page.locator('.figure-card')).toHaveCount(1);
   const file = await exportPackage(page, info);
   await context.setOffline(true); await page.reload();
-  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-22-fixed-zoom-v1');
+  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-22-delete-location-v1');
   await page.getByRole('button', { name: 'Ocho lernen' }).tap();
   await expect(page.locator('#learningVideo')).toHaveJSProperty('videoWidth', 320);
   await page.locator('#playPause').tap();
