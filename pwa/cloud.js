@@ -37,13 +37,13 @@ async function load(library = current) {
     const cleaned = await cloudCall(state.me.is_admin ? 'admin_cleanup' : 'cleanup').catch(() => null);
     if (cleaned?.cleaned) state = await cloudCall('state');
   }
-  if (area === 'initial') area = state.me ? 'figures' : 'libraries';
+  if (area === 'initial') area = 'figures';
   if (!state.me && !['figures', 'libraries'].includes(area)) area = 'libraries';
   cancelThumbnails(); clearPreviews(body); body.replaceChildren();
   posterView = createPosterView(body, state.me);
   const toolbar = node('div', undefined, 'cloud-tabs');
   toolbar.setAttribute('aria-label', 'Cloud-Bereiche');
-  for (const [key, label] of [['libraries', 'Bibliotheken'], ['figures', 'Meine Figuren']]) {
+  for (const [key, label] of [['figures', 'Meine Figuren'], ['libraries', 'Bibliotheken']]) {
     const button = action(label, () => navigate(key)); if (key === 'figures') button.setAttribute('aria-label', 'Meine Cloud-Figuren'); button.setAttribute('aria-pressed', String(!source && (current ? key === 'libraries' : area === key || (area === 'create' && key === 'libraries')))); toolbar.append(button);
   }
   const utilities = node('div', undefined, 'cloud-utilities');
