@@ -16,7 +16,7 @@ async function seed(page) {
 test('Step by Step defaults to Klar, persists Terrakotta and fonts work after offline reload', async ({ page, context }, info) => {
   await page.emulateMedia({ colorScheme: 'light' }); await start(page);
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark'); await expect(page).toHaveTitle('Step by Step');
-  await expect(page.locator('#offlineStatus')).toContainText('Offline bereit', { timeout: 30000 });
+  await expect(page.locator('html')).toHaveAttribute('data-offline-status','ready', { timeout: 30000 });
   await page.evaluate(async () => { await navigator.serviceWorker.ready; if (!navigator.serviceWorker.controller) await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true })); await document.fonts.ready; });
   await seed(page);
   await expect(page.locator('#openAddFigure')).toBeVisible();

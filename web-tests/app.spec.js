@@ -5,7 +5,7 @@ const clip = path.resolve('web-tests/fixtures/clip.mp4');
 const portrait = path.resolve('web-tests/fixtures/portrait.mp4');
 async function start(page) {
   await page.goto('/pwa/'); await expect(page.getByRole('heading', { name: 'Step by Step' })).toBeVisible();
-  await expect(page.locator('#offlineStatus')).toContainText('Offline bereit', { timeout: 30000 });
+  await expect(page.locator('html')).toHaveAttribute('data-offline-status','ready', { timeout: 30000 });
   await page.evaluate(async () => { await navigator.serviceWorker.ready; if (!navigator.serviceWorker.controller) await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true })); });
 }
 async function addFigure(page) {
@@ -242,7 +242,7 @@ test('touch import works after cancel, keyboard editing and returning from the p
 test('installed shell update bypasses stale HTTP CSS and preserves offline videos', async ({ page, context }, info) => {
   const id = `${info.project.name}-${Date.now()}`, scope = `/upgrade/${id}/`;
   await page.goto(scope);
-  await expect(page.locator('#offlineStatus')).toContainText('Offline bereit', { timeout: 30000 });
+  await expect(page.locator('html')).toHaveAttribute('data-offline-status','ready', { timeout: 30000 });
   await page.evaluate(async () => { await navigator.serviceWorker.ready; if (!navigator.serviceWorker.controller) await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true })); });
   await expect(page.locator('html')).toHaveAttribute('data-app-version', 'qa-legacy-shell');
   await expect(page.locator('#importFigure')).toHaveCSS('pointer-events', 'none');
@@ -257,12 +257,12 @@ test('installed shell update bypasses stale HTTP CSS and preserves offline video
   await page.locator('#editorBack').tap(); await page.locator('#confirmOK').tap();
   await expect(page.locator('#editor')).not.toBeVisible();
   await page.locator('#applyUpdate').tap();
-  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-23-cloud-cache-v1');
+  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-23-brand-slogan-v1');
   await expect(page.locator('#importFigure')).toHaveCSS('pointer-events', 'auto');
   await expect(page.locator('.figure-card')).toHaveCount(1);
   const file = await exportPackage(page, info);
   await context.setOffline(true); await page.reload();
-  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-23-cloud-cache-v1');
+  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-23-brand-slogan-v1');
   await page.getByRole('button', { name: 'Ocho lernen' }).tap();
   await expect(page.locator('#learningVideo')).toHaveJSProperty('videoWidth', 320);
   await page.locator('#playPause').tap();

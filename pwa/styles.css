@@ -187,3 +187,10 @@ html{scroll-padding-top:calc(var(--brand-header-height,73px) + var(--overview-in
 .back svg{display:block;width:24px;height:24px;flex:none}
 .screen-header h2,.settings-heading h2{line-height:1.2}
 .settings-heading{min-height:64px;padding:8px 12px;margin-inline:calc(-1 * var(--settings-gutter,20px))}
+
+/* The slogan belongs to the app brand, including cloud and settings headers. */
+.brand-lockup{font-size:clamp(26px,6vw,34px);font-weight:500}
+.brand-copy{display:grid;gap:2px;min-width:0}
+.brand-copy h1{font-size:inherit;font-weight:inherit;line-height:1.15}
+.brand-slogan{font-size:12px;line-height:1.35;font-weight:400;color:var(--muted);letter-spacing:0}
+@media(max-height:540px){.brand-copy{gap:0}.brand-slogan{font-size:10px;line-height:1.2}}

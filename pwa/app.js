@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-23-cloud-cache-v1';
+const APP_VERSION = '2026-10-23-brand-slogan-v1';
 import { initBackup } from './backup-ui.js';
 import { initCloud, openCloud } from './cloud.js';
 import { exportFigure, importFigure, packageSize, packageFilename, MAX_PACKAGE_BYTES } from './package.js';
@@ -429,7 +429,7 @@ async function storageInfo() {
     $('storageDetails').textContent = `${estimate ? `Ungefähr ${Math.round((estimate.usage ?? 0) / 1048576)} MB lokal belegt. ` : ''}${persistent ? 'Der Browser hat dauerhaften Speicher gewährt.' : 'Dauerhafter Speicher ist bisher nicht bestätigt.'}`;
   } catch { $('storageDetails').textContent = 'Der Browser kann keine Speicherinformationen anzeigen.'; }
   try { await renderDeviceStorage(); } catch (e) { $('deviceStorageStatus').textContent = storageMessage(e); }
-  $('offlineDetails').textContent = offlineReady ? 'Die App ist für Offline-Aufrufe bereit. Gespeicherte Videos funktionieren ohne Netz.' : 'Bitte die App einmal online laden und warten, bis „Offline bereit“ angezeigt wird.';
+  $('offlineDetails').textContent = offlineReady ? 'Die App ist für Offline-Aufrufe bereit. Gespeicherte Videos funktionieren ohne Netz.' : document.documentElement.dataset.offlineStatus === 'error' ? 'Die Offline-Vorbereitung ist fehlgeschlagen. Bitte die App mit Internetverbindung neu laden.' : 'Die Offline-Nutzung wird beim ersten Online-Aufruf vorbereitet.';
 }
 function showInfoDialog() {
   const dialog = $('infoDialog');
@@ -447,15 +447,15 @@ $('persistStorage').onclick = async () => {
   catch { $('persistenceResult').textContent = 'Dieser Browser unterstützt die Speicheranfrage nicht.'; }
 };
 if ('serviceWorker' in navigator) {
-  $('offlineStatus').textContent = 'Offline-Nutzung wird vorbereitet …';
+  document.documentElement.dataset.offlineStatus = 'preparing';
   navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then(registration => {
     const update = () => { if (navigator.onLine) registration.update().catch(() => {}); };
     document.addEventListener('visibilitychange', () => { if (!document.hidden) update(); });
     window.addEventListener('online', update);
     return navigator.serviceWorker.ready;
   }).then(() => {
-    offlineReady = true; $('offlineStatus').textContent = 'Offline bereit · lokal gespeichert';
-  }).catch(() => { $('offlineStatus').textContent = 'Offline-Vorbereitung fehlgeschlagen · bitte online neu laden'; });
+    offlineReady = true; document.documentElement.dataset.offlineStatus = 'ready';
+  }).catch(() => { document.documentElement.dataset.offlineStatus = 'error'; });
 }
 window.addEventListener('offline', () => toast('Du bist offline. Deine gespeicherten Videos bleiben verfügbar.'));
 renderFilters();
