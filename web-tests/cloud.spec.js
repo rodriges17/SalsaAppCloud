@@ -61,9 +61,14 @@ test('manual sign-in link is redeemed inside the current app without navigating 
  await mock(page,true);
  await page.route(`${host}/auth/v1/verify`,r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({access_token:'test-new-user-jwt',refresh_token:'test-new-refresh',expires_in:3600})}));
  await start(page);await page.locator('#cloudButton').tap();
+ await expect(page.locator('#cloudBody')).not.toContainText('iPhone-App');
+ await expect(page.locator('#cloudBody')).toContainText('Die Anmeldung in einer anderen App oder einem anderen Browser wird nicht automatisch übernommen.');
+ await expect(page.locator('.cloud-tabs button')).toHaveText(['Bibliotheken']);
+ expect(await page.locator('.cloud-tabs').evaluate(n=>n.getBoundingClientRect().width-n.firstElementChild.getBoundingClientRect().width)).toBeLessThanOrEqual(9);
  await page.getByLabel('Anmeldelink einfügen',{exact:true}).fill('https://rodriges17.github.io/SalsaAppCloud/?cloud=1&type=magiclink&token_hash=test-once');
  await page.getByRole('button',{name:'Anmelden',exact:true}).tap();
  await expect(page.locator('#cloudBody')).toContainText('admin@example.test');
+ await expect(page.locator('.cloud-tabs button')).toHaveText(['Meine Figuren','Bibliotheken']);
  expect(page.url()).not.toContain('token_hash');
  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('salsa-cloud-session:/pwa/:v1')).access_token)).toBe('test-new-user-jwt');
 });

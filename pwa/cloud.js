@@ -42,6 +42,7 @@ async function load(library = current) {
   posterView = createPosterView(body, state.me);
   const toolbar = node('div', undefined, 'cloud-tabs');
   toolbar.setAttribute('aria-label', 'Cloud-Bereiche');
+  toolbar.style.gridTemplateColumns = state.me ? 'repeat(2,minmax(0,1fr))' : '1fr';
   for (const [key, label] of [...(state.me ? [['figures', 'Meine Figuren']] : []), ['libraries', 'Bibliotheken']]) {
     const button = action(label, () => navigate(key)); if (key === 'figures') button.setAttribute('aria-label', 'Meine Cloud-Figuren'); button.setAttribute('aria-pressed', String(!source && (current ? key === 'libraries' : area === key || (area === 'create' && key === 'libraries')))); toolbar.append(button);
   }
@@ -56,7 +57,7 @@ async function load(library = current) {
     body.append(node('p', 'Du bist derzeit nicht angemeldet. Bibliotheken erstellen und Verwaltung erscheinen nach der Anmeldung mit einem berechtigten Konto.'));
     const box = section('Mit persönlichem Link anmelden'), form = node('form'); box.append(form);
     const link = field(form, 'Anmeldelink einfügen', '', 'password'); link.autocomplete = 'off';
-    box.append(node('p', 'In einer installierten iPhone-App den Link hier einfügen, damit die Anmeldung in dieser App erfolgt.'));
+    box.append(node('p', 'Füge deinen persönlichen Anmeldelink hier ein, um dich in dieser App anzumelden. Die Anmeldung in einer anderen App oder einem anderen Browser wird nicht automatisch übernommen.'));
     form.append(action('Anmelden', () => run('Anmelden …', async () => { await loginWithLink(link.value.trim()); area = 'figures'; await load(null); }))); form.onsubmit = e => e.preventDefault();
   }
   if (source) { await publishForm(); return; }
