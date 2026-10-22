@@ -26,3 +26,5 @@ Die Cloud-PWA in Chrome und die Android-App verwenden dieselben Module für Clou
 Bereits im Editor vollständig geprüfte Videos werden bei reinen Metadatenänderungen nicht nochmals vollständig gelesen, wenn ihre Größe und Änderungszeit unverändert sind. Fehlen verlässliche Metadaten, wird vollständig geprüft. Neue Kopien, Exporte und Backups behalten die vollständige Integritätsprüfung.
 
 Die acht zusätzlichen Cloud-Fremdschlüsselindizes sind in der Cloud-PWA-Migration `20261022140200_cloud_foreign_key_indexes.sql` dokumentiert und auf dem Cloud-Projekt installiert. Zugriffsrechte und Daten bleiben unverändert.
+
+WebKit 27.2 in Playwright 1.64 meldet bei nativen Auswahlfeldern einen bekannten falschen CSP-Alarm ([Playwright #43497](https://github.com/microsoft/playwright/issues/43497)). Der Vertrag grenzt ausschließlich diese Meldung auf die Anzahl der Auswahlfelder ein; eigene Inline-Styles und andere CSP-Fehler bleiben verboten. Die App-Sicherheitsrichtlinie wird dafür nicht gelockert. Mobile Reimport-Tests behalten die zum emulierten Gerät gehörige Viewportgröße bei.
