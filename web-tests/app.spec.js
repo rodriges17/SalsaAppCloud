@@ -257,12 +257,12 @@ test('installed shell update bypasses stale HTTP CSS and preserves offline video
   await page.locator('#editorBack').tap(); await page.locator('#confirmOK').tap();
   await expect(page.locator('#editor')).not.toBeVisible();
   await page.locator('#applyUpdate').tap();
-  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-22-fixed-brand-header-v1');
+  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-22-settings-header-v1');
   await expect(page.locator('#importFigure')).toHaveCSS('pointer-events', 'auto');
   await expect(page.locator('.figure-card')).toHaveCount(1);
   const file = await exportPackage(page, info);
   await context.setOffline(true); await page.reload();
-  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-22-fixed-brand-header-v1');
+  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-22-settings-header-v1');
   await page.getByRole('button', { name: 'Ocho lernen' }).tap();
   await expect(page.locator('#learningVideo')).toHaveJSProperty('videoWidth', 320);
   await page.locator('#playPause').tap();
@@ -276,6 +276,13 @@ test('installed shell update bypasses stale HTTP CSS and preserves offline video
 test('installation and storage opens at the beginning on first open and reopen', async ({ page }) => {
   await start(page);
   const dialog = page.locator('#infoDialog');
+  await page.locator('#infoButton').tap();
+  const brand=dialog.locator('.settings-brand-header');await expect(brand.getByRole('heading',{name:'Step by Step',exact:true})).toBeVisible();
+  await dialog.evaluate(n=>n.scrollTop=n.scrollHeight);
+  await expect.poll(()=>brand.evaluate(n=>Math.round(n.getBoundingClientRect().top))).toBe(0);
+  await expect(dialog.locator('#closeInfoTop')).toBeInViewport();
+  await page.locator('#closeInfoTop').tap();
+
   for (let i = 0; i < 2; i++) {
     await page.locator('#infoButton').tap();
     await expect(page.locator('#infoTitle')).toBeFocused();
