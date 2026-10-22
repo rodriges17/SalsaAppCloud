@@ -94,7 +94,7 @@ async function load(library = current, allowCache = false) {
     if (epoch !== viewEpoch || !dialog.open) return;
     current = library;
     const active = () => epoch === viewEpoch && dialog.open && owner === cloudIdentity();
-    const locals = Promise.resolve().then(() => hooks.localFigures()).then(figures => {
+    void Promise.resolve().then(() => hooks.localFigures()).then(figures => {
       if (active()) { localFigures = figures; localUpdates.forEach(update => update()); }
       return figures;
     }).catch(() => localFigures);
@@ -120,7 +120,6 @@ async function load(library = current, allowCache = false) {
     }
     const freshDetail = library ? await requestLibrary(owner, library) : null;
     if (!active()) return;
-    if (!cached) localFigures = await locals;
     if (!active()) return;
     // Do not interrupt a form, an active download, expanded history or a video preview.
     const editing = !snapshot.accessChanged && cached && (busy || allowCache !== 'refresh' && body.querySelector('details[open], video, form input:focus, form textarea:focus, input[type=checkbox]:not(:checked)'));
