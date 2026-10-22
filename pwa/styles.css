@@ -181,3 +181,9 @@ html{scroll-padding-top:calc(var(--brand-header-height,73px) + var(--overview-in
  .overview~.bottom-nav{padding-top:4px;padding-bottom:4px}
  .overview~.bottom-nav button{min-height:48px;gap:2px;padding:3px}
 }
+
+/* Match back controls and title rows across full-screen views. */
+.back{display:inline-flex;align-items:center;justify-content:center;flex:0 0 44px;line-height:1}
+.back svg{display:block;width:24px;height:24px;flex:none}
+.screen-header h2,.settings-heading h2{line-height:1.2}
+.settings-heading{min-height:64px;padding:8px 12px;margin-inline:calc(-1 * var(--settings-gutter,20px))}
