@@ -1,21 +1,11 @@
-import { cloudCall } from './cloud-api.js';
+import { readCloudCache, writeCloudCache, cloudCacheRevision } from './cloud-cache.js';
+import { cloudCall, cloudIdentity } from './cloud-api.js';
 import { listFigures, figureVideos } from './storage.js';
 const LIMIT = 65536;
-const scope = new URL('./', import.meta.url).pathname;
-const cacheDB = () => new Promise((resolve, reject) => {
-  const request = indexedDB.open(`step-cloud-posters:${scope}:v1`, 1);
-  request.onupgradeneeded = () => request.result.createObjectStore('posters');
-  request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
-});
-async function cachedPoster(user, revision, blob) {
-  const bytes = blob ? await blob.arrayBuffer() : null, db = await cacheDB();
-  try { return await new Promise((resolve, reject) => {
-    const tx = db.transaction('posters', blob ? 'readwrite' : 'readonly'), store = tx.objectStore('posters');
-    const key = `${user?.id ?? 'public'}:${revision}`, request = blob ? store.put(bytes, key) : store.get(key);
-    let result; request.onsuccess = () => { result = request.result; };
-    tx.oncomplete = () => resolve(blob ?? (result instanceof ArrayBuffer ? new Blob([result], { type: 'image/jpeg' }) : result));
-    tx.onabort = () => reject(tx.error); tx.onerror = () => {};
-  }); } finally { db.close(); }
+async function cachedPoster(owner, revision, blob, kind = 'local', generation = cloudCacheRevision(owner)) {
+  if (blob) return writeCloudCache(owner, `poster:${revision}`, { bytes: await blob.arrayBuffer(), kind }, generation);
+  const record = await readCloudCache(owner, `poster:${revision}`);
+  return record ? { ...record, blob: new Blob([record.value.bytes], { type: 'image/jpeg' }) } : null;
 }
 const fromBase64 = value => {
   if (typeof value !== 'string' || value.length > 90000) return null;
@@ -41,8 +31,6 @@ export async function posterPayload(blob, kind = 'local') {
   return { data: btoa(binary), kind };
 }
 async function localPoster(user, revision, figures) {
-  const cached = await cachedPoster(user, revision.id).catch(() => null);
-  if (cached) return cached;
   const matches = [];
   for (const figure of await figures()) {
     if (!figure.poster) continue;
@@ -88,7 +76,7 @@ async function videoPoster(revision, signal) {
   } finally { player.pause(); player.removeAttribute('src'); player.load(); }
 }
 export function createPosterView(root, user) {
-  const controller = new AbortController(), urls = new Set(), jobs = new Map(); let figures;
+  const controller = new AbortController(), urls = new Set(), jobs = new Map(), owner = cloudIdentity(), generation = cloudCacheRevision(owner); let figures;
   const locals = () => figures ??= listFigures().catch(() => []);
   const observer = new IntersectionObserver(entries => {
     for (const entry of entries) if (entry.isIntersecting) { observer.unobserve(entry.target); jobs.get(entry.target)?.(); }
@@ -99,8 +87,18 @@ export function createPosterView(root, user) {
       placeholder.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1.5"/><path d="m4 18 5-6 4 4 3-4 4 6"/></svg>';
       heading.prepend(placeholder);
       jobs.set(heading, async () => {
-        const active = () => !controller.signal.aborted && heading.isConnected;
+        const active = () => !controller.signal.aborted && heading.isConnected && owner === cloudIdentity();
+        let displayed = placeholder;
+        const show = async blob => {
+          if (!blob || !active()) return;
+          const image = document.createElement('img'), url = URL.createObjectURL(blob); urls.add(url);
+          image.className = 'cloud-thumbnail'; image.alt = ''; image.width = 64; image.height = 64; image.src = url;
+          try { await image.decode(); if (active()) { const previous = displayed; displayed.replaceWith(image); displayed = image; if (previous.tagName === 'IMG') { URL.revokeObjectURL(previous.src); urls.delete(previous.src); } } else { URL.revokeObjectURL(url); urls.delete(url); } } catch { URL.revokeObjectURL(url); urls.delete(url); }
+        };
         try {
+          const saved = await cachedPoster(owner, revision.id);
+          if (saved) { await show(saved.blob); if (Date.now() - saved.updatedAt < 60000 || !navigator.onLine) return; }
+          if (!active()) return;
           const remote = await cloudCall('poster_get', { revision: revision.id }); if (!active()) return;
           let blob = remote.poster ? fromBase64(remote.poster) : null, local;
           if (!blob || (remote.kind === 'frame' && remote.can_write)) local = await localPoster(user, revision, locals);
@@ -117,11 +115,9 @@ export function createPosterView(root, user) {
             }
           }
           if (!blob || !active()) return;
-          if (remote.kind === 'local' || local) await cachedPoster(user, revision.id, blob).catch(() => {});
+          await cachedPoster(owner, revision.id, blob, kind, generation).catch(() => {});
           if (!active()) return;
-          const image = document.createElement('img'), url = URL.createObjectURL(blob); urls.add(url);
-          image.className = 'cloud-thumbnail'; image.alt = ''; image.width = 64; image.height = 64; image.src = url;
-          try { await image.decode(); if (active()) placeholder.replaceWith(image); } catch { URL.revokeObjectURL(url); urls.delete(url); }
+          await show(blob);
         } catch { /* Keep the neutral image placeholder, including for anonymous/offline readers. */ }
       });
       observer.observe(heading);

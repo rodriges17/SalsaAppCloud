@@ -1,5 +1,5 @@
 // The same behavior contract runs against the PWA and the bundled Android UI.
-export const PARITY_CASES = ['menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles'];
+export const PARITY_CASES = ['menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change'];
 export async function runParityCase(page, { root, fixture, native = false, scenario, consoleErrors = [], browserName = 'chromium' }) {
  const assert = (value, message) => { if (!value) throw new Error(message); };
  const frame = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -14,6 +14,80 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   },{root,fixture,count,fingerprint});
   await page.waitForFunction(count=>document.querySelectorAll('.figure-card').length===count,count);
  };
+ if(scenario.startsWith('cloud-cache-')){
+  const scope=new URL(root,page.url()).pathname,key=`salsa-cloud-session:${scope}:v1`;
+  await page.evaluate(key=>localStorage.setItem(key,JSON.stringify({access_token:'account-a',refresh_token:'refresh-a',expires_at:Date.now()+3600000})),key);
+  const poster=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=c.height=4;c.getContext('2d').fillRect(0,0,4,4);return c.toDataURL('image/jpeg').split(',')[1]});
+  let version=1,calls=0,posterCalls=0,stall=false,fail=false,revoked=false,release;
+  await page.route('**/auth/v1/logout',r=>r.fulfill({contentType:'application/json',body:'{}'}));
+  await page.route('**/functions/v1/cloud',async r=>{
+   const {action}=r.request().postDataJSON(),token=r.request().headers().authorization;
+   const who=token?.includes('account-b')?'B':token?'A':null;
+   let value={ok:true};
+   if(action==='state'){
+    calls++;if(stall&&who==='A')await new Promise(resolve=>release=resolve);
+    if(fail)return r.fulfill({status:503,contentType:'application/json',body:'{"error":"Test: offline"}'});
+    value={me:who?{id:who,email:who+'@example.test',used:0,quota:500000000,upload_enabled:true}:null,libraries:[{id:'cache-library',title:'Cache Bibliothek',visibility:'public'}],own_figures:who?[{id:'cache-figure',public_allowed:false,revisions:[{id:'cache-revision',title:`Cache ${who} ${version}`,description:'',tags:[],created_at:'2026-10-23T00:00:00Z',videos:[{id:'cache-video',name:'Video',type:'video/mp4',size:123}]}]}]:[]};
+   }
+   if(action==='poster_get'){posterCalls++;value={poster,kind:'local',can_write:false};}
+   if(action==='state'&&revoked){value={...value,me:{...value.me,upload_enabled:false},libraries:[],own_figures:[]};}
+   if(action==='library'){
+    if(revoked)return r.fulfill({status:400,contentType:'application/json',body:JSON.stringify({error:'Zugriff entzogen'})});
+    value={library:{id:'cache-library',title:'Private Details',description:'',visibility:'private'},entries:[],members:[],manage:false,contribute:false};
+   }
+   return r.fulfill({contentType:'application/json',body:JSON.stringify(value)});
+  });
+  const open=async()=>{await page.locator('#cloudButton').click();await page.getByRole('heading',{name:`Cache A ${version}`,exact:true}).waitFor();};
+  await open();await page.locator('.cloud-thumbnail').waitFor();const firstCalls=calls;
+  const owner=await page.evaluate(async root=>(await import(root+'cloud-api.js')).cloudIdentity(),root);
+  if(scenario==='cloud-cache-fast-reopen'){
+   await page.getByRole('button',{name:'Bibliotheken',exact:true}).click();await page.getByRole('heading',{name:'Bibliotheken',exact:true}).waitFor();
+   await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).click();await page.getByRole('heading',{name:'Cache A 1',exact:true}).waitFor();
+   await page.locator('#cloudBack').click();await open();await page.locator('.cloud-thumbnail').waitFor();
+   assert(calls===firstCalls,'A fresh tab switch/reopen fetched cloud state again');assert(posterCalls===1,'A cached poster was fetched again');
+   await page.reload();await page.locator('#cloudButton').waitFor();await open();await page.locator('.cloud-thumbnail').waitFor();
+   assert(calls===firstCalls&&posterCalls===1,'Persistent snapshots/posters were not restored after reload');
+   await page.locator('#cloudBack').click();await page.context().setOffline(true);await open();
+   assert((await page.locator('#cloudStatus').textContent()).includes('Offline'),'Offline snapshot lacks a freshness notice');await page.context().setOffline(false);
+   await page.locator('#cloudBack').click();await page.route('**/auth/v1/token?grant_type=refresh_token',r=>r.fulfill({status:400,contentType:'application/json',body:JSON.stringify({code:'refresh_token_not_found',msg:'Session revoked'})}));
+   await page.evaluate(key=>{const s=JSON.parse(localStorage.getItem(key));localStorage.setItem(key,JSON.stringify({...s,expires_at:0}))},key);await page.clock.setFixedTime(new Date(await page.evaluate(()=>Date.now())+61000));
+   await page.locator('#cloudButton').click();await page.getByText('Du bist derzeit nicht angemeldet.',{exact:false}).waitFor();
+   assert(await page.getByRole('heading',{name:'Cache A 1',exact:true}).count()===0,'Revoked session left private contents visible');
+   assert(await page.evaluate(async({root,owner})=>!(await(await import(root+'cloud-cache.js')).readCloudCache(owner,'state')),{root,owner}),'Revoked session retained private snapshots');
+  }else if(scenario==='cloud-cache-permission-change'){
+   await page.getByRole('button',{name:'Bibliotheken',exact:true}).click();await page.getByRole('button',{name:'Öffnen',exact:true}).click();await page.getByRole('heading',{name:'Private Details',exact:true}).waitFor();await page.locator('#cloudBack').click();
+   await page.clock.setFixedTime(new Date(await page.evaluate(()=>Date.now())+61000));revoked=true;
+   await page.evaluate(root=>{void import(root+'cloud.js').then(m=>m.openCloud(null,'cache-library'));},root);
+   await page.waitForFunction(()=>document.querySelector('#cloudError').textContent.includes('Zugriff entzogen'));
+   assert(await page.getByRole('heading',{name:'Private Details',exact:true}).count()===0,'Revoked private library details remained visible');
+   assert(await page.evaluate(async({root,owner})=>!(await(await import(root+'cloud-cache.js')).readCloudCache(owner,'library:cache-library'))&&!await(await import(root+'cloud-cache.js')).readCloudCache(owner,'poster:cache-revision'),{root,owner}),'Permission revocation retained private details/posters');
+  }else{
+   await page.locator('#cloudBack').click();await page.clock.setFixedTime(new Date(await page.evaluate(()=>Date.now())+61000));stall=true;
+   await page.locator('#cloudButton').click();await page.getByRole('heading',{name:'Cache A 1',exact:true}).waitFor();
+   await page.waitForFunction(()=>document.querySelector('#cloudStatus').textContent.includes('Änderungen werden geladen'));
+   assert(await page.locator('#cloudBack').isEnabled(),'Cached refresh disabled back navigation');
+   while(!release)await new Promise(r=>setTimeout(r,10));
+   if(scenario==='cloud-cache-refresh'){
+    await page.getByRole('button',{name:'Bibliotheken',exact:true}).click();await page.getByRole('heading',{name:'Bibliotheken',exact:true}).waitFor();
+    assert(calls===firstCalls+1,'Simultaneous navigation did not deduplicate refresh');
+    version=2;stall=false;release();await page.waitForFunction(()=>document.querySelector('#cloudStatus').textContent==='Alles aktuell');
+    await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).click();await page.getByRole('heading',{name:'Cache A 2',exact:true}).waitFor();
+    await page.locator('#cloudBack').click();await page.clock.setFixedTime(new Date(await page.evaluate(()=>Date.now())+61000));fail=true;
+    await page.locator('#cloudButton').click();await page.getByRole('heading',{name:'Cache A 2',exact:true}).waitFor();
+    await page.waitForFunction(()=>document.querySelector('#cloudStatus').textContent.includes('Aktualisierung nicht möglich'));
+    fail=false;version=3;await page.getByRole('button',{name:'Aktualisieren',exact:true}).click();await page.getByRole('heading',{name:'Cache A 3',exact:true}).waitFor();
+   }else{
+    await page.getByRole('button',{name:'Abmelden',exact:true}).click();await page.getByText('Du bist derzeit nicht angemeldet.',{exact:false}).waitFor();
+    assert(await page.evaluate(async({root,owner})=>!(await(await import(root+'cloud-cache.js')).readCloudCache(owner,'state'))&&!await(await import(root+'cloud-cache.js')).readCloudCache(owner,'poster:cache-revision'),{root,owner}),'Logout retained private snapshots or posters');
+    const other=await page.context().newPage();await other.goto(page.url());await other.evaluate(key=>localStorage.setItem(key,JSON.stringify({access_token:'account-b',refresh_token:'refresh-b',cache_id:'account-b-session',expires_at:Date.now()+3600000})),key);
+    await page.getByRole('heading',{name:'Cache B 1',exact:true}).waitFor();stall=false;release();
+    await page.waitForTimeout(100);assert(await page.getByRole('heading',{name:'Cache A 1',exact:true}).count()===0,'A late old-account response repopulated the UI');
+    await page.getByRole('button',{name:'Bibliotheken',exact:true}).click();await page.getByRole('button',{name:'Bibliothek erstellen',exact:true}).click();await page.getByLabel('Name',{exact:true}).fill('Entwurf behalten');
+    await other.evaluate(key=>{const s=JSON.parse(localStorage.getItem(key));localStorage.setItem(key,JSON.stringify({...s,access_token:'account-b-renewed'}))},key);await page.waitForTimeout(100);assert(await page.getByLabel('Name',{exact:true}).inputValue()==='Entwurf behalten','Token rotation in another tab discarded a form');await other.close();
+   }
+  }
+ }
+
  if(scenario==='menus-and-short-windows'){
   await seed(12);await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));await page.locator('.card-options').last().click();
   const menu=await page.locator('.card-menu').boundingBox(),footer=await page.locator('body>.bottom-nav').boundingBox();

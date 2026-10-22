@@ -28,3 +28,13 @@ Bereits im Editor vollständig geprüfte Videos werden bei reinen Metadatenände
 Die acht zusätzlichen Cloud-Fremdschlüsselindizes sind in der Cloud-PWA-Migration `20261022140200_cloud_foreign_key_indexes.sql` dokumentiert und auf dem Cloud-Projekt installiert. Zugriffsrechte und Daten bleiben unverändert.
 
 WebKit 27.2 in Playwright 1.64 meldet bei nativen Auswahlfeldern einen bekannten falschen CSP-Alarm ([Playwright #43497](https://github.com/microsoft/playwright/issues/43497)). Der Vertrag grenzt ausschließlich diese Meldung auf die Anzahl der Auswahlfelder ein; eigene Inline-Styles und andere CSP-Fehler bleiben verboten. Die App-Sicherheitsrichtlinie wird dafür nicht gelockert. Mobile Reimport-Tests behalten die zum emulierten Gerät gehörige Viewportgröße bei.
+
+## Cloud-Cache
+
+Listen, Bibliotheksdetails und Vorschaubilder werden pro Anmeldesitzung in IndexedDB gespeichert. Videos und signierte Download-URLs gehören nicht in diesen Cache. Die letzte Ansicht erscheint sofort; innerhalb von 60 Sekunden entfallen wiederholte Zustandsabrufe. Danach wird beim Öffnen im Hintergrund aktualisiert. „Aktualisieren“ erzwingt einen Abruf; erfolgreiche Schreibvorgänge verwerfen betroffene Metadaten. Die Bereinigung läuft separat, höchstens einmal pro zehn Minuten und Sitzung.
+
+Die Oberfläche meldet „Änderungen werden geladen …“, „Alles aktuell“ oder bei Fehlern den letzten geladenen Stand mit Zeitangabe. Offline bleibt der gespeicherte Stand ausdrücklich als offline erkennbar. Navigation bleibt während einer Hintergrundaktualisierung nutzbar; parallele Abrufe werden zusammengeführt.
+
+Abmelden, Kontowechsel und eine definitiv widerrufene Sitzung entfernen deren Cache. Token-Erneuerung behält die Cache-Zuordnung und offene Formulare bei. Alte Antworten dürfen nach einem Kontowechsel keine privaten Daten zurückschreiben. Neue Server-Berechtigungen werden vor Verwaltung und Schreibvorgängen geprüft; ein Cache erteilt keine Zugriffsrechte. Erkannte Berechtigungsänderungen verwerfen alte Bibliotheksdetails und Bilder.
+
+Der identische Browservertrag prüft Wiederöffnen und Neustart ohne weiteren Listen-/Bildabruf, Offline-Anzeige, gedrosselte und zusammengeführte Hintergrundabrufe, Fehlerwiederholung, Abmeldung mit Löschung von Daten/Bildern, verspätete Kontoantworten sowie Token-Erneuerung in einem zweiten Tab ohne Entwurfsverlust.
