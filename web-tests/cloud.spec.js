@@ -65,7 +65,6 @@ test('manual sign-in link is redeemed inside the current app without navigating 
  await expect(page.locator('#cloudBody')).toContainText('Die Anmeldung in einer anderen App oder einem anderen Browser wird nicht automatisch übernommen.');
  await expect(page.locator('.cloud-tabs button')).toHaveText(['Meine Figuren','Bibliotheken']);
  await expect(page.locator('.cloud-tabs button').first()).toHaveAttribute('aria-pressed','true');
- await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).tap();
  await expect(page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true})).toHaveAttribute('aria-pressed','true');
  await expect(page.locator('#cloudBody')).toContainText('Melde dich an, um deine hochgeladenen Figuren zu sehen.');
  await page.getByLabel('Anmeldelink einfügen',{exact:true}).fill('https://rodriges17.github.io/SalsaAppCloud/?cloud=1&type=magiclink&token_hash=test-once');
