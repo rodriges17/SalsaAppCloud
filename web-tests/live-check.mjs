@@ -12,7 +12,7 @@ for (const [name, engine, options] of [
     const context = await browser.newContext(options), page = await context.newPage(), errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(url);
-    await page.waitForFunction(() => document.documentElement.dataset.appVersion === '2026-10-22-cloud-login-ui-v1');
+    await page.waitForFunction(() => document.documentElement.dataset.appVersion === '2026-10-22-cloud-tabs-v1');
     await page.getByRole('button', { name: 'Figur hinzufügen', exact: true }).tap();
     await page.getByRole('button', { name: 'Figur importieren', exact: true }).tap();
     assert.equal(await page.locator('#importChoiceDialog').isVisible(), true);

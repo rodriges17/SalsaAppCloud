@@ -37,13 +37,13 @@ async function load(library = current) {
     const cleaned = await cloudCall(state.me.is_admin ? 'admin_cleanup' : 'cleanup').catch(() => null);
     if (cleaned?.cleaned) state = await cloudCall('state');
   }
-  if (!state.me) area = 'libraries';
+  if (area === 'initial') area = state.me ? 'figures' : 'libraries';
+  if (!state.me && !['figures', 'libraries'].includes(area)) area = 'libraries';
   cancelThumbnails(); clearPreviews(body); body.replaceChildren();
   posterView = createPosterView(body, state.me);
   const toolbar = node('div', undefined, 'cloud-tabs');
   toolbar.setAttribute('aria-label', 'Cloud-Bereiche');
-  toolbar.style.gridTemplateColumns = state.me ? 'repeat(2,minmax(0,1fr))' : '1fr';
-  for (const [key, label] of [...(state.me ? [['figures', 'Meine Figuren']] : []), ['libraries', 'Bibliotheken']]) {
+  for (const [key, label] of [['libraries', 'Bibliotheken'], ['figures', 'Meine Figuren']]) {
     const button = action(label, () => navigate(key)); if (key === 'figures') button.setAttribute('aria-label', 'Meine Cloud-Figuren'); button.setAttribute('aria-pressed', String(!source && (current ? key === 'libraries' : area === key || (area === 'create' && key === 'libraries')))); toolbar.append(button);
   }
   const utilities = node('div', undefined, 'cloud-utilities');
@@ -53,13 +53,15 @@ async function load(library = current) {
   body.append(toolbar, utilities);
   if (state.me) body.append(node('p', `${state.me.email} · ${MB(state.me.used)} / ${MB(state.me.quota)} belegt${state.me.upload_enabled ? '' : ' · Lesen erlaubt, Uploads gesperrt'}`, 'cloud-account'));
   else {
-    body.append(node('p', 'Öffentliche Bibliotheken sind ohne Anmeldung lesbar. Für private Bibliotheken und Beiträge erhältst du einen persönlichen Anmeldelink vom Administrator.'));
+    if (area === 'figures') body.append(node('h3', 'Meine Cloud-Figuren'), node('p', 'Melde dich an, um deine hochgeladenen Figuren zu sehen.'));
+    else body.append(node('p', 'Öffentliche Bibliotheken sind ohne Anmeldung lesbar. Für private Bibliotheken und Beiträge erhältst du einen persönlichen Anmeldelink vom Administrator.'));
     body.append(node('p', 'Du bist derzeit nicht angemeldet. Bibliotheken erstellen und Verwaltung erscheinen nach der Anmeldung mit einem berechtigten Konto.'));
     const box = section('Mit persönlichem Link anmelden'), form = node('form'); box.append(form);
     const link = field(form, 'Anmeldelink einfügen', '', 'password'); link.autocomplete = 'off';
     box.append(node('p', 'Füge deinen persönlichen Anmeldelink hier ein, um dich in dieser App anzumelden. Die Anmeldung in einer anderen App oder einem anderen Browser wird nicht automatisch übernommen.'));
     form.append(action('Anmelden', () => run('Anmelden …', async () => { await loginWithLink(link.value.trim()); area = 'figures'; await load(null); }))); form.onsubmit = e => e.preventDefault();
   }
+  if (!state.me && area === 'figures') return;
   if (source) { await publishForm(); return; }
   if (current) { await libraryView(current); return; }
   if (area === 'create') { libraryForm(); return; }
@@ -300,7 +302,7 @@ export function initCloud(callbacks) {
   const query = new URLSearchParams(location.search); if (query.has('library') || query.has('cloud')) setTimeout(() => openCloud(null, query.get('library')), 0);
 }
 export async function openCloud(local = null, library = null) {
-  if (busy || dialog.open) return; source = local; current = library; area = 'figures';
+  if (busy || dialog.open) return; source = local; current = library; area = 'initial';
   errorBox.hidden = true; body.replaceChildren(); dialog.showModal();
   await run('Cloud-Bibliotheken laden …', () => load(library));
   if (!body.childElementCount) body.append(action('Erneut versuchen', () => run('Laden …', () => load(library))));

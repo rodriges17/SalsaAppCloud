@@ -46,7 +46,7 @@ test.describe('primary navigation and cloud layouts', () => {
     });
     await start(page); await seed(page);
     const nav = page.locator('body > .bottom-nav'); await expect(nav.getByRole('button')).toHaveCount(2); await expect(nav.getByRole('button')).toHaveText(['Figuren', 'Cloud-Speicher']);
-    await page.locator('#cloudButton').tap(); await expect(page.locator('#cloudDialog')).toBeVisible(); await expect(page.locator('.cloud-tabs button')).toHaveText(['Meine Figuren', 'Bibliotheken']);
+    await page.locator('#cloudButton').tap(); await expect(page.locator('#cloudDialog')).toBeVisible(); await expect(page.locator('.cloud-tabs button')).toHaveText(['Bibliotheken', 'Meine Figuren']);
     await expect(page.locator('#cloudDialog [data-nav=cloud]')).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('heading', { name: 'Meine Cloud-Figuren', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Bibliotheken', exact: true }).tap();
