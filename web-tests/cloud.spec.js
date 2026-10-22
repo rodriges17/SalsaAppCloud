@@ -78,6 +78,20 @@ test('manual sign-in link is redeemed inside the current app without navigating 
 async function signIn(page) {
  await page.addInitScript(()=>localStorage.setItem('salsa-cloud-session:/pwa/:v1',JSON.stringify({access_token:'test-user-jwt',refresh_token:'test-refresh',expires_at:Date.now()+3600000})));
 }
+test('cloud keeps its brand header and back navigation fixed without a settings button',async({page},info)=>{
+ await mock(page);await start(page);await page.locator('#cloudButton').tap();
+ const header=page.locator('#cloudDialog > .cloud-brand-header');
+ await expect(header.getByRole('heading',{name:'Step by Step',exact:true})).toBeVisible();
+ await expect(header.locator('.brand-mark')).toBeVisible();await expect(header.getByRole('button')).toHaveCount(0);
+ await page.screenshot({path:info.outputPath('cloud-brand-header-top.png')});
+ await page.locator('#cloudBody').evaluate(n=>n.style.minHeight='1800px');
+ const before=await header.boundingBox();await page.locator('.cloud-scroll').evaluate(n=>n.scrollTop=600);
+ expect(await page.locator('.cloud-scroll').evaluate(n=>n.scrollTop)).toBeGreaterThan(100);
+ const after=await header.boundingBox();expect(after.y).toBe(before.y);
+ const back=page.locator('#cloudBack');await expect(back).toBeInViewport();
+ for(const theme of ['dark','light']){await page.evaluate(t=>window.stepAppearance.set(t),theme);await page.screenshot({path:info.outputPath(`${theme}-fixed-cloud-header.png`)});}
+ await back.tap();await expect(page.locator('#cloudDialog')).not.toBeVisible();await expect(page.locator('#infoButton')).toBeVisible();
+});
 test('libraries and own cloud figures are separate; creation is explicit and cancellable',async({page})=>{
  await signIn(page);const calls=await mock(page,true,true);await start(page);await page.locator('#cloudButton').tap();
  await expect(page.getByRole('heading',{name:'Meine Cloud-Figuren',exact:true})).toBeVisible();

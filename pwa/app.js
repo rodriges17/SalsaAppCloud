@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-22-cloud-tabs-v1';
+const APP_VERSION = '2026-10-22-fixed-brand-header-v1';
 import { initBackup } from './backup-ui.js';
 import { initCloud, openCloud } from './cloud.js';
 import { exportFigure, importFigure, packageSize, packageFilename, MAX_PACKAGE_BYTES } from './package.js';
@@ -16,6 +16,12 @@ const channel = 'BroadcastChannel' in window ? new BroadcastChannel(`salsa-train
 const loop = new ABLoop();
 let playIntent = false, wakeLock = null;
 const video = $('learningVideo');
+const brandHeading = document.querySelector('.overview > .heading');
+if (brandHeading && 'ResizeObserver' in window) {
+  const measure = () => document.documentElement.style.setProperty('--brand-header-height', `${brandHeading.getBoundingClientRect().height}px`);
+  new ResizeObserver(measure).observe(brandHeading); measure();
+}
+
 
 function toast(message) { $('toast').textContent = message; $('toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { $('toast').hidden = true; }, 4500); }
 function setError(id, message) { $(id).textContent = message ?? ''; $(id).hidden = !message; }

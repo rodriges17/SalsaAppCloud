@@ -77,7 +77,9 @@ test('add sheet stays reachable after scrolling, works in both themes and restor
  await start(page);await seed(page);
  await page.evaluate(()=>{const list=document.getElementById('figureList');for(let i=0;i<12;i++)list.append(list.firstElementChild.cloneNode(true));});
  await page.evaluate(()=>window.scrollTo(0,700));
- await expect.poll(()=>page.locator('.page-intro').evaluate(node=>Math.round(node.getBoundingClientRect().top))).toBe(0);
+ await expect.poll(()=>page.locator('.overview > .heading').evaluate(node=>Math.round(node.getBoundingClientRect().top))).toBe(0);
+ const headerHeight=await page.locator('.overview > .heading').evaluate(node=>Math.round(node.getBoundingClientRect().height));
+ await expect.poll(()=>page.locator('.page-intro').evaluate(node=>Math.round(node.getBoundingClientRect().top))).toBe(headerHeight);
  const add=page.getByRole('button',{name:'Figur hinzufügen',exact:true});await expect(add).toBeInViewport();
  for(const theme of ['dark','light']){
   await page.evaluate(theme=>window.stepAppearance.set(theme),theme);await add.tap();

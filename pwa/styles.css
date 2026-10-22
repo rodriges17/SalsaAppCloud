@@ -145,3 +145,9 @@ details.settings-section{display:block}details.settings-section[open]>:not(summa
 
 /* PWA page gestures pan content instead of magnifying the app layout. */
 html,body{touch-action:pan-x pan-y}
+
+/* Keep the brand visible on the overview and above the cloud scroll area. */
+.overview > .heading{position:sticky;top:0;z-index:6}
+.page-intro{top:var(--brand-header-height,73px)}
+.cloud-brand-header{flex-shrink:0;margin:0;padding:calc(16px + env(safe-area-inset-top)) max(20px,calc((100% - 680px)/2)) 12px;background:var(--surface);border-bottom:1px solid var(--border)}
+#cloudDialog > .screen-header{padding-top:8px}
