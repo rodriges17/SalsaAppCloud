@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-22-cloud-tabs-v1';
+const APP_VERSION = '2026-10-22-own-download-v1';
 import { initBackup } from './backup-ui.js';
 import { initCloud, openCloud } from './cloud.js';
 import { exportFigure, importFigure, packageSize, packageFilename, MAX_PACKAGE_BYTES } from './package.js';
@@ -117,7 +117,7 @@ function isDirty() { return editor && (JSON.stringify(formValue()) !== editor.in
 async function openEditor(figure = null, imported = null) {
   if (opening || editor || learning) return; opening = true;
   try {
-    const records = figure ? await figureVideos(figure, true) : [];
+    const records = figure && !imported ? await figureVideos(figure, true) : [];
     editor = { id: figure?.id ?? crypto.randomUUID(), revision: figure?.revision ?? null, storageFolder: figure?.storageFolder, drafts: records.map(r => ({ ...r, existing: !r.missing, confirmed: !r.missing })), busy: false, allowClose: false, replacing: null, reviewAll: false };
     $('figureTitle').value = figure?.title ?? ''; $('figureDescription').value = figure?.description ?? '';
     $('figureStatus').value = figure?.status ?? 'Neu'; $('figureTags').value = figure?.tags.join(', ') ?? '';
@@ -127,7 +127,7 @@ async function openEditor(figure = null, imported = null) {
       editor.importFingerprint = imported.fingerprint;
       editor.drafts = imported.drafts.map(d => ({ ...d, id: crypto.randomUUID() }));
       $('figureTitle').value = imported.title; $('figureDescription').value = imported.description;
-      $('figureTags').value = imported.tags.join(', '); $('figureStatus').value = 'Neu';
+      $('figureTags').value = imported.tags.join(', '); $('figureStatus').value = figure?.status ?? 'Neu';
     }
     $('editorHeading').textContent = figure ? 'Figur bearbeiten' : 'Figur hinzufügen'; setError('editorError', null);
     renderDrafts(); setBusy(false); $('editor').showModal(); pushRoute('editor'); $('figureTitle').focus();
@@ -561,10 +561,28 @@ document.querySelectorAll('[data-nav]').forEach(nav => {
     else { window.scrollTo({ top: 0 }); $('search').focus({ preventScroll: true }); }
   };
 });
-initCloud({ confirm: confirmAction, imported: async imported => {
+async function chooseCloudImport({ title, fingerprint, revisionIds }) {
   const current = await listFigures();
-  if (current.some(f => f.importFingerprint === imported.fingerprint) && !await confirmAction({ title: 'Cloud-Version bereits übernommen', message: 'Trotzdem eine weitere lokale Kopie erstellen?', ok: 'Weitere Kopie erstellen' })) return;
-  await openEditor(null, imported);
+  if (current.some(f => f.importFingerprint === fingerprint)) { toast('Diese Cloud-Version ist bereits lokal vorhanden.'); return null; }
+  const normalize = value => value.trim().normalize('NFC').toLocaleLowerCase('de');
+  const matches = current.filter(f => normalize(f.title) === normalize(title) || revisionIds.some(id => f.importFingerprint?.startsWith(`cloud:${id}:`)));
+  if (!matches.length) return {};
+  const dialog = el('dialog', 'small-dialog'); dialog.id = 'cloudImportConflict';
+  const heading = el('h2', '', 'Figur bereits lokal vorhanden'); heading.id = 'cloudImportConflictTitle'; dialog.setAttribute('aria-labelledby', heading.id);
+  dialog.append(heading, el('p', '', 'Vorhandene Figur ersetzen oder eine neue lokale Figur speichern? Die Cloud-Figur und ihre Bibliothekszuordnungen bleiben erhalten.'));
+  const select = document.createElement('select'); select.setAttribute('aria-label', 'Zu ersetzende lokale Figur');
+  for (const f of matches) { const option = document.createElement('option'); option.value = f.id + ':' + (f.storageFolder ?? 'app'); option.textContent = `${f.title} · ${f.storageFolder ? `Geräteordner ${f.folderName ?? ''}`.trim() : 'App-Speicher'} · ${f.status}`; select.append(option); }
+  dialog.append(select);
+  return new Promise(resolve => {
+    const finish = value => { dialog.close(); dialog.remove(); resolve(value); };
+    const actions = el('div', 'dialog-actions');
+    actions.append(button('Abbrechen', () => finish(null), 'secondary'), button('Als neue Figur speichern', () => finish({}), 'secondary'), button('Vorhandene Figur ersetzen', () => finish({ figure: matches[select.selectedIndex] }), 'primary'));
+    dialog.append(actions); dialog.oncancel = event => { event.preventDefault(); finish(null); };
+    document.body.append(dialog); dialog.showModal(); actions.firstChild.focus();
+  });
+}
+initCloud({ confirm: confirmAction, localFigures: listFigures, chooseImport: chooseCloudImport, imported: async (imported, figure) => {
+  await openEditor(figure ?? null, imported);
 } });
 try { await cleanupInterruptedImports(); } catch { /* Refresh reports unavailable storage. */ }
 await refresh();

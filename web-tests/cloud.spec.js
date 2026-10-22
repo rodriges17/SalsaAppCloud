@@ -306,3 +306,58 @@ test('failed poster loading keeps a neutral placeholder and the figure actions u
  await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Bibliotheken',exact:true}).tap();await page.getByRole('button',{name:'Öffnen',exact:true}).tap();await page.locator('.revision-heading').scrollIntoViewIfNeeded();await expect(page.locator('.cloud-thumbnail-placeholder')).toBeVisible();await expect(page.locator('.cloud-thumbnail')).toHaveCount(0);
  await page.getByRole('button',{name:'In meine Figuren übernehmen',exact:true}).tap();await expect(page.locator('#editor')).toBeVisible();
 });
+
+async function seedCloudLocal(page, {title='Cloud Drehung', fingerprint=null}={}) {
+ return page.evaluate(async({title,fingerprint})=>{
+  const s=await import('/pwa/storage.js'),blob=await(await fetch('/web-tests/fixtures/clip.mp4')).blob();
+  const saved=await s.saveFigure({id:'existing-local',title,description:'Lokale Notiz',tags:['Lokal'],status:'Sitzt',importFingerprint:fingerprint},[{id:'old-media',name:'Original',blob:blob.slice(0,blob.size,'video/mp4'),confirmed:true,duration:6,width:320,height:180}]);
+  return {id:saved.id,revision:saved.revision,videoIds:saved.videoIds,createdAt:saved.createdAt};
+ },{title,fingerprint});
+}
+async function finishCloudImport(page) {
+ await page.locator('#reviewAll').tap();await expect(page.locator('#acceptVideo')).toBeEnabled();await page.locator('#acceptVideo').tap();
+ await page.locator('#saveFigure').tap();await expect(page.locator('#editor')).not.toBeVisible();
+}
+async function localCloudFigures(page) { return page.evaluate(async()=> (await (await import('/pwa/storage.js')).listFigures()).map(f=>({id:f.id,title:f.title,status:f.status,createdAt:f.createdAt,revision:f.revision,videoIds:f.videoIds,importFingerprint:f.importFingerprint}))); }
+
+test('own cloud figure downloads directly without a library and marks identical selection as local',async({page})=>{
+ await signIn(page);const calls=await mock(page,true,true,true,{noLibraries:true,videos:[{id:'video-1',name:'Führung'},{id:'video-2',name:'Folgen'}]});
+ await start(page);await page.locator('#cloudButton').tap();
+ await page.getByLabel('Führung ·',{exact:false}).uncheck();
+ await page.getByRole('button',{name:'Lokal übernehmen',exact:true}).tap();
+ await expect(page.locator('#editor')).toBeVisible();await expect(page.locator('.draft-card')).toHaveCount(1);await expect(page.locator('#saveFigure')).toBeDisabled();
+ expect(calls.filter(c=>['attach','library_save','library'].includes(c.action))).toHaveLength(0);
+ await finishCloudImport(page);
+ const local=await localCloudFigures(page);expect(local).toHaveLength(1);expect(local[0].importFingerprint).toBe('cloud:rev-1:video-2');
+ await page.locator('#cloudButton').tap();await page.getByLabel('Führung ·',{exact:false}).uncheck();
+ await expect(page.getByRole('button',{name:'Bereits lokal vorhanden',exact:true})).toBeDisabled();
+ await page.getByLabel('Führung ·',{exact:false}).check();await expect(page.getByRole('button',{name:'Lokal übernehmen',exact:true})).toBeEnabled();
+});
+
+test('direct cloud replacement can be cancelled and preserves identity and learning status only after confirmation',async({page},info)=>{
+ await signIn(page);const calls=await mock(page,true,true);await start(page);const before=await seedCloudLocal(page);
+ await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Lokal übernehmen',exact:true}).tap();
+ const conflict=page.locator('#cloudImportConflict');await expect(conflict).toBeVisible();
+ for(const theme of ['dark','light']){await page.evaluate(t=>window.stepAppearance.set(t),theme);await page.screenshot({path:info.outputPath(`${theme}-cloud-import-conflict.png`)});}
+ await conflict.getByRole('button',{name:'Abbrechen',exact:true}).tap();await expect(conflict).toHaveCount(0);await expect(page.locator('#cloudDialog')).toBeVisible();
+ expect((await localCloudFigures(page))[0].revision).toBe(before.revision);
+ await page.getByRole('button',{name:'Lokal übernehmen',exact:true}).tap();await conflict.getByRole('button',{name:'Vorhandene Figur ersetzen',exact:true}).tap();
+ await expect(page.locator('#editor')).toBeVisible();await expect(page.locator('#figureStatus')).toHaveValue('Sitzt');await expect(page.locator('#saveFigure')).toBeDisabled();
+ await page.locator('#editorBack').tap();await page.locator('#confirmOK').tap();await expect(page.locator('#editor')).not.toBeVisible();expect((await localCloudFigures(page))[0].revision).toBe(before.revision);
+ await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Lokal übernehmen',exact:true}).tap();await conflict.getByRole('button',{name:'Vorhandene Figur ersetzen',exact:true}).tap();await finishCloudImport(page);
+ const local=await localCloudFigures(page);expect(local).toHaveLength(1);expect(local[0]).toMatchObject({id:before.id,status:'Sitzt',createdAt:before.createdAt,importFingerprint:'cloud:rev-1:video-1'});expect(local[0].revision).not.toBe(before.revision);expect(local[0].videoIds).not.toEqual(before.videoIds);
+ expect(calls.filter(c=>['attach','library_save','public_permission','delete_figure'].includes(c.action))).toHaveLength(0);
+});
+
+test('older cloud version has its own download and can create a separate copy of a renamed local figure',async({page})=>{
+ await signIn(page);const bytes=await readFile('web-tests/fixtures/clip.mp4');
+ const rev=(id,date)=>({id,title:'Cloud Drehung',description:'',tags:[],created_at:date,videos:[{id:'video-'+id,name:'Führung',type:'video/mp4',size:bytes.length}]});
+ const calls=await mock(page,true,[{id:'figure-1',public_allowed:false,revisions:[rev('old','2026-10-20T00:08:13Z'),rev('latest','2026-10-20T00:11:45Z')]}],true,{noLibraries:true});
+ await start(page);const before=await seedCloudLocal(page,{title:'Mein anderer Name',fingerprint:'cloud:latest:video-latest'});
+ await page.locator('#cloudButton').tap();await expect(page.getByRole('button',{name:'Bereits lokal vorhanden',exact:true})).toBeDisabled();
+ await page.locator('.cloud-history summary').tap();const older=page.locator('.cloud-history article').nth(1);
+ await older.getByRole('button',{name:'Lokal übernehmen',exact:true}).tap();await page.locator('#cloudImportConflict').getByRole('button',{name:'Als neue Figur speichern',exact:true}).tap();
+ await expect(page.locator('#figureStatus')).toHaveValue('Neu');await finishCloudImport(page);
+ const local=await localCloudFigures(page);expect(local).toHaveLength(2);expect(local.find(f=>f.id===before.id)).toMatchObject({revision:before.revision,title:'Mein anderer Name',status:'Sitzt'});expect(local.find(f=>f.id!==before.id).importFingerprint).toBe('cloud:old:video-old');
+ expect(calls.filter(c=>['attach','library_save','library'].includes(c.action))).toHaveLength(0);
+});

@@ -33,6 +33,7 @@ function focusSection(box) {
 }
 async function load(library = current) {
   await finishLogin(); state = await cloudCall('state'); current = library;
+  localFigures = await hooks.localFigures();
   if (state.me) {
     const cleaned = await cloudCall(state.me.is_admin ? 'admin_cleanup' : 'cleanup').catch(() => null);
     if (cleaned?.cleaned) state = await cloudCall('state');
@@ -145,6 +146,10 @@ function revisionCard(parent, rev, label) {
   if (rev.title !== parent.querySelector('h3').textContent) box.append(node('p', rev.title, 'revision-title'));
   parent.append(box);
   box.append(node('p', rev.description), node('p', rev.tags.join(' · ')));
+  downloadControls(box, rev);
+}
+function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}) {
+  if (!rev.videos.length) return;
   const chosen = [], multiple = rev.videos.length > 1;
   if (multiple) box.append(node('h4', 'Videos zum Herunterladen auswählen'));
   for (const v of rev.videos) {
@@ -154,10 +159,14 @@ function revisionCard(parent, rev, label) {
     chosen.push([check, v]);
     box.append(action(`Video: ${v.name || 'Ohne Namen'}`, () => previewVideo(box, rev, v)));
   }
-  box.append(action(multiple ? 'Ausgewählte Videos in meine Figuren übernehmen' : 'In meine Figuren übernehmen', () => run('Videos herunterladen …', async () => {
+  const fingerprint = selected => `cloud:${rev.id}:${selected.map(v => v.id).join(',')}`;
+  const label = own ? 'Lokal übernehmen' : multiple ? 'Ausgewählte Videos in meine Figuren übernehmen' : 'In meine Figuren übernehmen';
+  const take = action(label, () => run('Videos herunterladen …', async () => {
     const selected = chosen.filter(([check]) => !check || check.checked).map(([, v]) => v);
     if (!selected.length) throw new Error('Bitte mindestens ein Video auswählen.');
     if (selected.reduce((n, v) => n + v.size, 0) > 250 * 1024 * 1024) throw new Error('Bitte weniger Videos wählen: maximal 250 MB pro Übernahme.');
+    const target = await hooks.chooseImport({ title: rev.title, fingerprint: fingerprint(selected), revisionIds });
+    if (!target) return;
     const drafts = [];
     for (const v of selected) {
       const signed = await cloudCall('media_url', { revision: rev.id, media: v.id });
@@ -165,10 +174,18 @@ function revisionCard(parent, rev, label) {
       const blob = await response.blob(); if (blob.size !== v.size) throw new Error('Unvollständiger Download.');
       drafts.push({ name: v.name, blob: blob.slice(0, blob.size, v.type), confirmed: false, existing: false, duration: 0, poster: null });
     }
-    const imported = { title: rev.title, description: rev.description, tags: rev.tags, fingerprint: `cloud:${rev.id}:${selected.map(v => v.id).join(',')}`, drafts };
+    const imported = { title: rev.title, description: rev.description, tags: rev.tags, fingerprint: fingerprint(selected), drafts };
     // Leave the busy state before opening the local editor.
-    busy = false; close(); await hooks.imported(imported);
-  })));
+    busy = false; close(); await hooks.imported(imported, target.figure);
+  }));
+  if (own) take.className = 'primary';
+  box.append(take);
+  const update = () => {
+    const selected = chosen.filter(([check]) => !check || check.checked).map(([, v]) => v);
+    const exists = localFigures.some(f => f.importFingerprint === fingerprint(selected));
+    take.textContent = exists ? 'Bereits lokal vorhanden' : label; take.disabled = exists;
+  };
+  chosen.forEach(([check]) => { if (check) check.onchange = update; }); update();
 }
 function attachForm(revision) {
   cancelThumbnails(); clearPreviews(body); body.replaceChildren();
@@ -182,6 +199,7 @@ function attachForm(revision) {
   box.append(action('Figur zuordnen', () => run('Zuordnen …', async () => { await cloudCall('attach', { library: choice.value, revision: revision.id }); await load(choice.value); })));
 }
 let posterView;
+let localFigures = [];
 function cancelThumbnails() { posterView?.dispose(); posterView = null; }
 function thumbnail(heading, revision) { posterView?.add(heading, revision); }
 function ownFigures() {
@@ -196,13 +214,15 @@ function ownFigures() {
     })));
     box.append(node('p', 'Die Freigabe gilt für alle Versionen dieser Figur und alle öffentlichen Bibliotheken, denen sie zugeordnet ist. Ohne Freigabe bleibt sie dort für Lesende verborgen. Private Bibliotheken bleiben unverändert.'));
     if (latest) {
-      const assign = action('Einer Bibliothek zuordnen', () => attachForm(latest)); assign.className = 'primary'; box.append(assign);
+      downloadControls(box, latest, { own: true, revisionIds: revisions.map(r => r.id) });
+      const assign = action('Einer Bibliothek zuordnen', () => attachForm(latest)); assign.className = 'secondary'; box.append(assign);
       const history = node('details', undefined, 'cloud-history');
       history.append(node('summary', `Versionsverlauf · ${revisions.length} ${revisions.length === 1 ? 'Version' : 'Versionen'}`));
       for (const revision of revisions) {
         const entry = node('article', undefined, 'version-entry');
         entry.append(node('h4', `${versionLabel(revision)}${revision.id === latest.id ? ' · Neueste Version' : ''}`), node('p', revision.title));
-        for (const video of revision.videos) entry.append(action(`Video: ${video.name || 'Ohne Namen'}`, () => previewVideo(entry, revision, video)));
+        for (const video of revision.id === latest.id ? revision.videos : []) entry.append(action(`Video: ${video.name || 'Ohne Namen'}`, () => previewVideo(entry, revision, video)));
+        if (revision.id !== latest.id) downloadControls(entry, revision, { own: true, revisionIds: revisions.map(r => r.id) });
         if (revision.id !== latest.id) entry.append(action('Diese Version einer Bibliothek zuordnen', () => attachForm(revision)));
         history.append(entry);
       }
