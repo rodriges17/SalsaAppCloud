@@ -1,10 +1,10 @@
-const APP_VERSION = '2026-10-21-dance-logo-v1';
+const APP_VERSION = '2026-10-22-lazy-folder-player-v1';
 import { initBackup } from './backup-ui.js';
 import { initCloud, openCloud } from './cloud.js';
 import { exportFigure, importFigure, packageSize, packageFilename, MAX_PACKAGE_BYTES } from './package.js';
 import { checksum } from './package.js';
 import { STATUSES, cleanTags, timeLabel, filterFigures, ABLoop } from './logic.js';
-import { listFigures, figureVideos, saveFigure, deleteFigure, storageMessage, cleanupInterruptedImports, folderSupported, storageSettings, chooseFolder, connectFolder, allowFolderAccess, setStorageFolder, transferFigure } from './storage.js';
+import { listFigures, figureVideos, playerVideos, saveFigure, deleteFigure, storageMessage, cleanupInterruptedImports, folderSupported, storageSettings, chooseFolder, connectFolder, allowFolderAccess, setStorageFolder, transferFigure } from './storage.js';
 
 const $ = id => document.getElementById(id);
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
@@ -250,7 +250,7 @@ window.addEventListener('beforeunload', event => { if (editor && (editor.busy ||
 async function openPlayer(figure) {
   if (opening || editor || learning) return; opening = true;
   try {
-    const records = await figureVideos(figure);
+    const records = await playerVideos(figure);
     learning = { figure, records, index: 0, crop: false, landscape: false, fullLoop: false, speed: 1 };
     loop.clear(); $('playerTitle').textContent = figure.title; $('playerDescription').textContent = figure.description;
     $('playerVideoChoice').replaceChildren(); records.forEach((record, index) => { const option = el('option', '', record.name || `Video ${index + 1}`); option.value = String(index); $('playerVideoChoice').append(option); });
@@ -259,14 +259,30 @@ async function openPlayer(figure) {
     pushRoute('player'); loadPlayerVideo(0, false); $('playerBack').focus();
   } catch (error) { toast(storageMessage(error)); } finally { opening = false; }
 }
-function loadPlayerVideo(index, autoplay) {
+let playerLoad = 0;
+async function loadPlayerVideo(index, autoplay) {
   if (!learning?.records[index]) return;
+  const active = learning, request = ++playerLoad, record = active.records[index];
   playIntent = autoplay; video.pause(); releaseWakeLock();
   if (videoURL) { video.removeAttribute('src'); video.load(); releaseURL(videoURL); }
   learning.index = index; $('playerVideoChoice').value = String(index); loop.clear(); updateLoop(); setError('playerError', null); $('videoLoading').hidden = false;
   $('seek').value = '0'; $('position').textContent = '0:00'; $('duration').textContent = timeLabel(learning.records[index].duration);
-  videoURL = URL.createObjectURL(learning.records[index].blob); video.src = videoURL; video.playbackRate = learning.speed; video.load();
   $('playPause').textContent = '▶'; $('playPause').setAttribute('aria-label', 'Abspielen');
+  try {
+    if (!record.blob) {
+      record.pending ??= record.load();
+      const loaded = await record.pending;
+      record.blob = loaded.blob;
+      record.pending = null;
+    }
+    if (learning !== active || request !== playerLoad) return;
+    videoURL = URL.createObjectURL(record.blob); video.src = videoURL; video.playbackRate = active.speed; video.load();
+  } catch (error) {
+    record.pending = null;
+    if (learning !== active || request !== playerLoad) return;
+    playIntent = false; $('videoLoading').hidden = true;
+    setError('playerError', storageMessage(error));
+  }
 }
 video.addEventListener('loadedmetadata', () => { if (!learning) return; if (!Number.isFinite(video.duration) || video.duration <= 0) { setError('playerError', 'Das Video konnte nicht geladen werden.'); return; } $('seek').max = String(video.duration); $('duration').textContent = timeLabel(video.duration); video.playbackRate = learning.speed; });
 video.addEventListener('loadeddata', () => { $('videoLoading').hidden = true; if (learning && playIntent && !document.hidden) play(); });
@@ -315,6 +331,7 @@ $('playerVideoChoice').onchange = () => { if (learning) loadPlayerVideo(Number($
 $('fullscreen').onclick = async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else if ($('playerScreen').requestFullscreen) await $('playerScreen').requestFullscreen(); else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen(); else toast('Diese Ansicht nutzt bereits die verfügbare Displayfläche.'); } catch { toast('Vollbild wird von diesem Browser nicht freigegeben.'); } };
 $('playerBack').onclick = () => history.back();
 function closePlayer() {
+  ++playerLoad;
   pause(); video.removeAttribute('src'); video.load(); releaseURL(videoURL); videoURL = null; learning = null; loop.clear();
   $('playerScreen').hidden = true; $('overview').hidden = false; $('overview').inert = false; document.body.classList.remove('playing-screen');
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); if (video.webkitDisplayingFullscreen) video.webkitExitFullscreen();

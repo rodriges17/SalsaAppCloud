@@ -117,3 +117,39 @@ test('folder access rejects a replaced library without accepting its catalog',as
  });
  expect(result.message).toContain('andere Bibliothek');expect(result.mirrored).toBe(result.original);expect(result.settings.activeFolder).toBe(result.original);
 });
+
+test('folder player loads selected media only, ignores late reads and rechecks changed files',async({page,browserName},info)=>{
+ test.skip(browserName!=='chromium','Folder handles are available in Chromium.');
+ await enablePicker(page,'lazy-'+info.testId.replace(/\W/g,''));await start(page);await choose(page);
+ await page.evaluate(async()=>{
+  const {saveFigure}=await import('/pwa/storage.js');const blob=await(await fetch('/web-tests/fixtures/clip.mp4')).blob();
+  return saveFigure({id:crypto.randomUUID(),title:'Lazy Ocho',description:'',status:'Neu',tags:[]},[1,2].map(i=>({id:crypto.randomUUID(),name:'Video '+i,blob:blob.slice(0,blob.size,'video/mp4'),duration:6,confirmed:true})));
+ });
+ await page.reload();await expect(page.getByRole('button',{name:'Lazy Ocho lernen',exact:true})).toBeVisible();
+ await page.evaluate(()=>{
+  const original=FileSystemFileHandle.prototype.getFile;window.mediaReads=[];window.releaseMedia=[];window.holdMedia=true;
+  FileSystemFileHandle.prototype.getFile=async function(){
+   if(/\.(mp4|mov|m4v|webm|ogv|media)$/i.test(this.name)){window.mediaReads.push(this.name);if(window.holdMedia)await new Promise(r=>window.releaseMedia.push(r));}
+   return original.call(this);
+  };
+ });
+ await page.getByRole('button',{name:'Lazy Ocho lernen',exact:true}).tap();
+ await expect(page.locator('#playerScreen')).toBeVisible();
+ await page.waitForFunction(()=>window.mediaReads.length===1);
+ await page.locator('#playerVideoChoice').selectOption('1');await page.waitForFunction(()=>window.mediaReads.length===2);
+ await page.evaluate(()=>window.releaseMedia[1]());await page.waitForFunction(()=>document.querySelector('#learningVideo').readyState>=2);
+ const second=await page.locator('#learningVideo').getAttribute('src');
+ await page.evaluate(()=>window.releaseMedia[0]());await page.waitForTimeout(100);
+ await expect(page.locator('#learningVideo')).toHaveAttribute('src',second);
+ await page.locator('#playerVideoChoice').selectOption('0');await page.waitForFunction(()=>document.querySelector('#learningVideo').readyState>=2);
+ expect(await page.evaluate(()=>window.mediaReads.length)).toBe(2);
+ await page.locator('#playerBack').tap();await expect(page.locator('#playerScreen')).toBeHidden();
+ await page.evaluate(async()=>{
+  window.holdMedia=false;const folder=await registeredFolder();const media=await folder.handle.getDirectoryHandle('media');
+  const handle=await media.getFileHandle(window.mediaReads[0]);const bytes=new Uint8Array(await(await handle.getFile()).arrayBuffer());bytes[bytes.length-1]^=1;
+  const writer=await handle.createWritable();await writer.write(bytes);await writer.close();
+ });
+ await page.getByRole('button',{name:'Lazy Ocho lernen',exact:true}).tap();
+ await expect(page.locator('#playerError')).toContainText('verändert');
+ await expect(page.locator('#learningVideo')).not.toHaveAttribute('src',/.+/);
+});

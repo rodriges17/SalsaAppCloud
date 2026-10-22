@@ -114,6 +114,14 @@ async function folderFor(figure) {
   const folder = await entries(figure.storageFolder); if (!folder) throw new Error('Ordner erneut verbinden.');
   return folder;
 }
+// Playback needs the selected video only. Editing/export/backup retain full verification.
+export async function playerVideos(figure) {
+  if (!figure.storageFolder) return app.figureVideos(figure);
+  const folder = await folderFor(figure), f = folder.library.figures.find(f => f.id === figure.id);
+  if (!f || f.revision !== figure.revision) throw new Error('Figur wurde inzwischen geändert. Bitte neu laden.');
+  await permission(folder.handle);
+  return f.videos.map(record => ({ ...record, load: () => readFolderVideo(folder, f, record) }));
+}
 export async function figureVideos(figure, repair = false) {
   if (!figure.storageFolder) return app.figureVideos(figure);
   const folder = await folderFor(figure), f = folder.library.figures.find(f => f.id === figure.id);
