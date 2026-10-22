@@ -40,6 +40,10 @@ test('bounded metadata rejects invalid types and missing video entries', async (
 });
 test('checksum matches standard CRC32; canceled exports stop', async () => {
  assert.equal(await checksum(new Blob(['123456789'])), 0xcbf43926);
+ const multiChunk = new Blob([Uint8Array.from({length:2*1048576+17},(_,i)=>i%251)]);
+ assert.equal(await checksum(multiChunk), 2218964564);
+ const during = new AbortController(); setTimeout(() => during.abort(), 0);
+ await assert.rejects(checksum(multiChunk, during.signal), {name:'AbortError'});
  const controller = new AbortController(); controller.abort(); await assert.rejects(exportFigure(figure, records, controller.signal), { name: 'AbortError' });
 });
 test('filename removes unsafe path characters', () => { assert.equal(packageFilename('../Salsa / Figur?'), 'Salsa  Figur.zip'); assert.equal(packageFilename('💃'), 'Salsa-Figur.zip'); });

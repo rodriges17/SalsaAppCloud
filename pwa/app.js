@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-22-own-download-v1';
+const APP_VERSION = '2026-10-22-saving-v1';
 import { initBackup } from './backup-ui.js';
 import { initCloud, openCloud } from './cloud.js';
 import { exportFigure, importFigure, packageSize, packageFilename, MAX_PACKAGE_BYTES } from './package.js';
@@ -16,10 +16,12 @@ const channel = 'BroadcastChannel' in window ? new BroadcastChannel(`salsa-train
 const loop = new ABLoop();
 let playIntent = false, wakeLock = null;
 const video = $('learningVideo');
-const brandHeading = document.querySelector('.overview > .heading');
-if (brandHeading && 'ResizeObserver' in window) {
-  const measure = () => document.documentElement.style.setProperty('--brand-header-height', `${brandHeading.getBoundingClientRect().height}px`);
-  new ResizeObserver(measure).observe(brandHeading); measure();
+if ('ResizeObserver' in window) {
+  for (const [selector, variable] of [['.overview > .heading', '--brand-header-height'], ['.page-intro', '--overview-intro-height'], ['.overview-filters', '--overview-filters-height']]) {
+    const row = document.querySelector(selector); if (!row) continue;
+    const measure = () => document.documentElement.style.setProperty(variable, `${row.getBoundingClientRect().height}px`);
+    new ResizeObserver(measure).observe(row); measure();
+  }
 }
 
 
@@ -145,7 +147,7 @@ $('addChoiceDialog').addEventListener('click', event => {
 });
 $('addFigure').onclick = () => { $('addChoiceDialog').close(); openEditor(); };
 function updateSave() { $('saveFigure').disabled = !editor || editor.busy || !$('figureTitle').value.trim() || !editor.drafts.length || editor.drafts.some(d => !d.confirmed); }
-function setBusy(value) { editor.busy = value; $('editorFields').disabled = value; $('editorBack').disabled = value; $('saveProgress').hidden = !value; updateSave(); }
+function setBusy(value) { editor.busy = value; $('editorFields').disabled = value; $('editorBack').disabled = value; $('saveProgress').hidden = !value; $('saveIndicator').hidden = !value; updateSave(); }
 $('editorForm').addEventListener('input', updateSave);
 function chooseFiles(replacing = null) { if (!editor || editor.busy) return; editor.replacing = replacing; $('videoFiles').multiple = !replacing; $('videoFiles').value = ''; $('videoFiles').click(); }
 $('pickVideos').onclick = () => chooseFiles();
@@ -187,6 +189,8 @@ $('editorForm').addEventListener('submit', async event => {
   event.preventDefault(); if (!editor || editor.busy || $('saveFigure').disabled) return;
   const active = editor; setError('editorError', null); setBusy(true);
   try {
+    // Paint the saving state before starting video copies and verification.
+    await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
     await saveFigure({ id: active.id, ...formValue(), importFingerprint: active.importFingerprint, storageFolder: active.storageFolder }, active.drafts, active.revision);
     changed(); await refresh();
     if (editor === active) { active.allowClose = true; setBusy(false); history.back(); toast('Figur lokal gespeichert.'); }

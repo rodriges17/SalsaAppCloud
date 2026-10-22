@@ -11,7 +11,7 @@ export async function checksum(blob, signal) {
   let crc = 0xffffffff;
   for (let offset = 0; offset < blob.size; offset += 1048576) {
     check(signal); const bytes = new Uint8Array(await blob.slice(offset, offset + 1048576).arrayBuffer());
-    for (const byte of bytes) crc = table[(crc ^ byte) & 255] ^ (crc >>> 8);
+    for (let i = 0; i < bytes.length; i++) crc = table[(crc ^ bytes[i]) & 255] ^ (crc >>> 8);
     await new Promise(resolve => setTimeout(resolve, 0));
   }
   check(signal); return (crc ^ 0xffffffff) >>> 0;

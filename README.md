@@ -120,3 +120,7 @@ Optionale lokale Ordnerbibliothek: [Bedienung, Wiederherstellung und Grenzen](GE
 Lokale Sicherung inklusive Videos und Lernständen: [Bedienung und Wiederherstellung](BACKUP.md). Das vollständige Backup ist vom Figur-ZIP-Austausch getrennt.
 
 Eigene Cloud-Figuren lassen sich mit „Lokal übernehmen“ direkt und ohne Bibliothekszuordnung herunterladen. Neueste Version und ältere Versionen unterstützen Videoauswahl und bestätigte Vorschau. Bereits übernommene Auswahlen werden als lokal vorhanden markiert; bei passenden lokalen Figuren stehen Ersetzen, separate Kopie und Abbrechen zur Wahl. Ersetzen behält Lernstatus und Speicherort und schreibt erst nach dem Speichern.
+
+Beim lokalen Speichern werden Prüfsummen mit einer schnelleren indizierten Schleife berechnet. Der Speicherstatus und ein unbestimmter Fortschrittsbalken werden vor dem Kopieren sichtbar. Videokopien werden weiterhin vollständig geprüft.
+
+Suche und Lernstand-/Tagfilter bleiben beim Scrollen unter dem festen Markenheader und Seitentitel sichtbar. Die Positionen folgen den gemessenen Zeilenhöhen.

@@ -96,3 +96,18 @@ test('add sheet stays reachable after scrolling, works in both themes and restor
  await page.setViewportSize({width:320,height:650});await add.tap();expect(await page.locator('#addChoiceDialog').evaluate(node=>node.scrollWidth<=node.clientWidth)).toBe(true);await page.locator('#closeAddChoice').tap();
  await page.setViewportSize({width:740,height:360});await add.tap();await expect(page.locator('#importFigure')).toBeInViewport();
 });
+
+test('search and filters stay fixed below the header while figures scroll',async({page},info)=>{
+ await start(page);await seed(page);
+ await page.locator('#figureList').evaluate(list=>{for(let i=0;i<20;i++){const row=document.createElement('article');row.className='figure-card';row.style.minHeight='100px';row.textContent='Weitere Figur '+i;list.append(row);}});
+ await page.evaluate(()=>window.scrollTo(0,600));
+ for(const theme of ['dark','light']){
+  await page.evaluate(t=>window.stepAppearance.set(t),theme);
+  const header=await page.locator('.overview>.heading').boundingBox(),intro=await page.locator('.page-intro').boundingBox(),filters=await page.locator('.overview-filters').boundingBox();
+  expect(Math.abs(filters.y-(intro.y+intro.height))).toBeLessThan(1);expect(header.y).toBe(0);
+  await expect(page.locator('#search')).toBeInViewport();await expect(page.locator('#statusFilters')).toBeInViewport();await expect(page.locator('#tagsButton')).toBeInViewport();
+  await page.screenshot({path:info.outputPath(`${theme}-fixed-search-filters.png`)});
+ }
+ await page.locator('#search').fill('Drehung');await expect(page.locator('.figure-card')).toHaveCount(1);
+ await page.getByRole('button',{name:'Sitzt',exact:true}).tap();await expect(page.locator('.figure-card')).toHaveCount(0);await expect(page.locator('#search')).toBeInViewport();
+});

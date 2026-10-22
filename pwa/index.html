@@ -44,7 +44,7 @@
         <input id="videoFiles" class="sr-only" type="file" accept="video/*,.mov,.mp4,.m4v" multiple tabindex="-1">
         <p class="small muted">Aus Fotos oder Dateien wählen. Neue Videos zuerst in der Vorschau bestätigen. Die Originale bleiben unverändert.</p>
       </fieldset>
-      <footer class="save-footer"><p id="editorError" class="error" role="alert" hidden></p><p id="saveProgress" role="status" hidden>Videos werden lokal gespeichert …</p><button id="saveFigure" class="primary" type="submit" disabled>Figur speichern</button></footer>
+      <footer class="save-footer"><p id="editorError" class="error" role="alert" hidden></p><p id="saveProgress" role="status" hidden>Figur inkl. Video(s) werden gespeichert...</p><progress id="saveIndicator" aria-label="Figur wird gespeichert" style="width:100%" hidden></progress><button id="saveFigure" class="primary" type="submit" disabled>Figur speichern</button></footer>
     </form>
   </dialog>
   <dialog id="preview" class="screen-dialog preview-dialog">
