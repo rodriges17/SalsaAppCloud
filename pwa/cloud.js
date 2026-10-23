@@ -155,9 +155,14 @@ function libraryForm(lib = null) {
 async function libraryView(id, detail) {
   const lib = detail.library;
   const intro = section(lib.title); intro.append(node('p', lib.description));
-  const share = new URL(location.href); share.hash = ''; share.search = ''; share.searchParams.set('library', id);
+  // Share the public entry point, never this WebView's internal or preview URL.
+  const share = new URL('https://rodriges17.github.io/SalsaAppCloud/'); share.searchParams.set('library', id);
   const link = field(intro, 'Bibliothekslink', share.href); link.readOnly = true;
-  intro.append(action('Link kopieren', () => navigator.clipboard.writeText(link.value).catch(() => { link.select(); report(new Error('Bitte den markierten Link kopieren.')); })));
+  intro.append(action('Link kopieren', async () => {
+    try { await navigator.clipboard.writeText(link.value); }
+    catch { link.focus(); link.select(); report(new Error('Bitte den markierten Link kopieren.')); }
+  }));
+  if (lib.visibility === 'private') intro.append(node('p', 'Zum Öffnen sind Anmeldung und Bibliotheksberechtigung erforderlich.'));
   if (lib.visibility === 'public') intro.append(node('p', 'Figuren ohne Zustimmung zur öffentlichen Veröffentlichung bleiben für Lesende verborgen.'));
   for (const entry of detail.entries) {
     const box = section(entry.published?.title ?? entry.pending?.title ?? 'Figur ohne veröffentlichte Version');

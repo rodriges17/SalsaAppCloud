@@ -1,5 +1,5 @@
 // The same behavior contract runs against the PWA and the bundled Android UI.
-export const PARITY_CASES = ['zip-save-feedback', 'menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change', 'cloud-cache-frame-reuse'];
+export const PARITY_CASES = ['library-share-links', 'zip-save-feedback', 'menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change', 'cloud-cache-frame-reuse'];
 export async function runParityCase(page, { root, fixture, native = false, scenario, consoleErrors = [], browserName = 'chromium' }) {
  const assert = (value, message) => { if (!value) throw new Error(message); };
  const frame = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -14,6 +14,45 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   },{root,fixture,count,fingerprint});
   await page.waitForFunction(count=>document.querySelectorAll('.figure-card').length===count,count);
  };
+ if(scenario==='library-share-links'){
+  const libraries=[{id:'4a1bc1f6-1623-42d5-bade-f9e625f408b2',title:'Öffentlich',visibility:'public'},{id:'privat & Tanz/Üben',title:'Privat',visibility:'private'}];
+  const calls=[];
+  await page.evaluate(root=>{
+   const scope=new URL(root,location.href).pathname;
+   localStorage.setItem(`salsa-cloud-session:${scope}:v1`,JSON.stringify({access_token:'link-test',refresh_token:'link-refresh',expires_at:Date.now()+3600000}));
+   Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async value=>{window.copiedLibraryLink=value;}}});
+   history.replaceState(history.state,'',location.pathname+'?token_hash=must-not-share#access_token=private-token');
+  },root);
+  await page.route('**/functions/v1/cloud',route=>{
+   const {action,payload}=route.request().postDataJSON();calls.push(action);let data={ok:true};
+   if(action==='state')data={me:{id:'link-user',email:'links@example.test',used:0,quota:500000000,upload_enabled:false},libraries,own_figures:[]};
+   if(action==='library')data={library:{...libraries.find(lib=>lib.id===payload.id),description:'Link-Test'},entries:[],members:[],manage:false,contribute:false};
+   return route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
+  });
+  await page.locator('#cloudButton').click();await page.getByRole('button',{name:'Bibliotheken',exact:true}).click();
+  for(let index=0;index<libraries.length;index++){
+   await page.getByRole('button',{name:'Öffnen',exact:true}).nth(index).click();
+   const field=page.getByRole('textbox',{name:'Bibliothekslink',exact:true});await field.waitFor();
+   const value=await field.inputValue(),link=new URL(value);
+   assert(link.origin==='https://rodriges17.github.io'&&link.pathname==='/SalsaAppCloud/','Library link uses an internal, test or preview address');
+   assert(link.searchParams.get('library')===libraries[index].id&&[...link.searchParams.keys()].length===1&&!link.hash,'Library link leaks unrelated login data or corrupts the ID');
+   assert(!value.includes('must-not-share')&&!value.includes('appassets.androidplatform.net'),'Internal/login data leaked');
+   if(!index)assert(value==='https://rodriges17.github.io/SalsaAppCloud/?library=4a1bc1f6-1623-42d5-bade-f9e625f408b2','Public UUID link differs from canonical address');
+   const hint=page.getByText('Zum Öffnen sind Anmeldung und Bibliotheksberechtigung erforderlich.',{exact:true});
+   assert(await hint.count()===(index?1:0),'Private library permission hint is missing or shown for public library');
+   await page.getByRole('button',{name:'Link kopieren',exact:true}).click();await page.waitForFunction(expected=>window.copiedLibraryLink===expected,value);
+   if(!index){
+    await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:undefined}));
+    await page.getByRole('button',{name:'Link kopieren',exact:true}).click();
+    await page.waitForFunction(()=>!document.querySelector('#cloudError').hidden);
+    assert((await page.locator('#cloudError').textContent()).includes('Bitte den markierten Link kopieren.'),'Missing clipboard API has no manual-copy fallback');
+    assert(await field.evaluate(input=>input.selectionStart===0&&input.selectionEnd===input.value.length),'Fallback did not select the canonical link');
+    await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async value=>{window.copiedLibraryLink=value;}}}));
+   }
+   await page.getByRole('button',{name:'Bibliotheken',exact:true}).click();await page.getByRole('button',{name:'Öffnen',exact:true}).first().waitFor();
+  }
+  assert(calls.every(action=>['state','cleanup','library'].includes(action)),'Sharing unexpectedly changes library permissions');
+ }
  if(scenario==='zip-save-feedback'){
   await seed();await page.locator('.card-options').click();await page.getByRole('button',{name:'Figur teilen',exact:true}).click();
   await page.evaluate(()=>{const original=Blob.prototype.arrayBuffer;window.releaseZip=null;Blob.prototype.arrayBuffer=function(){Blob.prototype.arrayBuffer=original;return new Promise(resolve=>window.releaseZip=()=>resolve(original.call(this)));};});
