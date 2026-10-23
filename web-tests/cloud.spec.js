@@ -358,6 +358,15 @@ test('older cloud version has its own download and can create a separate copy of
  await start(page);const before=await seedCloudLocal(page,{title:'Mein anderer Name',fingerprint:'cloud:latest:video-latest'});
  await page.locator('#cloudButton').tap();await expect(page.getByRole('button',{name:'✓ Lokal vorhanden',exact:true})).toBeDisabled();
  await expect(page.locator('.cloud-local-status').first()).toHaveText('✓ Bereits lokal vorhanden');
+ for(const theme of ['dark','light']){
+  await page.evaluate(theme=>window.stepAppearance.set(theme),theme);
+  const contrast=await page.locator('.cloud-local-status').first().evaluate(element=>{
+   const luminance=color=>color.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>v/255).map(v=>v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[0.2126,0.7152,0.0722][i],0);
+   const style=getComputedStyle(element),a=luminance(style.color),b=luminance(style.backgroundColor);
+   return (Math.max(a,b)+0.05)/(Math.min(a,b)+0.05);
+  });expect(contrast).toBeGreaterThanOrEqual(4.5);
+ }
+
  await page.locator('.cloud-history summary').tap();const older=page.locator('.cloud-history article').nth(1);
  await older.getByRole('button',{name:'Lokal übernehmen',exact:true}).tap();await page.locator('#cloudImportConflict').getByRole('button',{name:'Als neue Figur speichern',exact:true}).tap();
  await expect(page.locator('#figureStatus')).toHaveValue('Neu');await finishCloudImport(page);
