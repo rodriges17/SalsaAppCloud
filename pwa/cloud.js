@@ -209,6 +209,8 @@ function revisionCard(parent, rev, label) {
 function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}) {
   if (!rev.videos.length) return;
   const chosen = [], multiple = rev.videos.length > 1;
+  const localStatus = node('p', '', 'cloud-local-status'); localStatus.hidden = true; localStatus.setAttribute('role', 'status');
+  box.firstElementChild?.after(localStatus);
   if (multiple) box.append(node('h4', 'Videos zum Herunterladen auswählen'));
   for (const v of rev.videos) {
     const label = `${v.name || 'Video'} · ${MB(v.size)}`;
@@ -219,7 +221,7 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
   }
   const fingerprint = selected => `cloud:${rev.id}:${selected.map(v => v.id).join(',')}`;
   const label = own ? 'Lokal übernehmen' : multiple ? 'Ausgewählte Videos in meine Figuren übernehmen' : 'In meine Figuren übernehmen';
-  const take = action(label, () => run('Videos herunterladen …', async () => {
+  const download = () => run('Videos herunterladen …', async () => {
     const selected = chosen.filter(([check]) => !check || check.checked).map(([, v]) => v);
     if (!selected.length) throw new Error('Bitte mindestens ein Video auswählen.');
     if (selected.reduce((n, v) => n + v.size, 0) > 250 * 1024 * 1024) throw new Error('Bitte weniger Videos wählen: maximal 250 MB pro Übernahme.');
@@ -235,14 +237,24 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
     const imported = { title: rev.title, description: rev.description, tags: rev.tags, fingerprint: fingerprint(selected), drafts };
     // Leave the busy state before opening the local editor.
     busy = false; close(); await hooks.imported(imported, target.figure);
-  }));
+  });
+  const take = action(label, download);
+  // Keep recovery available when files were removed or modified outside the app.
+  const repair = action('Lokale Kopie erneut herunterladen', download); repair.className = 'subtle'; repair.hidden = true;
   if (own) take.className = 'primary';
-  box.append(take);
+  box.append(take, repair);
   const update = () => {
     const selected = chosen.filter(([check]) => !check || check.checked).map(([, v]) => v);
-    const exists = localFigures.some(f => f.importFingerprint === fingerprint(selected));
-    take.textContent = exists ? 'Erneut lokal übernehmen' : label; take.disabled = false;
-    take.title = exists ? 'Diese Version wurde schon übernommen. Die lokale Kopie kann ersetzt oder separat gespeichert werden.' : '';
+    const prefix = `cloud:${rev.id}:`;
+    const selections = localFigures.filter(f => f.importFingerprint?.startsWith(prefix))
+      .map(f => new Set(f.importFingerprint.slice(prefix.length).split(',')));
+    const exists = selected.length > 0 && selections.some(ids => selected.every(v => ids.has(v.id)));
+    const complete = selections.some(ids => rev.videos.every(v => ids.has(v.id)));
+    localStatus.hidden = !selections.length;
+    localStatus.textContent = complete ? '✓ Bereits lokal vorhanden' : '✓ Teilweise lokal vorhanden';
+    take.textContent = exists ? '✓ Lokal vorhanden' : label; take.disabled = exists;
+    repair.hidden = !exists;
+    take.title = exists ? 'Die ausgewählten Videos dieser Version sind bereits in deinen lokalen Figuren vorhanden.' : '';
   };
   chosen.forEach(([check]) => { if (check) check.onchange = update; }); localUpdates.push(update); update();
 }

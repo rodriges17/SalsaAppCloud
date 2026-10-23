@@ -152,7 +152,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
    await picker.setFiles({name:'Geändert.mp4',mimeType:'video/mp4',buffer:Buffer.concat([bytes,Buffer.from([0,0,0,0])])});
    await page.waitForFunction(()=>!document.querySelector('#acceptVideo').disabled);await page.locator('#acceptVideo').click();await page.locator('#saveFigure').click();await page.waitForFunction(()=>!document.querySelector('#editor').open);
   }
-  await page.locator('#cloudButton').click();const again=page.getByRole('button',{name:'Erneut lokal übernehmen',exact:true});await again.waitFor();assert(await again.isEnabled(),'Cloud recovery is disabled');
+  await page.locator('#cloudButton').click();const again=page.getByRole('button',{name:'Lokale Kopie erneut herunterladen',exact:true});await again.waitFor();assert(await again.isEnabled(),'Cloud recovery is disabled');
   await again.click();await page.locator('#cloudImportConflict').getByRole('button',{name:'Abbrechen',exact:true}).click();assert(await page.locator('#cloudDialog').isVisible(),'Cancelling repair closed cloud');
   await again.click();await page.locator('#cloudImportConflict').getByRole('button',{name:'Vorhandene Figur ersetzen',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#editor').open);
   assert(await page.locator('#figureStatus').inputValue()==='Sitzt','Repair lost learning status');

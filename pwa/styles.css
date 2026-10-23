@@ -204,3 +204,6 @@ html{scroll-padding-top:calc(var(--brand-header-height,73px) + var(--overview-in
 @media(prefers-reduced-motion:reduce){.transfer-status.is-busy::before{animation:none;border-style:dotted}}
 
 .editor-loading{flex-shrink:0;margin:12px 20px;padding:14px 16px;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
+
+/* Local availability belongs to the cloud figure, separate from publication consent. */
+.cloud-card .cloud-local-status,.cloud-revision .cloud-local-status,.version-entry .cloud-local-status{justify-self:start;display:inline-flex;align-items:center;width:fit-content;max-width:100%;margin:0;padding:4px 10px;border-radius:999px;background:var(--success);color:var(--bg);font-size:13px;font-weight:650;line-height:1.4}
