@@ -55,16 +55,17 @@ export async function selectDirectory() {
 }
 export const hydrateFolder = (f, folderId) => ({ ...f, storageFolder: folderId, videoIds: f.videos.map(v => v.id), poster: f.posterBytes ? new Blob([new Uint8Array(f.posterBytes)], { type: 'image/jpeg' }) : null });
 const verifiedDrafts = new WeakMap();
-export async function readFolderVideo(folder, figure, record) {
+export async function readFolderVideo(folder, figure, record, signal) {
   try {
     await permission(folder.handle);
     const media = await folder.handle.getDirectoryHandle('media');
     const file = await (await media.getFileHandle(record.file)).getFile();
-    if (file.size !== record.size || await checksum(file) !== record.crc) throw new Error('Video wurde außerhalb der App verändert.');
+    signal?.throwIfAborted();
+    if (file.size !== record.size || await checksum(file, signal) !== record.crc) throw new Error('Video wurde außerhalb der App verändert.');
     const blob = file.slice(0, file.size, record.type);
     verifiedDrafts.set(blob, { folder: folder.id, figure: figure.id, revision: figure.revision, file: record.file, crc: record.crc, size: file.size, modifiedAt: file.lastModified });
     return { ...record, modifiedAt: file.lastModified ?? record.modifiedAt, figureId: figure.id, storageFolder: folder.id, blob, poster: record.posterBytes ? new Blob([new Uint8Array(record.posterBytes)], { type: 'image/jpeg' }) : null };
-  } catch (e) { throw new Error(`„${record.name || 'Video'}“ nicht verfügbar: ${e.message} Ordner erneut verbinden oder die Figur bearbeiten und das Video ersetzen.`); }
+  } catch (e) { if (e.name === 'AbortError') throw e; throw new Error(`„${record.name || 'Video'}“ nicht verfügbar: ${e.message} Ordner erneut verbinden oder die Figur bearbeiten und das Video ersetzen.`); }
 }
 // File-system-specific staging preserves files referenced by the on-disk
 // catalog even if closing a catalog writer reports an ambiguous failure.

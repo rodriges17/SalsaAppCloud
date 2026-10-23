@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-23-cloud-read-state-v1';
+const APP_VERSION = '2026-10-23-figure-media-v1';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';
@@ -6,7 +6,7 @@ import { initCloud, openCloud } from './cloud.js';
 import { importFigure } from './package.js';
 import { checksum } from './package.js';
 import { STATUSES, cleanTags, timeLabel, filterFigures, ABLoop } from './logic.js';
-import { listFigures, figureVideos, playerVideos, saveFigure, deleteFigure, storageMessage, cleanupInterruptedImports, folderSupported, storageSettings, chooseFolder, connectFolder, allowFolderAccess, setStorageFolder, transferFigure } from './storage.js';
+import { listFigures, figureVideos, figureMedia, saveFigure, deleteFigure, storageMessage, cleanupInterruptedImports, folderSupported, storageSettings, chooseFolder, connectFolder, allowFolderAccess, setStorageFolder, transferFigure } from './storage.js';
 
 const $ = id => document.getElementById(id);
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
@@ -138,9 +138,9 @@ function draftSignature(drafts) { return JSON.stringify(drafts.map(d => ({ id: d
 function isDirty() { return editor && (JSON.stringify(formValue()) !== editor.initialForm || draftSignature(editor.drafts) !== editor.initialDrafts); }
 async function openEditor(figure = null, imported = null) {
   if (opening || editor || learning) return; opening = true;
+  let active;
   try {
-    const records = figure && !imported ? await figureVideos(figure, true) : [];
-    editor = { id: figure?.id ?? crypto.randomUUID(), revision: figure?.revision ?? null, storageFolder: figure?.storageFolder, drafts: records.map(r => ({ ...r, existing: !r.missing, confirmed: !r.missing })), busy: false, allowClose: false, replacing: null, reviewAll: false };
+    editor = { id: figure?.id ?? crypto.randomUUID(), revision: figure?.revision ?? null, storageFolder: figure?.storageFolder, drafts: [], busy: false, loading: !!figure && !imported, loadFailed: false, controller: new AbortController(), allowClose: false, replacing: null, reviewAll: false };
     $('figureTitle').value = figure?.title ?? ''; $('figureDescription').value = figure?.description ?? '';
     $('figureStatus').value = figure?.status ?? 'Neu'; $('figureTags').value = figure?.tags.join(', ') ?? '';
     editor.initialForm = JSON.stringify(formValue()); editor.initialDrafts = draftSignature(editor.drafts);
@@ -152,8 +152,26 @@ async function openEditor(figure = null, imported = null) {
       $('figureTags').value = imported.tags.join(', '); $('figureStatus').value = figure?.status ?? 'Neu';
     }
     $('editorHeading').textContent = figure ? 'Figur bearbeiten' : 'Figur hinzufügen'; setError('editorError', null);
-    renderDrafts(); setBusy(false); $('editor').showModal(); pushRoute('editor'); $('figureTitle').focus();
-  } catch (error) { toast(storageMessage(error)); } finally { opening = false; }
+    active = editor;
+    renderDrafts(); setBusy(false); setEditorLoading(active.loading); $('editor').showModal(); pushRoute('editor');
+    opening = false;
+    if (!active.loading) { $('figureTitle').focus(); return; }
+    $('editorBack').focus();
+    // Paint the editor and its spinner before starting video verification.
+    await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+    if (editor !== active) return;
+    const loaded = await figureVideos(figure, true, { signal: active.controller.signal, progress: ({ done, total }) => {
+      if (editor === active) $('editorLoading').textContent = `Videos werden geladen und geprüft … ${done} von ${total}`;
+    } });
+    if (editor !== active) return;
+    active.drafts = loaded.map(r => ({ ...r, existing: !r.missing, confirmed: !r.missing }));
+    active.initialDrafts = draftSignature(active.drafts);
+    renderDrafts(); setEditorLoading(false); $('figureTitle').focus();
+  } catch (error) {
+    if (editor === active && error.name !== 'AbortError') {
+      active.loadFailed = true; setEditorLoading(false); setError('editorError', storageMessage(error));
+    }
+  } finally { if (!active || editor === active) opening = false; }
 }
 $('openAddFigure').onclick = () => $('addChoiceDialog').showModal();
 $('closeAddChoice').onclick = () => $('addChoiceDialog').close();
@@ -166,10 +184,19 @@ $('addChoiceDialog').addEventListener('click', event => {
   if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) $('addChoiceDialog').close();
 });
 $('addFigure').onclick = () => { $('addChoiceDialog').close(); openEditor(); };
-function updateSave() { $('saveFigure').disabled = !editor || editor.busy || !$('figureTitle').value.trim() || !editor.drafts.length || editor.drafts.some(d => !d.confirmed); }
-function setBusy(value) { editor.busy = value; $('editorFields').disabled = value; $('editorBack').disabled = value; $('saveProgress').hidden = !value; $('saveIndicator').hidden = !value; updateSave(); }
+function updateSave() { $('saveFigure').disabled = !editor || editor.busy || editor.loading || editor.loadFailed || !$('figureTitle').value.trim() || !editor.drafts.length || editor.drafts.some(d => !d.confirmed); }
+function setBusy(value) { editor.busy = value; $('editorFields').disabled = value || editor.loading || editor.loadFailed; $('editorBack').disabled = value; $('saveProgress').hidden = !value; $('saveIndicator').hidden = !value; updateSave(); }
+function setEditorLoading(value) {
+  editor.loading = value;
+  $('editorLoading').hidden = !value;
+  $('editorLoading').classList.toggle('is-busy', value);
+  $('editorLoading').textContent = value ? 'Videos werden geladen und geprüft …' : '';
+  $('editorForm').setAttribute('aria-busy', String(value));
+  $('editorFields').disabled = value || editor.busy || editor.loadFailed;
+  updateSave();
+}
 $('editorForm').addEventListener('input', updateSave);
-function chooseFiles(replacing = null) { if (!editor || editor.busy) return; editor.replacing = replacing; $('videoFiles').multiple = !replacing; $('videoFiles').value = ''; $('videoFiles').click(); }
+function chooseFiles(replacing = null) { if (!editor || editor.busy || editor.loading || editor.loadFailed) return; editor.replacing = replacing; $('videoFiles').multiple = !replacing; $('videoFiles').value = ''; $('videoFiles').click(); }
 $('pickVideos').onclick = () => chooseFiles();
 $('videoFiles').addEventListener('cancel', () => { if (editor) editor.replacing = null; });
 $('videoFiles').addEventListener('change', () => {
@@ -216,7 +243,7 @@ $('editorForm').addEventListener('submit', async event => {
     if (editor === active) { active.allowClose = true; setBusy(false); history.back(); toast('Figur lokal gespeichert.'); }
   } catch (error) { if (editor === active) { setBusy(false); setError('editorError', storageMessage(error)); } }
 });
-function cleanupEditor() { $('editor').close(); editor = null; $('videoFiles').value = ''; }
+function cleanupEditor() { editor?.controller.abort(); $('editor').close(); editor = null; $('videoFiles').value = ''; }
 
 const previewVideo = $('previewVideo');
 function openPreview(draft, replacing = null) {
@@ -280,7 +307,7 @@ window.addEventListener('beforeunload', event => { if (editor && (editor.busy ||
 async function openPlayer(figure) {
   if (opening || editor || learning) return; opening = true;
   try {
-    const records = await playerVideos(figure);
+    const records = await figureMedia(figure, { verifyAccess: true });
     learning = { figure, records, index: 0, crop: false, landscape: false, fullLoop: false, speed: 1 };
     loop.clear(); $('playerTitle').textContent = figure.title; $('playerDescription').textContent = figure.description;
     $('playerVideoChoice').replaceChildren(); records.forEach((record, index) => { const option = el('option', '', record.name || `Video ${index + 1}`); option.value = String(index); $('playerVideoChoice').append(option); });
@@ -299,16 +326,10 @@ async function loadPlayerVideo(index, autoplay) {
   $('seek').value = '0'; $('position').textContent = '0:00'; $('duration').textContent = timeLabel(learning.records[index].duration);
   $('playPause').textContent = '▶'; $('playPause').setAttribute('aria-label', 'Abspielen');
   try {
-    if (!record.blob) {
-      record.pending ??= record.load();
-      const loaded = await record.pending;
-      record.blob = loaded.blob;
-      record.pending = null;
-    }
+    const loaded = await record.load();
     if (learning !== active || request !== playerLoad) return;
-    videoURL = URL.createObjectURL(record.blob); video.src = videoURL; video.playbackRate = active.speed; video.load();
+    videoURL = URL.createObjectURL(loaded.blob); video.src = videoURL; video.playbackRate = active.speed; video.load();
   } catch (error) {
-    record.pending = null;
     if (learning !== active || request !== playerLoad) return;
     playIntent = false; $('videoLoading').hidden = true;
     setError('playerError', storageMessage(error));

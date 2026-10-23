@@ -114,23 +114,61 @@ async function folderFor(figure) {
   const folder = await entries(figure.storageFolder); if (!folder) throw new Error('Ordner erneut verbinden.');
   return folder;
 }
-// Playback needs the selected video only. Editing/export/backup retain full verification.
-export async function playerVideos(figure) {
-  if (!figure.storageFolder) return app.figureVideos(figure);
-  const folder = await folderFor(figure), f = folder.library.figures.find(f => f.id === figure.id);
-  if (!f || f.revision !== figure.revision) throw new Error('Figur wurde inzwischen geändert. Bitte neu laden.');
-  await permission(folder.handle);
-  return f.videos.map(record => ({ ...record, load: () => readFolderVideo(folder, f, record) }));
+// A media session owns lazy reads, concurrent requests and retry. Its cache
+// lasts only for this view; a newly opened view verifies folder bytes again.
+export async function figureMedia(figure, { verifyAccess = false, signal } = {}) {
+  signal?.throwIfAborted();
+  let records, read;
+  if (!figure.storageFolder) {
+    records = await app.figureVideoRecords(figure);
+    read = async record => {
+      const loaded = await app.getVideo(record.id);
+      if (!loaded || loaded.figureId !== figure.id) throw new Error('Eine lokale Videodatei fehlt. Bitte die Figur bearbeiten.');
+      return loaded;
+    };
+  } else {
+    const folder = await folderFor(figure), current = folder.library.figures.find(f => f.id === figure.id);
+    if (!current || current.revision !== figure.revision) throw new Error('Figur wurde inzwischen geändert. Bitte neu laden.');
+    if (verifyAccess) await permission(folder.handle);
+    records = current.videos;
+    read = record => readFolderVideo(folder, current, record, signal);
+  }
+  return records.map(record => {
+    let pending;
+    const load = () => {
+      if (signal?.aborted) return Promise.reject(signal.reason);
+      if (!pending) pending = Promise.resolve().then(() => { signal?.throwIfAborted(); return read(record); }).then(loaded => {
+        signal?.throwIfAborted(); return loaded;
+      }).catch(error => { pending = null; throw error; });
+      return pending;
+    };
+    return { ...record, load, async describe() {
+      // Older app-cache records predate size/type metadata. An explicitly empty
+      // MIME type is valid metadata and does not require reading video bytes.
+      if (record.size != null && typeof record.type === 'string') return { ...record };
+      const loaded = await load();
+      return { ...record, size: loaded.blob.size, type: loaded.blob.type };
+    } };
+  });
 }
-export async function figureVideos(figure, repair = false) {
-  if (!figure.storageFolder) return app.figureVideos(figure);
-  const folder = await folderFor(figure), f = folder.library.figures.find(f => f.id === figure.id);
-  if (!f || f.revision !== figure.revision) throw new Error('Figur wurde inzwischen geändert. Bitte neu laden.');
-  return Promise.all(f.videos.map(async v => {
-    try { return await readFolderVideo(folder, f, v); }
-    catch (e) {
-      if (!repair) throw e;
-      return { ...v, figureId: f.id, storageFolder: folder.id, blob: new Blob(), missing: true, problem: e.message, poster: null };
+// Editing/export/backup require all bytes, including full folder verification.
+export async function figureVideos(figure, repair = false, { signal, progress = () => {} } = {}) {
+  signal?.throwIfAborted();
+  const records = await figureMedia(figure, { signal }); let done = 0;
+  signal?.throwIfAborted();
+  progress({ done, total: records.length });
+  return Promise.all(records.map(async record => {
+    try {
+      signal?.throwIfAborted();
+      const loaded = await record.load(); signal?.throwIfAborted();
+      progress({ done: ++done, total: records.length });
+      return loaded;
+    } catch (error) {
+      signal?.throwIfAborted();
+      if (!repair || !figure.storageFolder) throw error;
+      progress({ done: ++done, total: records.length });
+      const { load, describe, ...metadata } = record;
+      return { ...metadata, figureId: figure.id, storageFolder: figure.storageFolder, blob: new Blob(), missing: true, problem: error.message, poster: null };
     }
   }));
 }

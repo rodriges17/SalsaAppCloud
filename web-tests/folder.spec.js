@@ -157,3 +157,24 @@ test('folder player loads selected media only, ignores late reads and rechecks c
  await expect(page.locator('#playerError')).toContainText('verändert');
  await expect(page.locator('#learningVideo')).not.toHaveAttribute('src',/.+/);
 });
+
+test('folder editor appears before verification and ignores completion after back or reopen',async({page,browserName},info)=>{
+ test.skip(browserName!=='chromium');
+ await enablePicker(page,'editor-loading-'+info.testId.replace(/\W/g,''));await start(page);await choose(page);await seed(page);await page.reload();
+ await expect(page.getByRole('button',{name:'Ordner Ocho lernen',exact:true})).toBeVisible();
+ await page.evaluate(()=>{const original=FileSystemFileHandle.prototype.getFile;window.releaseEditorMedia=[];
+  FileSystemFileHandle.prototype.getFile=async function(){if(/\.(mp4|mov|m4v|webm|ogv|media)$/i.test(this.name))await new Promise(r=>window.releaseEditorMedia.push(r));return original.call(this);};
+ });
+ async function edit(){await page.getByRole('button',{name:'Optionen für Ordner Ocho',exact:true}).tap();await page.getByRole('button',{name:'Bearbeiten',exact:true}).tap();}
+ await edit();await expect(page.locator('#editor')).toBeVisible();await expect(page.locator('#editorLoading')).toBeVisible();
+ await expect(page.locator('#editorLoading')).toHaveClass(/is-busy/);await expect(page.locator('#editorLoading')).toContainText('geladen und geprüft');
+ await expect(page.locator('#figureTitle')).toHaveValue('Ordner Ocho');await expect(page.locator('#figureTitle')).toBeDisabled();await expect(page.locator('#saveFigure')).toBeDisabled();await expect(page.locator('#editorBack')).toBeEnabled();
+ await page.waitForFunction(()=>window.releaseEditorMedia.length===1);
+ await page.screenshot({path:info.outputPath('editor-loading.png')});
+ await page.locator('#editorBack').tap();await expect(page.locator('#editor')).toBeHidden();
+ await edit();await page.waitForFunction(()=>window.releaseEditorMedia.length===2);
+ await page.evaluate(()=>window.releaseEditorMedia[0]());await expect(page.locator('#editorLoading')).toBeVisible();await expect(page.locator('#saveFigure')).toBeDisabled();
+ await page.evaluate(()=>window.releaseEditorMedia[1]());await expect(page.locator('#editorLoading')).toBeHidden();await expect(page.locator('#figureTitle')).toBeEnabled();await expect(page.locator('#saveFigure')).toBeEnabled();
+ await expect(page.locator('#draftVideos .draft-card')).toHaveCount(1);
+ await page.locator('#editorBack').tap();await expect(page.locator('#confirmDialog')).toBeHidden();await expect(page.locator('#editor')).toBeHidden();
+});
