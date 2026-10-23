@@ -14,8 +14,6 @@
 #shareVideos { border: 0; padding: 0; max-height: 35dvh; overflow-y: auto; }
 .share-choice { display: flex; align-items: center; gap: .75rem; padding: .65rem 0; overflow-wrap: anywhere; }
 .share-choice input { width: 1.4rem; height: 1.4rem; flex-shrink: 0; accent-color: var(--lavender); }
-.download-package { display: block; text-align: center; padding: .8rem; border-radius: .8rem; margin-top: .6rem; }
-.download-package[hidden] { display: none; }
 
 #importChoiceDialog input[type=file] { display: block; width: 100%; margin: 16px 0; min-height: 52px; }
 .update-notice { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px; margin: 12px 0; border: 1px solid var(--lavender); border-radius: 12px; }
@@ -194,3 +192,13 @@ html{scroll-padding-top:calc(var(--brand-header-height,73px) + var(--overview-in
 .brand-copy h1{font-size:inherit;font-weight:inherit;line-height:1.15}
 .brand-slogan{font-size:12px;line-height:1.35;font-weight:400;color:var(--muted);letter-spacing:0}
 @media(max-height:540px){.brand-copy{gap:0}.brand-slogan{font-size:10px;line-height:1.2}}
+
+/* Equal-sized ZIP actions and visible feedback from the first tap. */
+.package-actions{display:grid;gap:10px;margin:16px 0}
+.package-actions button{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:48px;border-radius:12px;text-decoration:none}
+.package-actions button[hidden]{display:none}.package-actions svg{width:21px;height:21px;flex:none}
+.transfer-status{font-size:14px;color:var(--lavender);overflow-wrap:anywhere}
+.transfer-status.is-busy{display:flex;align-items:center;gap:10px}
+.transfer-status.is-busy::before{content:"";display:block;width:18px;height:18px;flex:0 0 18px;border:2px solid var(--border);border-top-color:var(--lavender);border-radius:50%;animation:transfer-spin .8s linear infinite}
+@keyframes transfer-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.transfer-status.is-busy::before{animation:none;border-style:dotted}}

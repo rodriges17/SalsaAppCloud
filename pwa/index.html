@@ -77,11 +77,13 @@
     <h2 id="shareTitle">Figur teilen</h2>
     <p>Wähle die Videos. Name, Beschreibung, Tags und Videonamen werden mitgeschickt. Dein Lernstand bleibt bei dir.</p>
     <fieldset id="shareVideos" aria-label="Videos zum Teilen"></fieldset>
-    <p id="shareSize" role="status"></p><p id="shareProgress" role="status" hidden>ZIP wird vorbereitet …</p>
+    <p id="shareSize" role="status"></p><p id="shareProgress" class="transfer-status" role="status" hidden>ZIP wird vorbereitet …</p>
     <p id="shareError" class="error" role="alert" hidden></p>
-    <button id="preparePackage" class="primary">ZIP vorbereiten</button>
-    <button id="sendPackage" class="primary" hidden>ZIP teilen</button>
-    <a id="downloadPackage" class="secondary download-package" hidden>ZIP speichern</a>
+    <div class="package-actions">
+      <button id="preparePackage" class="primary" type="button">ZIP vorbereiten</button>
+      <button id="downloadPackage" class="primary" type="button" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/></svg><span>ZIP speichern</span></button>
+      <button id="sendPackage" class="secondary" type="button" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M5 12v8h14v-8"/></svg><span>ZIP teilen</span></button>
+    </div>
     <p class="small muted">Originalqualität, maximal 250 MB. ZIP in WhatsApp als Dokument senden. Empfänger: Anhang in Dateien speichern → App öffnen → Figur importieren.</p>
     <button id="closeShare" class="secondary">Schließen</button>
   </dialog>

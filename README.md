@@ -126,3 +126,12 @@ Beim lokalen Speichern werden Prüfsummen mit einer schnelleren indizierten Schl
 Suche und Lernstand-/Tagfilter bleiben beim Scrollen unter dem festen Markenheader und Seitentitel sichtbar. Die Positionen folgen den gemessenen Zeilenhöhen.
 
 Der geprüfte gemeinsame Funktionsumfang und die Plattformadapter sind in [docs/FEATURE-PARITY.md](docs/FEATURE-PARITY.md) beschrieben. Die Regressionen vom 22.10.2026 sind korrigiert: reparierbarer Cloud-Reimport, erreichbare Menüs, kompakte Querformat-Übersicht, synchroner Playerzustand und weniger doppelte Medienprüfung.
+
+
+ZIP-Speichern (23.10.2026): Ein eigener Button startet den Speicherort-Dialog,
+wenn der Browser ihn unterstützt; sonst wird der Browser-Download unmittelbar
+im Tippen ausgelöst. Status und Spinner zeigen ZIP-Erstellung und Dateiübergabe.
+Fehler und Abbruch lassen die vorbereitete ZIP zum Wiederholen erhalten.
+„Download angefordert“ bestätigt die Übergabe an den Browser, nicht dessen
+Speicherabschluss. Die native Android-App übergibt Dateien in begrenzten Blöcken an den nativen
+Speichern-/Teilen-Dialog. Lernstände bleiben vom Figur-ZIP ausgeschlossen.

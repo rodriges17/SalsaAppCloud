@@ -1,5 +1,6 @@
-const APP_VERSION = '2026-10-23-brand-slogan-v1';
+const APP_VERSION = '2026-10-23-zip-save-v1';
 import { initBackup } from './backup-ui.js';
+import { saveFile, saveResult } from './file-delivery.js';
 import { initCloud, openCloud } from './cloud.js';
 import { exportFigure, importFigure, packageSize, packageFilename, MAX_PACKAGE_BYTES } from './package.js';
 import { checksum } from './package.js';
@@ -491,42 +492,77 @@ function clearShareFile() {
   if (!sharing) return;
   releaseURL(sharing.url); sharing.url = null; sharing.file = null;
   $('sendPackage').hidden = true; $('downloadPackage').hidden = true;
+  $('shareProgress').hidden = true;
 }
 function updateShare() {
   if (!sharing) return;
   const records = sharing.records.filter(r => sharing.selected.has(r.id));
   const size = packageSize(sharing.figure, records);
   $('shareSize').textContent = `${records.length} Videos · ca. ${(size / 1048576).toFixed(1)} MB / 250 MB`;
-  $('preparePackage').disabled = !!sharing.controller || !records.length || records.length > 100 || size > MAX_PACKAGE_BYTES;
-  $('shareVideos').disabled = !!sharing.controller;
-  $('shareProgress').hidden = !sharing.controller;
+  const busy = !!sharing.controller || !!sharing.delivering;
+  $('preparePackage').disabled = busy || !records.length || records.length > 100 || size > MAX_PACKAGE_BYTES;
+  $('shareVideos').disabled = busy;
+  $('sendPackage').disabled = busy; $('downloadPackage').disabled = busy;
+  $('sendPackage').setAttribute('aria-busy', String(!!sharing.delivering));
+  $('downloadPackage').setAttribute('aria-busy', String(!!sharing.delivering));
+  $('shareProgress').classList.toggle('is-busy', busy);
+  if (busy) $('shareProgress').hidden = false;
+  $('closeShare').disabled = !!sharing.delivering;
   $('preparePackage').hidden = !!sharing.file;
   if (!sharing.file) { $('sendPackage').hidden = true; $('downloadPackage').hidden = true; }
 }
 function closeShare() {
+  if (sharing?.delivering) return;
   sharing?.controller?.abort(); clearShareFile(); sharing = null; $('shareDialog').close();
 }
 $('closeShare').onclick = closeShare;
 $('shareDialog').addEventListener('cancel', event => { event.preventDefault(); closeShare(); });
 $('preparePackage').onclick = async () => {
   const active = sharing; if (!active || active.controller) return;
-  active.controller = new AbortController(); setError('shareError', null); updateShare();
+  active.controller = new AbortController(); setError('shareError', null); $('shareProgress').textContent = 'ZIP inkl. Video(s) wird erstellt …'; updateShare();
   try {
+    await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
     const blob = await exportFigure(active.figure, active.records.filter(r => active.selected.has(r.id)), active.controller.signal);
     if (sharing !== active) return;
     active.file = new File([blob], packageFilename(active.figure.title), { type: 'application/zip' });
-    active.url = URL.createObjectURL(active.file);
-    $('downloadPackage').href = active.url; $('downloadPackage').download = active.file.name;
+    $('shareProgress').textContent = 'ZIP bereit. Jetzt speichern oder teilen.';
     $('downloadPackage').hidden = false;
     $('sendPackage').hidden = !(navigator.share && navigator.canShare?.({ files: [active.file] }));
-  } catch (error) { if (sharing === active && error.name !== 'AbortError') setError('shareError', storageMessage(error)); }
+  } catch (error) { if (sharing === active) { $('shareProgress').textContent = error.name === 'AbortError' ? 'ZIP-Erstellung abgebrochen.' : 'ZIP-Erstellung fehlgeschlagen.'; if (error.name !== 'AbortError') setError('shareError', storageMessage(error)); } }
   finally { if (sharing === active) { active.controller = null; updateShare(); } }
 };
-$('sendPackage').onclick = async () => {
-  if (!sharing?.file) return;
-  try { await navigator.share({ files: [sharing.file] }); }
-  catch (error) { if (error.name !== 'AbortError') setError('shareError', 'Direktes Teilen ist nicht möglich. Bitte ZIP speichern und in WhatsApp als Dokument anhängen.'); }
-};
+function deliverPackage(kind) {
+  const active = sharing; if (!active?.file || active.controller || active.delivering) return;
+  active.delivering = true; setError('shareError', null);
+  $('shareProgress').textContent = kind === 'save' ? 'ZIP wird zum Speichern übergeben …' : 'ZIP wird zum Teilen übergeben …';
+  updateShare();
+  const started = performance.now();
+  let work;
+  try {
+    // Do not yield here: native sharing and the save picker need this click's activation.
+    work = kind === 'save'
+      ? saveFile(active.file, { container: $('shareDialog'), progress: text => { if (sharing === active) $('shareProgress').textContent = text; } })
+      : navigator.share({ files: [active.file] }).then(result => result === 'native' ? 'native' : 'shared');
+  } catch (error) { work = Promise.reject(error); }
+  return Promise.resolve(work).then(result => {
+    if (sharing === active) {
+      $('shareProgress').textContent = kind === 'save' || result === 'native' ? saveResult(result) : 'Datei an die gewählte App übergeben.';
+      if (result === 'download' && !$('sendPackage').hidden) $('shareProgress').textContent += ' Falls keine Datei erscheint, ZIP teilen und eine Dateien-App wählen.';
+    }
+  }).catch(error => {
+    if (sharing !== active) return;
+    $('shareProgress').textContent = error.name === 'AbortError' ? 'Vorgang abgebrochen. Die ZIP bleibt zum erneuten Speichern oder Teilen bereit.' : 'Die ZIP konnte nicht übergeben werden.';
+    if (error.name !== 'AbortError') setError('shareError', kind === 'save'
+      ? 'Speichern fehlgeschlagen. Bitte erneut versuchen oder ZIP teilen und eine Dateien-App wählen. ' + (error.message ?? '')
+      : 'Direktes Teilen ist nicht möglich. Bitte ZIP speichern und in WhatsApp als Dokument anhängen.');
+  }).finally(async () => {
+    // Let the immediate hand-off remain visible even when the browser returns synchronously.
+    await new Promise(resolve => setTimeout(resolve, Math.max(0, 350 - (performance.now() - started))));
+    if (sharing === active) { active.delivering = false; updateShare(); }
+  });
+}
+$('downloadPackage').onclick = () => deliverPackage('save');
+$('sendPackage').onclick = () => deliverPackage('share');
 $('importFigure').onclick = () => {
   if (editor || opening || packageImport) { toast('Bitte zuerst den aktuellen Vorgang beenden.'); return; }
   $('addChoiceDialog').close(); $('packageFile').value = ''; $('importChoiceDialog').showModal();

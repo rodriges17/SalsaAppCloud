@@ -3,6 +3,8 @@ import path from 'node:path';
 
 const clip = path.resolve('web-tests/fixtures/clip.mp4');
 const portrait = path.resolve('web-tests/fixtures/portrait.mp4');
+// Ordinary download tests exercise the fallback; picker behavior is tested separately.
+test.beforeEach(async ({page}) => { await page.addInitScript(() => Object.defineProperty(window, 'showSaveFilePicker', {value:undefined, configurable:true})); });
 async function start(page) {
   await page.goto('/pwa/'); await expect(page.getByRole('heading', { name: 'Step by Step' })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-offline-status','ready', { timeout: 30000 });
@@ -257,12 +259,12 @@ test('installed shell update bypasses stale HTTP CSS and preserves offline video
   await page.locator('#editorBack').tap(); await page.locator('#confirmOK').tap();
   await expect(page.locator('#editor')).not.toBeVisible();
   await page.locator('#applyUpdate').tap();
-  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-23-brand-slogan-v1');
+  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-23-zip-save-v1');
   await expect(page.locator('#importFigure')).toHaveCSS('pointer-events', 'auto');
   await expect(page.locator('.figure-card')).toHaveCount(1);
   const file = await exportPackage(page, info);
   await context.setOffline(true); await page.reload();
-  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-23-brand-slogan-v1');
+  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-23-zip-save-v1');
   await page.getByRole('button', { name: 'Ocho lernen' }).tap();
   await expect(page.locator('#learningVideo')).toHaveJSProperty('videoWidth', 320);
   await page.locator('#playPause').tap();
