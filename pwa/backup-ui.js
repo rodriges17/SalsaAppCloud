@@ -1,12 +1,12 @@
 import * as storage from './storage.js';
 import { createBackupWorkflow } from './backup-workflow.js';
+import { createFileDelivery } from './file-delivery.js';
 const scope = new URL('./', import.meta.url).pathname, LAST = `salsa-last-backup:${scope}:v1`;
 const n = (tag, text, cls) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; };
 const size = bytes => `${(bytes / 1048576).toFixed(1)} MiB`;
 const date = value => new Date(value).toLocaleString('de');
-let dialog, body, status, cancel, close, workflow, hooks, urls = [], rendered = -1, restoreDetails;
+let dialog, body, status, cancel, close, workflow, hooks, delivery, rendered = -1, restoreDetails;
 const action = (label, work) => { const b = n('button', label, 'secondary'); b.type = 'button'; b.onclick = () => Promise.resolve().then(work).catch(error => { status.textContent = error.message; }); return b; };
-function release() { urls.forEach(url => URL.revokeObjectURL(url)); urls = []; }
 function lastCreated() {
   try { const data = JSON.parse(localStorage.getItem(LAST)); return data?.createdAt ? `Zuletzt erstellt am ${date(data.createdAt)} · ${data.parts} Teil(e). Das bestätigt die Erstellung, nicht das Speichern der Downloads.` : 'Noch kein vollständiges Backup erstellt.'; }
   catch { return 'Noch kein vollständiges Backup erstellt.'; }
@@ -22,15 +22,26 @@ function createIntro() {
   return n('p', 'Sichert alle lokalen Figuren aus App-Speicher und verbundenen Geräteordnern, einschließlich Videos, Angaben und Lernständen. Cloud-Inhalte werden nur gesichert, wenn sie lokal übernommen wurden. Anmeldedaten und Ordnerberechtigungen sind nicht enthalten.');
 }
 function renderDownloads(data) {
-  release();
   body.append(n('p', `${data.figures} Figuren wurden vollständig in ${data.parts.length} Teil(e) verpackt. Lade jeden Teil herunter und bewahre die Dateien gemeinsam auf.`));
   data.parts.forEach((part, i) => {
-    const url = URL.createObjectURL(part.blob); urls.push(url);
-    const box = n('section', undefined, 'cloud-card'), label = n('p', 'Noch nicht zum Download angefordert.');
-    const download = n('a', `Teil ${i + 1} von ${data.parts.length} herunterladen`, 'secondary backup-download');
-    download.href = url; download.download = part.name;
-    download.onclick = () => { label.textContent = 'Download angefordert. Bitte im Browser prüfen, ob die Datei gespeichert wurde.'; };
-    box.append(n('p', part.name), n('p', size(part.blob.size)), download, label); body.append(box);
+    const file = new File([part.blob], part.name, { type: part.blob.type || 'application/octet-stream' });
+    const box = n('section', undefined, 'cloud-card'), label = n('p', 'Noch nicht zum Download angefordert.', 'transfer-status');
+    label.setAttribute('role', 'status');
+    const actions = n('div', undefined, 'package-actions');
+    const download = n('button', `Teil ${i + 1} von ${data.parts.length} herunterladen`, 'primary backup-download');
+    download.type = 'button';
+    const deliver = kind => {
+      if (delivery.getState().busy) return;
+      currentDeliveryLabel = label;
+      // Call in the original click, never through the deferred action() helper.
+      return delivery.deliver(file, kind);
+    };
+    download.onclick = () => deliver('save'); actions.append(download);
+    if (delivery.canShare(file)) {
+      const share = n('button', 'Teil teilen', 'secondary'); share.type = 'button';
+      share.onclick = () => deliver('share'); actions.append(share);
+    }
+    box.append(n('p', part.name), n('p', size(part.blob.size)), actions, label); body.append(box);
   });
   try { localStorage.setItem(LAST, JSON.stringify({ createdAt: data.createdAt, parts: data.parts.length })); } catch { /* Download remains usable without bookkeeping. */ }
   updateLast();
@@ -70,6 +81,17 @@ function renderRestore(data) {
   conflicts.prepend(n('p', `${counts.new} neue Figuren · ${counts.identical} identische Figuren · ${counts.conflict} Konflikte. Standard bei vorhandenen Figuren: behalten.`));
   conflicts.append(action('Auswahl wiederherstellen', () => workflow.restore(hooks.confirm))); restoreDetails.append(conflicts);
 }
+let currentDeliveryLabel;
+function renderDelivery(state) {
+  if (currentDeliveryLabel) {
+    currentDeliveryLabel.textContent = [state.message, state.error].filter(Boolean).join(' ');
+    currentDeliveryLabel.classList.toggle('is-busy', state.busy);
+  }
+  body.querySelectorAll('.package-actions button').forEach(button => {
+    button.disabled = state.busy; button.setAttribute('aria-busy', String(state.busy));
+  });
+  close.disabled = state.busy || workflow.getState().busy;
+}
 function render(state) {
   if (state.revision !== rendered) {
     rendered = state.revision;
@@ -95,22 +117,23 @@ function render(state) {
   status.textContent = state.progress ? progressText(state.progress) : state.message;
 }
 function show(title, start) {
-  if (workflow.getState().busy) return;
-  release(); document.getElementById('backupTitle').textContent = title;
+  if (workflow.getState().busy || delivery.getState().busy) return;
+  currentDeliveryLabel = null; delivery.reset(); document.getElementById('backupTitle').textContent = title;
   if (!dialog.open) dialog.showModal();
   start();
 }
 export function initBackup(callbacks) {
   hooks = callbacks; dialog = document.getElementById('backupDialog'); body = document.getElementById('backupBody'); status = document.getElementById('backupStatus'); cancel = document.getElementById('backupCancel'); close = document.getElementById('backupClose');
+  delivery = createFileDelivery({ container: dialog, label: 'Datei', onChange: renderDelivery });
   workflow = createBackupWorkflow(storage, { onChange: render, onStorageChange: async () => { hooks.changed(); await hooks.refresh(); } });
   cancel.onclick = () => workflow.cancel();
   close.onclick = () => {
-    if (!workflow.close()) return;
-    dialog.close(); const old = urls; urls = []; setTimeout(() => old.forEach(url => URL.revokeObjectURL(url)), 30000);
+    if (delivery.getState().busy || !workflow.close()) return;
+    dialog.close(); currentDeliveryLabel = null; delivery.reset();
   };
   dialog.addEventListener('cancel', event => { event.preventDefault(); if (!workflow.getState().busy) close.onclick(); });
   document.getElementById('createBackup').onclick = () => show('Vollständiges Backup erstellen', () => workflow.startCreate());
   document.getElementById('restoreBackup').onclick = () => show('Vollständiges Backup wiederherstellen', () => workflow.startRestore());
   document.getElementById('infoButton').addEventListener('click', updateLast);
-  window.addEventListener('beforeunload', event => { if (workflow.getState().busy) { event.preventDefault(); event.returnValue = ''; } }); updateLast();
+  window.addEventListener('beforeunload', event => { if (workflow.getState().busy || delivery.getState().busy) { event.preventDefault(); event.returnValue = ''; } }); updateLast();
 }

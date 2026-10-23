@@ -1,13 +1,14 @@
 import { test,expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { createBackup,readBackup } from '../pwa/backup-format.js';
+test.beforeEach(async({page})=>{await page.addInitScript(()=>{window.showSaveFilePicker=undefined;});});
 async function start(page){await page.goto('/pwa/');await expect(page.getByRole('heading',{name:'Step by Step',exact:true})).toBeVisible();await expect(page.locator('html')).toHaveAttribute('data-offline-status','ready', { timeout: 30000 });}
 async function seed(page){return page.evaluate(async()=>{const s=await import('/pwa/storage.js'),blob=await(await fetch('/web-tests/fixtures/clip.mp4')).blob();for(let i=0;i<2;i++)await s.saveFigure({id:'backup-source-'+i,title:'Backup '+i,description:'Beschreibung',status:'Am Üben',tags:['Salsa']},[{id:crypto.randomUUID(),name:'Führung',blob:blob.slice(0,blob.size,'video/mp4'),confirmed:true,duration:6,width:320,height:180}]);});}
 async function backupFiles(split=false){const bytes=await readFile('web-tests/fixtures/clip.mp4');const source={figure:{id:'fixture-figure',title:'Backup Ocho',description:'Wiederhergestellt',tags:['Drehung'],status:'Sitzt',createdAt:1700000000000,videoIds:['v'],poster:null},records:[{name:'Führung',blob:new Blob([bytes],{type:'video/mp4'}),duration:6,width:320,height:180,poster:null}]};const result=await createBackup([source],split?{partBytes:32768,chunkBytes:4096}:{});return Promise.all(result.parts.map(async p=>({name:p.name,mimeType:'application/octet-stream',buffer:Buffer.from(await p.blob.arrayBuffer())})));}
 async function restoreDialog(page){await page.locator('#infoButton').tap();await page.getByRole('button',{name:'Backup wiederherstellen',exact:true}).tap();await expect(page.locator('#backupDialog')).toBeVisible();}
 test('backup UI produces a downloadable full archive and reports creation rather than saved files',async({page})=>{
  await start(page);await seed(page);await page.reload();await page.locator('#infoButton').tap();await page.getByRole('button',{name:'Vollständiges Backup erstellen',exact:true}).tap();await expect(page.locator('#backupBody')).toContainText('2 Figuren');await page.getByRole('button',{name:'Backup jetzt erstellen',exact:true}).tap();await expect(page.locator('#backupStatus')).toHaveText('Backup erstellt. Die Dateien sind zum Herunterladen bereit.');
- const download=page.waitForEvent('download');await page.getByRole('link',{name:'Teil 1 von 1 herunterladen',exact:true}).tap();const file=await download;const archive=await readBackup([new Blob([await readFile(await file.path())])]);expect(archive.sources).toHaveLength(2);expect(archive.sources[0].figure.status).toBe('Am Üben');await expect(page.locator('#backupBody')).toContainText('Download angefordert.');await page.locator('#backupClose').tap();await expect(page.locator('#backupLastCreated')).toContainText('nicht das Speichern');
+ const download=page.waitForEvent('download');await page.getByRole('button',{name:'Teil 1 von 1 herunterladen',exact:true}).tap();const file=await download;const archive=await readBackup([new Blob([await readFile(await file.path())])]);expect(archive.sources).toHaveLength(2);expect(archive.sources[0].figure.status).toBe('Am Üben');await expect(page.locator('#backupBody')).toContainText('Download angefordert.');await page.locator('#backupClose').tap();await expect(page.locator('#backupLastCreated')).toContainText('nicht das Speichern');
 });
 test('backup UI checks all parts before restoring and preserves learning state and creation date',async({page})=>{
  await page.addInitScript(()=>{window.showDirectoryPicker=undefined;});await start(page);await restoreDialog(page);const files=await backupFiles(true);expect(files.length).toBeGreaterThan(1);await page.locator('#backupBody input[type=file]').setInputFiles([files[0]]);await expect(page.locator('#backupStatus')).toContainText('Unvollständige Sicherung');expect(await page.evaluate(async()=>(await(await import('/pwa/storage.js')).listFigures()).length)).toBe(0);
@@ -60,10 +61,10 @@ test('backup requests missing folder grants, retries denial and rechecks access 
  await page.evaluate(()=>{window.__backupCancel=false;});await allow.first().tap();await expect(allow).toHaveCount(1);await allow.first().tap();
  await expect(page.locator('#backupBody')).toContainText('2 Figuren');await expect(page.getByRole('button',{name:'Backup jetzt erstellen',exact:true})).toBeVisible();
  await page.evaluate(()=>{window.__backupDenied[0]=true;});await page.getByRole('button',{name:'Backup jetzt erstellen',exact:true}).tap();
- await expect(allow).toHaveCount(1);await expect(page.locator('#backupBody a[download]')).toHaveCount(0);await allow.first().tap();
+ await expect(allow).toHaveCount(1);await expect(page.locator('#backupBody .backup-download')).toHaveCount(0);await allow.first().tap();
  await expect(page.locator('#backupStatus')).toHaveText('Backup erstellt. Die Dateien sind zum Herunterladen bereit.');
  expect(await page.evaluate(()=>window.__backupPromptCalls)).toBe(4);expect(await page.evaluate(()=>window.__backupPickerCalls)).toBe(3);
- const download=page.waitForEvent('download');await page.getByRole('link',{name:'Teil 1 von 1 herunterladen',exact:true}).tap();
+ const download=page.waitForEvent('download');await page.getByRole('button',{name:'Teil 1 von 1 herunterladen',exact:true}).tap();
  const file=await download,archive=await readBackup([new Blob([await readFile(await file.path())])]);expect(archive.sources).toHaveLength(2);expect(archive.sources.every(s=>s.figure.status==='Sitzt')).toBe(true);
 });
 
@@ -101,4 +102,29 @@ test('app staging rejects corrupt copies during save and restore without changin
   return {saveError,restoreError,snapshot,after:JSON.stringify(after.map(f=>[f.id,f.revision,f.title])),keys,afterKeys:(await cache.keys()).map(r=>r.url).sort(),sameBytes:await(await import('/pwa/package.js')).checksum(records[0].blob)===await(await import('/pwa/package.js')).checksum(verified[0].blob),jobs};
  });
  expect(result.saveError).toContain('Videokopie');expect(result.restoreError).toContain('Videokopie');expect(result.after).toBe(result.snapshot);expect(result.afterKeys).toEqual(result.keys);expect(result.sameBytes).toBe(true);expect(result.jobs).toBe(0);
+});
+
+
+test('backup hand-off keeps prepared parts on failure, blocks duplicate clicks and starts the picker in its click',async({page})=>{
+ await start(page);await seed(page);await page.locator('#infoButton').click();
+ await page.getByRole('button',{name:'Vollständiges Backup erstellen',exact:true}).click();
+ await page.getByRole('button',{name:'Backup jetzt erstellen',exact:true}).click();
+ const button=page.getByRole('button',{name:'Teil 1 von 1 herunterladen',exact:true});await expect(button).toBeVisible();
+ await page.evaluate(()=>{
+  window.__pickerCalls=0;window.__writeNames=[];
+  window.showSaveFilePicker=options=>{
+   window.__pickerCalls++;window.__pickerActive=navigator.userActivation.isActive;window.__writeNames.push(options.suggestedName);
+   return new Promise((resolve,reject)=>{window.__pickerReject=reject;window.__pickerResolve=()=>resolve({createWritable:async()=>({write:async()=>{},close:async()=>{}})});});
+  };
+ });
+ await button.click();await expect(button).toBeDisabled();await expect(page.locator('#backupClose')).toBeDisabled();
+ await expect(page.locator('#backupBody .transfer-status')).toHaveClass(/is-busy/);
+ expect(await page.evaluate(()=>window.__pickerActive)).toBe(true);
+ await page.evaluate(()=>window.__pickerReject(new Error('Speicher voll')));await expect(button).toBeEnabled();
+ await expect(page.locator('#backupBody .transfer-status')).toContainText('Speicher voll');
+ await button.click();await page.evaluate(()=>window.__pickerReject(new DOMException('Abbruch','AbortError')));await expect(button).toBeEnabled();
+ await expect(page.locator('#backupBody .transfer-status')).toContainText('abgebrochen');
+ await button.click();await page.evaluate(()=>window.__pickerResolve());await expect(button).toBeEnabled();
+ await expect(page.locator('#backupBody .transfer-status')).toHaveText('Datei gespeichert.');
+ expect(await page.evaluate(()=>window.__pickerCalls)).toBe(3);expect(await page.evaluate(()=>new Set(window.__writeNames).size)).toBe(1);
 });

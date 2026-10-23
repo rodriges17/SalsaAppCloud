@@ -135,3 +135,13 @@ Fehler und Abbruch lassen die vorbereitete ZIP zum Wiederholen erhalten.
 „Download angefordert“ bestätigt die Übergabe an den Browser, nicht dessen
 Speicherabschluss. Die native Android-App übergibt Dateien in begrenzten Blöcken an den nativen
 Speichern-/Teilen-Dialog. Lernstände bleiben vom Figur-ZIP ausgeschlossen.
+
+### Figur-ZIP und Dateiübergabe
+
+`pwa/figure-zip.js` bündelt Videoauswahl, ZIP-Erstellung, Abbruch, vorbereitetes Archiv und Wiederholung. Die Oberfläche liest Zustände und löst Aktionen aus; sie verwaltet keine zweite Kopie des Exportzustands. Änderungen der Auswahl verwerfen das vorbereitete Archiv. Schließen bricht die Erstellung ab; während der Dateiübergabe bleibt der Dialog offen.
+
+`pwa/file-delivery.js` führt Speichern und Teilen aus, verhindert parallele Übergaben und hält Status sowie Fehler für einen erneuten Versuch bereit. Der Picker beziehungsweise die native Übergabe startet synchron im ursprünglichen Klick. Browser-Downloads werden als angefordert gemeldet; nur ein erfolgreich geschriebener Picker-Stream wird als gespeichert bestätigt. Der Download-Link bleibt im aktiven Dialog und seine URL lange genug zum Einlesen erhalten.
+
+Das vollständige Backup behält `backup-workflow.js` und sein eigenes Archivformat einschließlich Lernständen. Nur die Übergabe fertiger Sicherungsteile verwendet dasselbe Datei-Modul. Android verwendet einen gemeinsamen Adapter mit kleinen Blöcken und Abbruchsignal, auch für die älteren nativen Ansichten.
+
+Verhaltenstests liegen in `web-tests/figure-zip.test.js`; Browserprüfungen schützen zusätzlich echte Downloads, Picker-Aktivierung und Wiederholungen. Archivtests prüfen unveränderte Videodaten sowie die getrennte Behandlung persönlicher Lernstände.
