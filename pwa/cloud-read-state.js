@@ -6,7 +6,7 @@ export const contentState = value => ({ ...value, people: [], settings: null });
 const accessShape = value => JSON.stringify([value.me?.id, value.me?.is_admin, value.me?.upload_enabled, (value.libraries ?? []).map(l => [l.id,l.manage,l.contribute,l.visibility]).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))]);
 export function createCloudReadState({ call = cloudCall, identity = cloudIdentity, login = finishLogin,
   read = readCloudCache, write = writeCloudCache, clear = clearCloudCache, generation = cloudCacheRevision,
-  now = Date.now, online = () => navigator.onLine } = {}) {
+  now = () => Date.now(), online = () => navigator.onLine } = {}) {
   const FRESH_FOR = 60000, CLEANUP_INTERVAL = 10 * 60000;
   const stateRequests = new Map(), libraryRequests = new Map(), cleanupRequests = new Set();
   function check(owner, revision) {
