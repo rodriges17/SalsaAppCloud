@@ -2,8 +2,8 @@ import {test,expect} from '@playwright/test';
 test('granted persistent storage is a status and not another permission request',async({page})=>{
  await page.addInitScript(()=>{
   window.mockPersistent=true;window.persistenceCalls=0;
-  Object.defineProperty(navigator.storage,'persisted',{value:async()=>window.mockPersistent,configurable:true});
-  Object.defineProperty(navigator.storage,'persist',{value:()=>{window.persistenceCalls++;return new Promise(resolve=>window.finishPersistence=resolve);},configurable:true});
+  const estimate=navigator.storage.estimate.bind(navigator.storage);
+  Object.defineProperty(navigator,'storage',{value:{estimate,persisted:async()=>window.mockPersistent,persist:()=>{window.persistenceCalls++;return new Promise(resolve=>window.finishPersistence=resolve);}},configurable:true});
  });
  await page.goto('/pwa/');await page.locator('#infoButton').click();
  await expect(page.locator('#storageDetails')).toContainText('Dauerhafter Speicher ist aktiv.');await expect(page.locator('#persistStorage')).toBeHidden();
@@ -18,8 +18,8 @@ test('granted persistent storage is a status and not another permission request'
 });
 test('a declined request can be retried and unsupported requests are hidden',async({page})=>{
  await page.addInitScript(()=>{
-  Object.defineProperty(navigator.storage,'persisted',{value:async()=>false,configurable:true});
-  Object.defineProperty(navigator.storage,'persist',{value:async()=>false,configurable:true});
+  const estimate=navigator.storage.estimate.bind(navigator.storage);
+  Object.defineProperty(navigator,'storage',{value:{estimate,persisted:async()=>false,persist:async()=>false},configurable:true});
  });
  await page.goto('/pwa/');await page.locator('#infoButton').click();await page.locator('#persistStorage').click();
  await expect(page.locator('#persistenceResult')).toContainText('nicht bestätigt');await expect(page.locator('#persistStorage')).toBeEnabled();
