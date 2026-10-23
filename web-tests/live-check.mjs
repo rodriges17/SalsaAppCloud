@@ -1,7 +1,10 @@
 import { chromium, webkit, devices } from 'playwright';
 import assert from 'node:assert/strict';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 const url = 'https://rodriges17.github.io/SalsaAppCloud/';
+const source = await readFile(new URL('../pwa/app.js', import.meta.url), 'utf8');
+const expectedVersion = source.match(/const APP_VERSION = '([^']+)'/)?.[1];
+assert.ok(expectedVersion, 'The source app must declare its deployment version.');
 await mkdir('test-results/live', { recursive: true });
 for (const [name, engine, options] of [
   ['chrome', chromium, { ...devices['Pixel 7'] }],
@@ -12,7 +15,7 @@ for (const [name, engine, options] of [
     const context = await browser.newContext(options), page = await context.newPage(), errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(url);
-    await page.waitForFunction(() => document.documentElement.dataset.appVersion === '2026-10-23-figure-zip-workflow-v1');
+    await page.waitForFunction(expected => document.documentElement.dataset.appVersion === expected, expectedVersion);
     await page.getByRole('button', { name: 'Figur hinzufügen', exact: true }).tap();
     await page.getByRole('button', { name: 'Figur importieren', exact: true }).tap();
     assert.equal(await page.locator('#importChoiceDialog').isVisible(), true);
