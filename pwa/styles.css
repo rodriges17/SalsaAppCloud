@@ -207,3 +207,5 @@ html{scroll-padding-top:calc(var(--brand-header-height,73px) + var(--overview-in
 
 /* Local availability belongs to the cloud figure, separate from publication consent. */
 .cloud-card p.cloud-local-status,.cloud-revision p.cloud-local-status,.version-entry p.cloud-local-status{justify-self:start;display:inline-flex;align-items:center;width:fit-content;max-width:100%;margin:0;padding:4px 10px;border-radius:999px;background:var(--success);color:var(--bg);font-size:13px;font-weight:650;line-height:1.4}
+
+.cloud-card p.cloud-local-status[data-access-required=true]{background:var(--peach);color:var(--bg)}

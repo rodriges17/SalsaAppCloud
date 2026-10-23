@@ -145,3 +145,7 @@ Speichern-/Teilen-Dialog. Lernstände bleiben vom Figur-ZIP ausgeschlossen.
 Das vollständige Backup behält `backup-workflow.js` und sein eigenes Archivformat einschließlich Lernständen. Nur die Übergabe fertiger Sicherungsteile verwendet dasselbe Datei-Modul. Android verwendet einen gemeinsamen Adapter mit kleinen Blöcken und Abbruchsignal, auch für die älteren nativen Ansichten.
 
 Verhaltenstests liegen in `web-tests/figure-zip.test.js`; Browserprüfungen schützen zusätzlich echte Downloads, Picker-Aktivierung und Wiederholungen. Archivtests prüfen unveränderte Videodaten sowie die getrennte Behandlung persönlicher Lernstände.
+
+### Lokale Originale nach neuen Cloud-Uploads
+
+Neue erfolgreiche Uploads speichern auf diesem Gerät eine Zuordnung aus Konto, Cloud-Version, lokalem Speicherort und den ausgewählten Video-IDs (`pwa/cloud-local.js`). Umbenennen und Lernstand ändern diese Zuordnung nicht. Entfernte oder ersetzte Videos zählen nicht mehr als verfügbar; fehlt der Ordnerzugriff, zeigt die Oberfläche die bekannte Zuordnung ohne Verfügbarkeit zu bestätigen. Andere Cloud-Versionen und Konten bleiben getrennt. Frühere Uploads werden nicht nachträglich zugeordnet. Die Prüfung lädt keine Videos zum Vergleich herunter und schreibt keine lokalen Figuren oder Lernstände um.

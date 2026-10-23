@@ -24,7 +24,10 @@ async function mock(page,admin=false, own=false, contribute=true, options={}){
   if(action==='public_permission'){if(options.failPermission)return route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({error:'Test: Freigabe konnte nicht gespeichert werden'})});options.publicAllowed=payload.allowed;}
   if(action==='library')result={library,manage:options.manage??false,contribute:options.manage??false,members:[],entries:options.entries??[{figure_id:'figure-1',owner_id:'owner',public_allowed:true,published:rev,pending:null}]};
   if(action==='reserve')result={job:'job-1',media:payload.videos.map((v,i)=>({id:'uploaded-'+i,path:'test/'+i+'.mp4'}))};
-  if(action==='commit')result={revision:'uploaded-revision'};
+  if(action==='commit'){
+   result={revision:'uploaded-revision'};
+   if(options.reflectUpload)own=[{id:'figure-upload',public_allowed:payload.public_allowed,revisions:[{id:result.revision,title:payload.title,description:payload.description,tags:payload.tags,created_at:'2026-10-23T00:00:00Z',videos:payload.videos.map(v=>({...v,size:clip.length,type:'video/mp4'}))}]}];
+  }
   if(action==='library_save')result={id:'lib-1'};
   if(action==='poster_get')result={...(options.posters.get(payload.revision)??(!own&&!options.noPoster?{poster:POSTER,kind:'local'}:{poster:null})),can_write:admin&&!!req.headers().authorization};
   if(action==='poster_put'){result=options.posters.get(payload.revision);if(!result||result.kind==='frame'&&payload.kind==='local'){result={poster:payload.data,kind:payload.kind};options.posters.set(payload.revision,result);}}
@@ -372,4 +375,23 @@ test('older cloud version has its own download and can create a separate copy of
  await expect(page.locator('#figureStatus')).toHaveValue('Neu');await finishCloudImport(page);
  const local=await localCloudFigures(page);expect(local).toHaveLength(2);expect(local.find(f=>f.id===before.id)).toMatchObject({revision:before.revision,title:'Mein anderer Name',status:'Sitzt'});expect(local.find(f=>f.id!==before.id).importFingerprint).toBe('cloud:old:video-old');
  expect(calls.filter(c=>['attach','library_save','library'].includes(c.action))).toHaveLength(0);
+});
+
+for(const folder of [false,true])test(`uploaded ${folder?'folder':'app'} original is marked local across reload without importing it back`,async({page,browserName})=>{
+ test.skip(folder&&browserName!=='chromium','Native folders exercised in Chromium.');
+ await signIn(page);const calls=await mock(page,true,false,true,{reflectUpload:true,noLibraries:true,posters:new Map([['uploaded-revision',{poster:POSTER,kind:'local'}]])});await localUpload(page,folder);
+ await page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true}).tap();
+ await expect(page.getByRole('button',{name:'✓ Lokal vorhanden',exact:true})).toBeDisabled();
+ await expect(page.locator('.cloud-local-status').first()).toHaveText('✓ Bereits lokal vorhanden');
+ await page.reload();await page.locator('#cloudButton').tap();
+ await expect(page.getByRole('button',{name:'✓ Lokal vorhanden',exact:true})).toBeDisabled();
+ expect(await localCloudFigures(page)).toHaveLength(1);expect(calls.filter(c=>c.action==='media_url')).toHaveLength(0);
+ if(folder){
+  await page.locator('#cloudBack').tap();
+  await page.evaluate(()=>{FileSystemDirectoryHandle.prototype.queryPermission=async()=> 'prompt';FileSystemDirectoryHandle.prototype.requestPermission=async()=> 'denied';});
+  await page.locator('#cloudButton').tap();
+  await expect(page.locator('.cloud-local-status').first()).toHaveText('Lokal zugeordnet · Ordnerzugriff erforderlich');
+  await expect(page.getByRole('button',{name:'Lokal übernehmen',exact:true})).toBeEnabled();
+ }
+
 });

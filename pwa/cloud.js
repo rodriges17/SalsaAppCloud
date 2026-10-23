@@ -2,6 +2,8 @@ import { cloudReadState, contentState } from './cloud-read-state.js';
 import { cloudCall, signedIn, uploadMedia, logout, loginWithLink, cloudIdentity } from './cloud-api.js';
 import { CLOUD_FILE_LIMIT } from './cloud-config.js';
 import { figureVideos } from './storage.js';
+import { createCloudLocalIndex } from './cloud-local.js';
+const localIndex = createCloudLocalIndex({ getItem: key => localStorage.getItem(key), setItem: (key, value) => localStorage.setItem(key, value) }, `salsa-cloud-local:${new URL('./', import.meta.url).pathname}:v1`);
 import { createPosterView, posterPayload } from './cloud-posters.js';
 const node = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
 const MB = value => `${(Number(value ?? 0) / 1000000).toFixed(1)} MB`;
@@ -246,12 +248,17 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
   const update = () => {
     const selected = chosen.filter(([check]) => !check || check.checked).map(([, v]) => v);
     const prefix = `cloud:${rev.id}:`;
-    const selections = localFigures.filter(f => f.importFingerprint?.startsWith(prefix))
-      .map(f => new Set(f.importFingerprint.slice(prefix.length).split(',')));
-    const exists = selected.length > 0 && selections.some(ids => selected.every(v => ids.has(v.id)));
-    const complete = selections.some(ids => rev.videos.every(v => ids.has(v.id)));
-    localStatus.hidden = !selections.length;
-    localStatus.textContent = complete ? '✓ Bereits lokal vorhanden' : '✓ Teilweise lokal vorhanden';
+    const linked = localIndex.availability(state.me?.id, rev.id, localFigures);
+    const selections = [...localFigures.filter(f => f.importFingerprint?.startsWith(prefix))
+      .map(f => new Set(f.importFingerprint.slice(prefix.length).split(','))), ...linked.available];
+    const available = new Set(selections.flatMap(ids => [...ids]));
+    const accessRequired = linked.accessRequired.some(ids => rev.videos.some(v => ids.has(v.id) && !available.has(v.id)));
+    const exists = selected.length > 0 && selected.every(v => available.has(v.id));
+    const complete = rev.videos.every(v => available.has(v.id));
+    localStatus.hidden = !available.size && !accessRequired;
+    localStatus.dataset.accessRequired = String(accessRequired);
+    localStatus.textContent = !available.size && accessRequired ? 'Lokal zugeordnet · Ordnerzugriff erforderlich'
+      : (complete ? '✓ Bereits lokal vorhanden' : '✓ Teilweise lokal vorhanden') + (accessRequired ? ' · Ordnerzugriff erforderlich' : '');
     take.textContent = exists ? '✓ Lokal vorhanden' : label; take.disabled = exists;
     repair.hidden = !exists;
     take.title = exists ? 'Die ausgewählten Videos dieser Version sind bereits in deinen lokalen Figuren vorhanden.' : '';
@@ -351,6 +358,7 @@ async function publishForm() {
     if (!videos.length) throw new Error('Bitte mindestens ein Video auswählen.');
     if (videos.some(v => v.blob.size > CLOUD_FILE_LIMIT)) throw new Error('Ein Video überschreitet 50 MB. Bitte ein kleineres Originalvideo auswählen.');
     if (state.libraries.find(l => l.id === library.value)?.visibility === 'public' && !allowed.checked) throw new Error('Für diese öffentliche Bibliothek musst du der öffentlichen Veröffentlichung zustimmen.');
+    const owner = state.me.id;
     let job = null; controller = new AbortController(); document.getElementById('cloudCancelUpload').hidden = false;
     try {
       const reserved = await cloudCall('reserve', { figure: figure.value || null, videos: videos.map(v => ({ size: v.blob.size, type: v.blob.type })) }); job = reserved.job;
@@ -362,8 +370,10 @@ async function publishForm() {
       controller.signal.throwIfAborted();
       const poster = await posterPayload(local.poster).catch(() => null);
       const saved = await cloudCall('commit', { job, ...(poster ? { poster } : {}), public_allowed: allowed.checked, title: local.title, description: local.description, tags: local.tags, videos: reserved.media.map((m, i) => ({ id: m.id, name: videos[i].name })) }); job = null;
+      const linked = localIndex.remember(owner, saved.revision, local, reserved.media.map((media, i) => ({ cloud: media.id, local: videos[i].id })));
       if (library.value) await cloudCall('attach', { library: library.value, revision: saved.revision });
       source = null; area = library.value ? 'libraries' : 'figures'; await load(library.value || null);
+      if (!linked) report(new Error('Upload erfolgreich. Die lokale Zuordnung konnte nicht dauerhaft gespeichert werden. Bitte freien App-Speicher prüfen.'));
     } catch (error) {
       if (job) await cloudCall('abort', { job }).catch(() => {});
       throw error;

@@ -8,5 +8,5 @@ export default defineConfig({
     { name: 'chromium-mobile', use: { browserName: 'chromium', channel: 'chrome', ...devices['Pixel 7'] } },
     { name: 'webkit-iphone', use: { browserName: 'webkit', ...devices['iPhone 13'] } }
   ],
-  webServer: { command: 'python3 web-tests/server.py', url: 'http://127.0.0.1:4173/pwa/', reuseExistingServer: false }
+  webServer: { command: 'python3 -u web-tests/server.py', url: 'http://127.0.0.1:4173/pwa/', reuseExistingServer: false, timeout: 120000, stdout: 'pipe', stderr: 'pipe' }
 });
