@@ -1,6 +1,6 @@
 import { readCloudCache, writeCloudCache, cloudCacheRevision } from './cloud-cache.js';
 import { cloudCall, cloudIdentity } from './cloud-api.js';
-import { listFigures, figureVideos } from './storage.js';
+import { listFigures, figureMedia } from './storage.js';
 const LIMIT = 65536;
 async function cachedPoster(owner, revision, blob, kind = 'local', generation = cloudCacheRevision(owner)) {
   if (blob) return writeCloudCache(owner, `poster:${revision}`, { bytes: await blob.arrayBuffer(), kind }, generation);
@@ -37,7 +37,7 @@ async function localPoster(user, revision, figures) {
     if (figure.importFingerprint === `cloud:${revision.id}:${revision.videos.map(v => v.id).join(',')}`) { matches.push(figure); continue; }
     if (figure.title !== revision.title || (figure.description ?? '') !== (revision.description ?? '') || JSON.stringify(figure.tags) !== JSON.stringify(revision.tags)) continue;
     try {
-      const records = figure.videos ?? await figureVideos(figure);
+      const records = await Promise.all((await figureMedia(figure)).map(video => video.describe()));
       if (revision.videos.every(media => records.some(v => v.name === media.name && (v.size ?? v.blob?.size) === media.size && (v.type ?? v.blob?.type) === media.type))) matches.push(figure);
     } catch { /* Cached folder metadata can still supply the original poster without permission. */ }
   }
@@ -87,7 +87,7 @@ export function createPosterView(root, user) {
       placeholder.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1.5"/><path d="m4 18 5-6 4 4 3-4 4 6"/></svg>';
       heading.prepend(placeholder);
       jobs.set(heading, async () => {
-        const active = () => !controller.signal.aborted && heading.isConnected && owner === cloudIdentity();
+        const active = () => !controller.signal.aborted && heading.isConnected && owner === cloudIdentity() && generation === cloudCacheRevision(owner);
         let displayed = placeholder;
         const show = async blob => {
           if (!blob || !active()) return;

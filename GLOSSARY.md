@@ -22,3 +22,9 @@ Eine Sicherung aller lokal verfügbaren Figuren einschließlich ihrer Videos, An
 
 **Figur-ZIP**:
 Eine ZIP-Datei zum Weitergeben einer einzelnen Figur mit ausgewählten Videos und Angaben in Originalqualität. Der persönliche Lernstand ist nicht enthalten.
+
+**Cloud-Lesestand**:
+Der zuletzt geladene Stand der zugänglichen Cloud-Figuren und Bibliotheken einschließlich ihrer Vorschaubilder und des Ladezeitpunkts.
+
+**Medien-Sitzung**:
+Der geordnete Zugriff auf die Videos einer Figur für einen geöffneten Bildschirm oder einen vollständigen Lesevorgang. Parallele Zugriffe teilen die laufende Prüfung; beim erneuten Öffnen beginnt eine neue Sitzung.

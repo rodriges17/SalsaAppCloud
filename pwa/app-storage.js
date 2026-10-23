@@ -26,6 +26,12 @@ export async function getVideo(id) {
   if (!response) throw new Error('Eine lokale Videodatei fehlt. Bitte die Figur bearbeiten und das Video ersetzen.');
   return { ...hydratePoster(record), blob: await response.blob() };
 }
+// Metadata is available without opening video bytes in Cache Storage.
+export async function figureVideoRecords(figure) {
+  const records = await Promise.all(figure.videoIds.map(id => read('videos', id)));
+  if (records.some(v => !v || v.figureId !== figure.id)) throw new Error('Eine lokale Videodatei fehlt. Bitte die Figur bearbeiten.');
+  return records.map(hydratePoster);
+}
 export async function figureVideos(figure) { const records = await Promise.all(figure.videoIds.map(getVideo)); if (records.some(v => !v || v.figureId !== figure.id)) throw new Error('Eine lokale Videodatei fehlt. Bitte die Figur bearbeiten.'); return records; }
 
 // Cache-specific staging: journal fresh keys before writing, verify every new
@@ -50,7 +56,7 @@ async function cacheStaging(cache, signal) {
         if (!storedBlob || storedBlob.size !== draft.blob.size || await checksum(storedBlob, signal) !== await checksum(draft.blob, signal)) throw new Error('Die gespeicherte Videokopie konnte nicht geprüft werden.');
       }
       signal?.throwIfAborted();
-      return { id, figureId, name, cacheKey, duration: draft.duration, width: draft.width, height: draft.height, posterBytes: draft.poster ? await draft.poster.arrayBuffer() : null, existing };
+      return { id, figureId, name, cacheKey, size: draft.blob.size, type: draft.blob.type, duration: draft.duration, width: draft.width, height: draft.height, posterBytes: draft.poster ? await draft.poster.arrayBuffer() : null, existing };
     },
     async commit(obsolete) {
       committed = true;

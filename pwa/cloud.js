@@ -1,5 +1,5 @@
-import { readCloudCache, writeCloudCache, clearCloudCache, cloudCacheRevision } from './cloud-cache.js';
-import { cloudCall, signedIn, uploadMedia, logout, loginWithLink, finishLogin, cloudIdentity } from './cloud-api.js';
+import { cloudReadState, contentState } from './cloud-read-state.js';
+import { cloudCall, signedIn, uploadMedia, logout, loginWithLink, cloudIdentity } from './cloud-api.js';
 import { CLOUD_FILE_LIMIT } from './cloud-config.js';
 import { figureVideos } from './storage.js';
 import { createPosterView, posterPayload } from './cloud-posters.js';
@@ -32,64 +32,21 @@ async function navigate(next, library = null) {
 function focusSection(box) {
   box.tabIndex = -1; box.focus(); box.scrollIntoView({ block: 'start' });
 }
-const FRESH_FOR = 60000, CLEANUP_INTERVAL = 10 * 60000;
 let viewEpoch = 0, statusTimer, displayedOwner = null, renderedView = null, authReloadPending = false;
-const stateRequests = new Map(), libraryRequests = new Map(), cleanupRequests = new Set();
 let localUpdates = [];
-const contentState = value => ({ ...value, people: [], settings: null });
-const accessShape = value => JSON.stringify([value.me?.id, value.me?.is_admin, value.me?.upload_enabled, (value.libraries ?? []).map(l => [l.id,l.manage,l.contribute,l.visibility]).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))]);
 function cacheStatus(message, temporary = false) {
   clearTimeout(statusTimer); statusBox.textContent = message;
   if (temporary) statusTimer = setTimeout(() => { if (!busy) statusBox.textContent = ''; }, 3500);
 }
 const lastStand = at => `Letzter Stand: ${new Date(at).toLocaleString('de')}`;
-async function requestSnapshot(owner) {
-  let revision = cloudCacheRevision(owner); const key = `${owner}:${revision}`;
-  if (!stateRequests.has(key)) stateRequests.set(key, (async () => {
-    const value = await cloudCall('state');
-    if (owner !== cloudIdentity() || revision !== cloudCacheRevision(owner)) throw new Error('Der Cloud-Stand wurde inzwischen geändert. Bitte aktualisieren.');
-    const previous = await readCloudCache(owner, 'state');
-    if (revision !== cloudCacheRevision(owner)) throw new Error('Der Cloud-Stand wurde inzwischen geändert. Bitte aktualisieren.');
-    const accessChanged = !!previous && accessShape(previous.value) !== accessShape(value);
-    if (accessChanged) { const clearing = clearCloudCache(owner); revision = cloudCacheRevision(owner); await clearing; }
-    if (revision !== cloudCacheRevision(owner)) throw new Error('Der Cloud-Stand wurde inzwischen geändert. Bitte aktualisieren.');
-    if (owner !== cloudIdentity()) throw new Error('Das angemeldete Konto wurde inzwischen gewechselt.');
-    const record = await writeCloudCache(owner, 'state', contentState(value), revision);
-    if (!record || owner !== cloudIdentity()) throw new Error('Das angemeldete Konto wurde inzwischen gewechselt.');
-    return { ...record, value, accessChanged };
-  })().finally(() => stateRequests.delete(key)));
-  return stateRequests.get(key);
-}
-async function requestLibrary(owner, library) {
-  const revision = cloudCacheRevision(owner), key = `${owner}:${revision}:${library}`;
-  if (!libraryRequests.has(key)) libraryRequests.set(key, (async () => {
-    const value = await cloudCall('library', { id: library });
-    if (owner !== cloudIdentity() || revision !== cloudCacheRevision(owner)) throw new Error('Der Cloud-Stand wurde inzwischen geändert. Bitte aktualisieren.');
-    return writeCloudCache(owner, `library:${library}`, value, revision);
-  })().finally(() => libraryRequests.delete(key)));
-  return libraryRequests.get(key);
-}
-function cleanupLater(owner, me) {
-  if (!me || !navigator.onLine || cleanupRequests.has(owner)) return;
-  cleanupRequests.add(owner);
-  // Cleanup is maintenance, not a prerequisite for showing an existing cloud list.
-  setTimeout(async () => {
-    try {
-      const previous = await readCloudCache(owner, 'cleanup');
-      if (owner !== cloudIdentity() || previous && Date.now() - previous.updatedAt < CLEANUP_INTERVAL) return;
-      await writeCloudCache(owner, 'cleanup', true);
-      if (owner !== cloudIdentity()) return;
-      const result = await cloudCall(me.is_admin ? 'admin_cleanup' : 'cleanup');
-      if (result.cleaned && dialog.open && !busy && !source && ['figures', 'libraries'].includes(area) && owner === cloudIdentity()) await load(current);
-    } catch { /* Maintenance is retried after the next interval, without blocking browsing. */ }
-    finally { cleanupRequests.delete(owner); }
-  }, 0);
-}
+function maintainCloud(owner, me) { cloudReadState.maintain(owner, me, async () => {
+  if (dialog.open && !busy && !source && ['figures', 'libraries'].includes(area)) await load(current);
+}); }
 async function load(library = current, allowCache = false) {
   let epoch = ++viewEpoch;
   let owner, cached, detail, available;
   try {
-    const beforeLogin = cloudIdentity(); await finishLogin(); owner = cloudIdentity();
+    const beforeLogin = cloudIdentity(); owner = await cloudReadState.open();
     if (beforeLogin !== owner && dialog.open) epoch = ++viewEpoch;
     if (epoch !== viewEpoch || !dialog.open) return;
     current = library;
@@ -100,26 +57,21 @@ async function load(library = current, allowCache = false) {
     }).catch(() => localFigures);
     const reusable = !!allowCache && !source && ['initial', 'figures', 'libraries'].includes(area);
     if (reusable) {
-      available = cached = await readCloudCache(owner, 'state');
-      if (library) detail = await readCloudCache(owner, `library:${library}`);
+      const saved = await cloudReadState.cached(owner, library);
+      available = cached = saved.state; detail = saved.detail;
       if (!active()) return;
       if (cached && (!library || detail)) {
         const sameView = renderedView?.owner === owner && renderedView.area === (area === 'initial' ? 'figures' : area) && renderedView.library === library;
         if (!sameView) { state = cached.value; displayedOwner = owner; await renderCloud(library, detail?.value); }
         if (!active()) return;
-        if (!navigator.onLine) { cacheStatus(`Offline – ${lastStand(cached.updatedAt)}`); return; }
-        if (allowCache !== 'refresh' && Date.now() - cached.updatedAt < FRESH_FOR && (!library || Date.now() - detail.updatedAt < FRESH_FOR)) { cacheStatus(''); cleanupLater(owner, state.me); return; }
+        if (!saved.online) { cacheStatus(`Offline – ${lastStand(cached.updatedAt)}`); return; }
+        if (allowCache !== 'refresh' && saved.fresh) { cacheStatus(''); maintainCloud(owner, state.me); return; }
       } else cached = null;
     }
     cacheStatus(cached ? 'Änderungen werden geladen …' : 'Cloud-Inhalte werden geladen …');
-    const snapshot = available && allowCache !== 'refresh' && Date.now() - available.updatedAt < FRESH_FOR ? available : await requestSnapshot(owner);
-    if (!active()) return;
-    if (snapshot.accessChanged) {
-      cancelThumbnails(); clearPreviews(body); body.replaceChildren(); renderedView = null;
-      state = snapshot.value; displayedOwner = owner; cached = null;
-    }
-    const freshDetail = library ? await requestLibrary(owner, library) : null;
-    if (!active()) return;
+    const { snapshot, detail: freshDetail } = await cloudReadState.refresh(owner, library, { available, force: allowCache === 'refresh', onAccessChanged: () => {
+      if (active()) { cancelThumbnails(); clearPreviews(body); body.replaceChildren(); renderedView = null; state = null; displayedOwner = null; cached = null; }
+    } });
     if (!active()) return;
     // Do not interrupt a form, an active download, expanded history or a video preview.
     const editing = !snapshot.accessChanged && cached && (busy || allowCache !== 'refresh' && body.querySelector('details[open], video, form input:focus, form textarea:focus, input[type=checkbox]:not(:checked)'));
@@ -130,11 +82,10 @@ async function load(library = current, allowCache = false) {
       await renderCloud(library, freshDetail?.value); body.scrollTop = scroll;
     }
     if (active() && !busy) { errorBox.hidden = true; cacheStatus(editing && changed ? 'Änderungen geladen – bitte nach Abschluss deines Vorgangs aktualisieren.' : 'Alles aktuell', !editing); }
-    cleanupLater(owner, snapshot.value.me);
+    maintainCloud(owner, snapshot.value.me);
   } catch (error) {
     if (epoch !== viewEpoch || !dialog.open || owner && owner !== cloudIdentity()) return;
-    if ([401, 403, 404].includes(error.status) && owner) {
-      await clearCloudCache(owner);
+    if (error.cacheCleared && owner) {
       if (epoch !== viewEpoch || !dialog.open || owner !== cloudIdentity()) return;
       cancelThumbnails(); clearPreviews(body); body.replaceChildren(); state = null; displayedOwner = null; cached = null;
     }
@@ -200,7 +151,6 @@ function libraryForm(lib = null) {
   form.onsubmit = event => event.preventDefault();
 }
 async function libraryView(id, detail) {
-  detail ??= (await requestLibrary(cloudIdentity(), id))?.value;
   const lib = detail.library;
   const intro = section(lib.title); intro.append(node('p', lib.description));
   const share = new URL(location.href); share.hash = ''; share.search = ''; share.searchParams.set('library', id);

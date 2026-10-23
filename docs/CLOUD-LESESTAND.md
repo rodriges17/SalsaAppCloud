@@ -1,0 +1,9 @@
+# Cloud-Lesestand (Kandidat 2)
+
+`cloud-read-state.js` bündelt Anmeldung abschließen, kontogebundene Snapshots, Frische, zusammengeführte Abrufe, Berechtigungsinvalidierung und zeitversetzte Bereinigung. Das Interface `open`, `cached`, `refresh`, `maintain` ist zugleich Testoberfläche. Transport/Anmeldung und IndexedDB sind Adapter; DOM, Navigation und Schutz offener Formulare bleiben in `cloud.js`. Dies schafft Locality für Ladefehler und Leverage für PWA und Android, die denselben Modultext verwenden.
+
+Der letzte Stand erscheint sofort. Innerhalb von 60 Sekunden werden Listen wiederverwendet; danach wird im Hintergrund geladen. Manuelles Aktualisieren umgeht die Frischeprüfung und tritt gegebenenfalls einem bereits laufenden Abruf derselben Sitzung und Cache-Generation bei. Eigene erfolgreiche Änderungen invalidieren Metadaten; beim Abmelden wird der Sitzungscache einschließlich Bildern gelöscht. Videos werden nur ausdrücklich übernommen, signierte URLs und Zugangstoken nie im Inhaltscache gespeichert. Verwaltungsdaten werden nicht dauerhaft gespeichert.
+
+Jede Antwort und jeder Cache-Schreibabschluss wird gegen Konto und Cache-Generation geprüft. Berechtigungswechsel löschen Bibliotheksdetails und Bilder; die Ansicht wird vor dem nächsten Detailabruf geleert. Alte Fehler dürfen keine neueren Snapshots löschen. Token-Erneuerung bleibt derselben Sitzung zugeordnet; eine verspätete Magic-Link-Antwort darf weder Abmeldung noch neuere Anmeldung überschreiben.
+
+Prüfung: `web-tests/cloud-read-state.test.js` und `cloud-session.test.js` testen das Interface mit kontrollierter Zeit und verzögerten Antworten. Die bestehenden gemeinsamen Browserverträge prüfen schnellen Neustart, Offlinebetrieb, Hintergrundaktualisierung, Kontowechsel, Berechtigungsentzug und Vorschaubilder. Native Dateifreigabe und Player bleiben unverändert.

@@ -31,6 +31,7 @@
   <dialog id="editor" class="screen-dialog">
     <header class="screen-header"><button id="editorBack" class="back" aria-label="Zurück"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button><h2 id="editorHeading">Figur hinzufügen</h2></header>
     <form id="editorForm" novalidate>
+      <p id="editorLoading" class="transfer-status editor-loading" role="status" hidden></p>
       <fieldset id="editorFields" class="editor-scroll">
         <label for="figureTitle">Name der Figur</label><input id="figureTitle" required maxlength="160" autocomplete="off">
         <label for="figureDescription">Beschreibung</label><textarea id="figureDescription" rows="4" placeholder="Schritte, Hinweise, Zählzeiten …"></textarea>
