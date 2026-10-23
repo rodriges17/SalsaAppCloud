@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-23-zip-save-v1';
+const APP_VERSION = '2026-10-23-storage-status-v1';
 import { initBackup } from './backup-ui.js';
 import { saveFile, saveResult } from './file-delivery.js';
 import { initCloud, openCloud } from './cloud.js';
@@ -425,10 +425,23 @@ async function moveFigure(figure) {
 
 let offlineReady = false;
 async function storageInfo() {
+  const request = $('persistStorage');
+  request.hidden = true;
   try {
-    const estimate = await navigator.storage?.estimate?.(); const persistent = await navigator.storage?.persisted?.();
-    $('storageDetails').textContent = `${estimate ? `Ungefähr ${Math.round((estimate.usage ?? 0) / 1048576)} MB lokal belegt. ` : ''}${persistent ? 'Der Browser hat dauerhaften Speicher gewährt.' : 'Dauerhafter Speicher ist bisher nicht bestätigt.'}`;
-  } catch { $('storageDetails').textContent = 'Der Browser kann keine Speicherinformationen anzeigen.'; }
+    const estimate = await navigator.storage?.estimate?.();
+    if (window.AndroidPlatform) {
+      $('storageDetails').textContent = `${estimate ? `Ungefähr ${Math.round((estimate.usage ?? 0) / 1048576)} MB lokal belegt. ` : ''}Die App verwendet den privaten Android-App-Speicher.`;
+      $('persistenceResult').textContent = 'Keine zusätzliche Speicherfreigabe erforderlich. Eine Deinstallation oder „App-Daten löschen“ entfernt deine lokalen Daten. Nutze Backups.';
+    } else {
+      const persistent = await navigator.storage?.persisted?.();
+      $('storageDetails').textContent = `${estimate ? `Ungefähr ${Math.round((estimate.usage ?? 0) / 1048576)} MB lokal belegt. ` : ''}${persistent ? 'Dauerhafter Speicher ist aktiv.' : 'Dauerhafter Speicher ist bisher nicht bestätigt.'}`;
+      request.hidden = persistent || typeof navigator.storage?.persist !== 'function';
+      if (persistent) $('persistenceResult').textContent = '';
+    }
+  } catch {
+    $('storageDetails').textContent = 'Der Speicherstatus konnte nicht geprüft werden.';
+    request.hidden = !!window.AndroidPlatform || typeof navigator.storage?.persist !== 'function';
+  }
   try { await renderDeviceStorage(); } catch (e) { $('deviceStorageStatus').textContent = storageMessage(e); }
   $('offlineDetails').textContent = offlineReady ? 'Die App ist für Offline-Aufrufe bereit. Gespeicherte Videos funktionieren ohne Netz.' : document.documentElement.dataset.offlineStatus === 'error' ? 'Die Offline-Vorbereitung ist fehlgeschlagen. Bitte die App mit Internetverbindung neu laden.' : 'Die Offline-Nutzung wird beim ersten Online-Aufruf vorbereitet.';
 }
@@ -444,8 +457,14 @@ $('closeInfoTop').onclick = () => { if (!deviceBusy) $('infoDialog').close(); };
 $('closeInfo').onclick = () => $('infoDialog').close();
 $('infoDialog').addEventListener('cancel', event => { if (deviceBusy) event.preventDefault(); });
 $('persistStorage').onclick = async () => {
-  try { const granted = await navigator.storage?.persist?.(); $('persistenceResult').textContent = granted ? 'Dauerhafter Speicher wurde gewährt.' : 'Der Browser hat die Anfrage nicht bestätigt. Die App bleibt nutzbar. Auf dem Home-Bildschirm installierte Apps werden bevorzugt berücksichtigt.'; await storageInfo(); }
-  catch { $('persistenceResult').textContent = 'Dieser Browser unterstützt die Speicheranfrage nicht.'; }
+  const request = $('persistStorage'); if (request.disabled || request.hidden) return;
+  request.disabled = true; request.setAttribute('aria-busy', 'true'); request.textContent = 'Speicherfreigabe wird geprüft …';
+  try {
+    const granted = await navigator.storage.persist();
+    $('persistenceResult').textContent = granted ? 'Dauerhafter Speicher ist aktiv.' : 'Der Browser hat die Anfrage nicht bestätigt. Die App bleibt nutzbar. Auf dem Home-Bildschirm installierte Apps werden bevorzugt berücksichtigt.';
+    await storageInfo();
+  } catch { $('persistenceResult').textContent = 'Die Speicheranfrage konnte nicht abgeschlossen werden. Bitte erneut versuchen.'; }
+  finally { request.disabled = false; request.removeAttribute('aria-busy'); request.textContent = 'Dauerhaften Speicher anfragen'; }
 };
 if ('serviceWorker' in navigator) {
   document.documentElement.dataset.offlineStatus = 'preparing';
