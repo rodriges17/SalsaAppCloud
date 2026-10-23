@@ -87,7 +87,7 @@ export function createPosterView(root, user) {
       placeholder.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1.5"/><path d="m4 18 5-6 4 4 3-4 4 6"/></svg>';
       heading.prepend(placeholder);
       jobs.set(heading, async () => {
-        const active = () => !controller.signal.aborted && heading.isConnected && owner === cloudIdentity();
+        const active = () => !controller.signal.aborted && heading.isConnected && owner === cloudIdentity() && generation === cloudCacheRevision(owner);
         let displayed = placeholder;
         const show = async blob => {
           if (!blob || !active()) return;

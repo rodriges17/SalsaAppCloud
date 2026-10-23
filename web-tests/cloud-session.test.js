@@ -41,3 +41,15 @@ test('cloud session: logout during refresh cannot be undone by a late response',
  let release;const gate=new Promise(r=>{release=r;});const {api,values}=await setup(async url=>String(url).includes('/logout')?json({}):(await gate,json(renewed())));
  const pending=api.accessToken();await api.logout();release();assert.equal(await pending,null);assert.equal(api.signedIn(),false);assert.equal(values.has(key),false);
 });
+test('cloud session: late magic-link verification cannot undo logout',async()=>{
+ let release;const gate=new Promise(r=>release=r);const {api}=await setup(async url=>String(url).includes('/verify')?(await gate,json(renewed())):json({}));
+ const pending=api.loginWithLink('https://example.test/?token_hash=one&type=magiclink');await api.logout();release();await assert.rejects(pending,/abgebrochen/);assert.equal(api.signedIn(),false);
+});
+test('cloud session: superseded magic-link verification cannot replace newer login',async()=>{
+ let release,calls=0;const gate=new Promise(r=>release=r);const {api,values}=await setup(async()=>++calls===1?(await gate,json({...renewed(),access_token:'late'})):json({...renewed(),access_token:'latest'}));
+ const first=api.loginWithLink('https://example.test/?token_hash=one&type=magiclink');await api.loginWithLink('https://example.test/?token_hash=two&type=magiclink');release();await assert.rejects(first,/abgebrochen/);assert.equal(JSON.parse(values.get(key)).access_token,'latest');
+});
+test('cloud session: changed identity during token refresh prevents sending cloud request',async()=>{
+ let release,calls=0;const gate=new Promise(r=>release=r);const {api}=await setup(async url=>{if(String(url).includes('/logout'))return json({});calls++;await gate;return json(renewed());});
+ const pending=api.cloudCall('state');await api.logout();release();await assert.rejects(pending,/Konto/);assert.equal(calls,1);
+});

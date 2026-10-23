@@ -22,3 +22,6 @@ Eine Sicherung aller lokal verfügbaren Figuren einschließlich ihrer Videos, An
 
 **Figur-ZIP**:
 Eine ZIP-Datei zum Weitergeben einer einzelnen Figur mit ausgewählten Videos und Angaben in Originalqualität. Der persönliche Lernstand ist nicht enthalten.
+
+**Cloud-Lesestand**:
+Der zuletzt geladene Stand der zugänglichen Cloud-Figuren und Bibliotheken einschließlich ihrer Vorschaubilder und des Ladezeitpunkts.
