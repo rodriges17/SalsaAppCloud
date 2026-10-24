@@ -34,7 +34,17 @@ const folderSummary = folder => ({ id: folder.id, name: folder.name, figureCount
 const mirror = folder => async library => { folder.library = library; await put(folder); };
 const locked = work => navigator.locks ? navigator.locks.request(`salsa-storage:${scope}`, work) : work();
 export async function storageSettings() {
-  const config = await entries('config') ?? { id: 'config', activeFolder: null }; return { ...config, folders: (await folders()).map(folderSummary), supported: folderSupported() };
+  const config = await entries('config') ?? { id: 'config', activeFolder: null }, supported = folderSupported();
+  // A remembered folder is not proof of a current grant. Query only: opening
+  // settings must never prompt or scan the catalog/videos.
+  const summaries = await Promise.all((await folders()).map(async folder => {
+    let access = 'unsupported';
+    if (supported) try {
+      access = typeof folder.handle.queryPermission !== 'function' || await folder.handle.queryPermission({ mode: 'readwrite' }) === 'granted' ? 'granted' : 'required';
+    } catch { access = 'unavailable'; }
+    return { ...folderSummary(folder), access };
+  }));
+  return { ...config, folders: summaries, supported };
 }
 // The UI sees folder summaries, not persisted handles or catalog internals.
 export async function chooseFolder() {

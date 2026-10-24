@@ -149,3 +149,5 @@ Verhaltenstests liegen in `web-tests/figure-zip.test.js`; Browserprüfungen sch�
 ### Lokale Originale nach neuen Cloud-Uploads
 
 Neue erfolgreiche Uploads speichern auf diesem Gerät eine Zuordnung aus Konto, Cloud-Version, lokalem Speicherort und den ausgewählten Video-IDs (`pwa/cloud-local.js`). Umbenennen und Lernstand ändern diese Zuordnung nicht. Entfernte oder ersetzte Videos zählen nicht mehr als verfügbar; fehlt der Ordnerzugriff, zeigt die Oberfläche die bekannte Zuordnung ohne Verfügbarkeit zu bestätigen. Andere Cloud-Versionen und Konten bleiben getrennt. Frühere Uploads werden nicht nachträglich zugeordnet. Die Prüfung lädt keine Videos zum Vergleich herunter und schreibt keine lokalen Figuren oder Lernstände um.
+
+Die Speichereinstellungen zeigen verbundene Geräteordner, aktuell erlaubten Zugriff und den Standard für neue Figuren getrennt. Bereits erfüllte Aktionen sind mit Häkchen gut lesbar bestätigt. Die Rechteprüfung beim Öffnen der Einstellungen fragt nur den aktuellen Status ab und löst keine Zugriffsanfrage aus.

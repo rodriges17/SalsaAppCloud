@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-24-library-links-v1';
+const APP_VERSION = '2026-10-24-storage-choices-v1';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';
@@ -407,9 +407,10 @@ async function renderDeviceStorage() {
   const settings = await storageSettings(), controls = $('deviceStorageControls'); controls.replaceChildren();
   const selected = settings.folders.find(f => f.id === settings.activeFolder);
   $('deviceStorageActive').textContent = `Neue Figuren: ${selected ? 'Geräteordner „' + selected.name + '“' : 'App-Speicher'}. Vorhandene Figuren bleiben an ihrem bisherigen Speicherort.`;
-  controls.append(button('App-Speicher verwenden', () => deviceWork(() => setStorageFolder(null)), 'secondary'));
+  const confirmed = label => { const control = button('✓ ' + label, () => {}, 'secondary storage-confirmed'); control.disabled = true; return control; };
+  controls.append(!selected ? confirmed('App-Speicher für neue Figuren aktiv') : button('App-Speicher verwenden', () => deviceWork(() => setStorageFolder(null)), 'secondary'));
   if (settings.supported) {
-    controls.append(button('Geräteordner auswählen', async () => {
+    controls.append(button(settings.folders.length ? 'Weiteren Geräteordner auswählen' : 'Geräteordner auswählen', async () => {
       // Open the OS picker directly in the click handler, before any other async work.
       let candidate; try { candidate = await chooseFolder(); } catch (e) { if (e.name !== 'AbortError') $('deviceStorageStatus').textContent = storageMessage(e); return; }
       const count = candidate.figureCount;
@@ -418,8 +419,18 @@ async function renderDeviceStorage() {
     }, 'secondary'));
   } else controls.append(el('p', 'muted', 'Geräteordner werden in diesem Browser nicht unterstützt. Verwende aktuelles Chrome auf Android oder Desktop. Auf iPhone/Safari bleibt der App-Speicher mit ZIP-Sicherung verfügbar.'));
   for (const folder of settings.folders) {
-    const row = el('div', 'cloud-card'); row.append(el('strong', '', `${folder.name} · ${folder.figureCount} Figuren${folder.id === settings.activeFolder ? ' · aktiv' : ''}`));
-    if (settings.supported) row.append(button('Ordnerzugriff erlauben', () => deviceWork(() => allowFolderAccess(folder.id)), 'secondary'), button('Für neue Figuren verwenden', () => deviceWork(async () => { await allowFolderAccess(folder.id); await setStorageFolder(folder.id); }), 'secondary'));
+    const row = el('div', 'cloud-card'); row.dataset.folderId = folder.id;
+    row.append(el('strong', '', `✓ ${folder.name} · ${folder.figureCount} Figur${folder.figureCount === 1 ? '' : 'en'} · verbunden`));
+    if (settings.supported) {
+      const granted = folder.access === 'granted', active = folder.id === settings.activeFolder;
+      row.append(granted ? confirmed('Ordnerzugriff erlaubt') : button('Ordnerzugriff erlauben', () => deviceWork(() => allowFolderAccess(folder.id)), 'secondary'));
+      if (active && granted) row.append(confirmed('Für neue Figuren aktiv'));
+      else if (active) {
+        const waiting = button('Für neue Figuren ausgewählt', () => {}, 'secondary'); waiting.disabled = true; row.append(waiting);
+        row.append(el('p', 'error', 'Für neue Figuren ausgewählt. Bitte den Ordnerzugriff erlauben, bevor du hier speicherst.'));
+      } else row.append(button('Für neue Figuren verwenden', () => deviceWork(async () => { await allowFolderAccess(folder.id); await setStorageFolder(folder.id); }), 'secondary'));
+      if (folder.access === 'unavailable') row.append(el('p', 'error', 'Der Ordnerzugriff konnte nicht geprüft werden. Bitte erneut erlauben oder den Ordner neu auswählen.'));
+    }
     if (folder.pendingCleanup) row.append(el('p', 'error', 'Dateibereinigung ausstehend. Sie wird beim nächsten Speichern oder Löschen erneut versucht.'));
     controls.append(row);
   }
