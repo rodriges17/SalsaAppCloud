@@ -27,7 +27,7 @@ async function run(message, work, errorTarget = errorBox) {
   try { return await work(); } catch (error) { report(error, errorTarget); }
   finally { busy = false; body.inert = false; document.getElementById('cloudBack').disabled = false; dialog.querySelectorAll('[data-nav]').forEach(button => { button.disabled = false; }); statusBox.textContent = ''; if (authReloadPending && dialog.open) { authReloadPending = false; source = null; area = 'initial'; void load(null, true); } }
 }
-function close() { if (busy) return; viewEpoch++; renderedView = null; clearTimeout(statusTimer); cancelThumbnails(); dialog.close(); body.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); }); source = null; }
+function close() { if (busy) return; viewEpoch++; renderedView = null; clearTimeout(statusTimer); cancelThumbnails(); dialog.close(); body.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); }); source = null; hooks.closed?.(); }
 async function navigate(next, library = null) {
   source = null; area = next; if (['admin', 'create'].includes(next)) await run('Laden …', () => load(library)); else await load(library, true);
 }
@@ -419,6 +419,9 @@ export function initCloud(callbacks) {
 }
 export async function openCloud(local = null, library = null) {
   if (busy || dialog.open) return; source = local; current = library; area = 'initial';
-  errorBox.hidden = true; if (displayedOwner !== cloudIdentity() || local) { cancelThumbnails(); clearPreviews(body); body.replaceChildren(); } dialog.showModal();
+  errorBox.hidden = true; if (displayedOwner !== cloudIdentity() || local) { cancelThumbnails(); clearPreviews(body); body.replaceChildren(); }
+  // Do not let dialog focus restoration reopen the search keyboard on return.
+  if (document.activeElement?.matches('input, textarea, [contenteditable=true]')) document.activeElement.blur();
+  dialog.showModal();
   if (local) await run('Cloud-Inhalte werden geladen …', () => load(library)); else await load(library, true);
 }

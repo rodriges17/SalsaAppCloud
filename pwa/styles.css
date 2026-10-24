@@ -49,9 +49,10 @@
 /* Step by Step · Klar / Terrakotta */
 body{line-height:1.45;-webkit-tap-highlight-color:transparent}
 h1,h2,h3,h4{letter-spacing:-.025em}button,input,textarea,select{font-family:inherit}
-button{border-radius:12px}button:not(:disabled):hover{background-color:var(--selection)}
+button{border-radius:12px}
+@media(hover:hover) and (pointer:fine){button:not(:disabled):hover{background-color:var(--selection)}}
 .primary{background:var(--purple);border-color:var(--purple);color:var(--primary-text)}
-.primary:not(:disabled):hover{background:var(--purple);filter:brightness(1.07)}
+@media(hover:hover) and (pointer:fine){.primary:not(:disabled):hover{background:var(--purple);filter:brightness(1.07)}}
 .secondary{background:transparent;border-color:var(--border)}
 a{color:var(--lavender)}input[type=checkbox],input[type=radio]{accent-color:var(--lavender)}
 .overview{max-width:720px;padding:20px 20px calc(108px + env(safe-area-inset-bottom))}
