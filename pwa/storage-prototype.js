@@ -30,7 +30,7 @@ function VariantB(){
 function VariantC(){
  const wrap=document.createDocumentFragment();wrap.append(node('h3',`Neue Figuren → ${state.active==='folder'?state.name:'App-Speicher'}`));
  const rows=[['1','Geräteordner',state.connected?`${state.name} verbunden`:'Noch nicht ausgewählt',state.connected,'Ordner auswählen',folderChoice],['2','Zugriffsrecht',state.granted?'Zugriff erlaubt':'Zugriff erforderlich',state.granted,'Zugriff erlauben',()=>state.granted=true],['3','Neue Figuren',state.active==='folder'?'Geräteordner ist aktiv':'App-Speicher ist aktiv',state.active==='folder','Geräteordner verwenden',useFolder]];
- for(const [num,title,detail,done,label,fn]of rows){const row=node('div',null,'proto-step');row.append(node('span',done?'✓':num,'proto-number'),node('strong',title),node('p',detail));if(!done)row.append(action(label,fn));wrap.append(row);}
+ for(const [num,title,detail,done,label,fn]of rows){const row=node('div',null,'proto-step');row.append(node('span',done?'✓':num,'proto-number'),node('strong',title),node('p',detail));if(!done){const b=action(label,fn);if(num!=='1'&&!state.connected)b.disabled=true;row.append(b);}wrap.append(row);}
  wrap.append(action('Auf App-Speicher wechseln',()=>state.active='app'));return wrap;
 }
 function variant(){const key=new URL(location.href).searchParams.get('variant');return key in names?key:'A';}
