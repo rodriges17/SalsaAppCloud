@@ -41,8 +41,10 @@ export async function runNavigationHoverCase(page, { root, native = false, cloud
   await mouse.setContent(`<link rel="stylesheet" href="${css}"><nav class="bottom-nav"><button id="hoverProbe">Cloud-Speicher</button></nav>`);
   assert(await mouse.evaluate(()=>matchMedia('(hover: hover) and (pointer: fine)').matches),'Desktop fixture does not support mouse hover');
   assert(await mouse.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--selection').trim()!==''),'Desktop stylesheet did not load');
-  await mouse.mouse.move(0,0);
+  await mouse.bringToFront();await mouse.mouse.move(0,0);
+  await mouse.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
   const probe=mouse.locator('#hoverProbe'),before=await probe.evaluate(e=>getComputedStyle(e).backgroundColor);
-  await probe.hover();assert(await probe.evaluate(e=>getComputedStyle(e).backgroundColor)!==before,'Mouse hover feedback was removed');
+  await probe.hover();
+  await mouse.waitForFunction(before=>{const button=document.querySelector('#hoverProbe');return getComputedStyle(button).backgroundColor!==before;},before,{timeout:5000});
  }finally{await desktop.close();}
 }
