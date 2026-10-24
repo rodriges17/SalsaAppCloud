@@ -404,6 +404,10 @@ async function deviceWork(work) {
   finally { deviceBusy = false; $('closeInfo').disabled = false; $('closeInfoTop').disabled = false; $('deviceStorageControls').inert = false; }
 }
 async function renderDeviceStorage() {
+  if (['localhost', '127.0.0.1'].includes(location.hostname) && new URL(location.href).searchParams.get('prototype') === 'storage') {
+    const { renderStoragePrototype } = await import('./storage-prototype.js');
+    renderStoragePrototype($('deviceStorageControls'), $('deviceStorageActive')); return;
+  }
   const settings = await storageSettings(), controls = $('deviceStorageControls'); controls.replaceChildren();
   const selected = settings.folders.find(f => f.id === settings.activeFolder);
   $('deviceStorageActive').textContent = `Neue Figuren: ${selected ? 'Geräteordner „' + selected.name + '“' : 'App-Speicher'}. Vorhandene Figuren bleiben an ihrem bisherigen Speicherort.`;
@@ -625,3 +629,8 @@ initCloud({ confirm: confirmAction, localFigures: listFigures, chooseImport: cho
 } });
 try { await cleanupInterruptedImports(); } catch { /* Refresh reports unavailable storage. */ }
 await refresh();
+
+if (['localhost', '127.0.0.1'].includes(location.hostname) && new URL(location.href).searchParams.get('prototype') === 'storage') {
+  $('infoButton').click();
+  document.querySelector('#deviceStorageControls').closest('section').scrollIntoView({block:'start'});
+}
