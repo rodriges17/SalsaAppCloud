@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-24-storage-confirm-v1';
+const APP_VERSION = '2026-10-24-settings-back-v1';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';
@@ -396,12 +396,12 @@ document.addEventListener('keydown', event => { if (event.key === 'Escape' && le
 
 let deviceBusy = false, storageChoicePending = false;
 async function deviceWork(work) {
-  if (deviceBusy) return; deviceBusy = true; $('closeInfo').disabled = true; $('closeInfoTop').disabled = true;
+  if (deviceBusy) return; deviceBusy = true; $('closeInfoTop').disabled = true;
   $('deviceStorageStatus').textContent = 'Bitte warten …';
   $('deviceStorageControls').inert = true;
   try { await work(); changed(); await refresh(); await renderDeviceStorage(); $('deviceStorageStatus').textContent = 'Gespeichert.'; }
   catch (e) { $('deviceStorageStatus').textContent = storageMessage(e); }
-  finally { deviceBusy = false; $('closeInfo').disabled = false; $('closeInfoTop').disabled = false; $('deviceStorageControls').inert = false; }
+  finally { deviceBusy = false; $('closeInfoTop').disabled = false; $('deviceStorageControls').inert = false; }
 }
 async function renderDeviceStorage() {
   const settings = await storageSettings(), controls = $('deviceStorageControls'); controls.replaceChildren();
@@ -515,7 +515,6 @@ function showInfoDialog() {
 $('infoButton').onclick = () => { $('themeChoice').value = window.stepAppearance.get(); storageInfo(); showInfoDialog(); };
 $('themeChoice').onchange = () => { $('themeStatus').textContent = window.stepAppearance.set($('themeChoice').value) ? 'Die Auswahl wird auf diesem Gerät gespeichert.' : 'Das Farbschema gilt für diesen Aufruf. Der Browser konnte die Auswahl nicht speichern.'; };
 $('closeInfoTop').onclick = () => { if (!deviceBusy) $('infoDialog').close(); };
-$('closeInfo').onclick = () => $('infoDialog').close();
 $('infoDialog').addEventListener('cancel', event => { if (deviceBusy) event.preventDefault(); });
 $('persistStorage').onclick = async () => {
   const request = $('persistStorage'); if (request.disabled || request.hidden) return;

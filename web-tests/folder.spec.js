@@ -12,7 +12,7 @@ async function enablePicker(page, name) {
 }
 async function choose(page) {
  await page.locator('#infoButton').tap();await page.getByRole('button',{name:'Geräteordner auswählen',exact:true}).tap();
- await expect(page.locator('#confirmDialog')).toBeVisible();await page.locator('#confirmOK').tap();await expect(page.locator('#deviceStorageStatus')).toHaveText('Gespeichert.');await page.locator('#closeInfo').tap();
+ await expect(page.locator('#confirmDialog')).toBeVisible();await page.locator('#confirmOK').tap();await expect(page.locator('#deviceStorageStatus')).toHaveText('Gespeichert.');await page.locator('#closeInfoTop').tap();
 }
 async function seed(page, title='Ordner Ocho') {
  return page.evaluate(async title=>{
@@ -26,7 +26,7 @@ test('unsupported browser offers no device-folder action',async({page})=>{
  await expect(page.getByRole('button',{name:'Geräteordner auswählen',exact:true})).toHaveCount(0);
  await expect(page.getByText('Geräteordner werden in diesem Browser nicht unterstützt.',{exact:false})).toBeVisible();
  await expect(page.locator('#deviceStorageControls [data-storage-target=app]')).toBeDisabled();
- await page.locator('#closeInfo').tap();await seed(page,'Nur App');await page.reload();await page.getByRole('button',{name:'Optionen für Nur App',exact:true}).tap();await expect(page.getByRole('button',{name:'In Geräteordner übertragen',exact:true})).toHaveCount(0);
+ await page.locator('#closeInfoTop').tap();await seed(page,'Nur App');await page.reload();await page.getByRole('button',{name:'Optionen für Nur App',exact:true}).tap();await expect(page.getByRole('button',{name:'In Geräteordner übertragen',exact:true})).toHaveCount(0);
 });
 test('device folder persists real files, plays offline and can be restored after losing its registry',async({page,context,browserName},info)=>{
  test.skip(browserName!=='chromium','Native folder handle contract is exercised with Chromium OPFS; WebKit exposes the unsupported option.');

@@ -96,7 +96,7 @@ a{color:var(--lavender)}input[type=checkbox],input[type=radio]{accent-color:var(
 .settings-section h3{font-size:18px;margin:0;color:var(--text)}.settings-section p{font-size:14px;line-height:1.6;margin:0}
 .settings-section label{font-size:14px}.settings-section select{width:100%}.settings-section summary{font-weight:600;color:var(--text);cursor:pointer;padding:3px 0}
 details.settings-section{display:block}details.settings-section[open]>:not(summary){margin-top:16px}.settings-section .cloud-card{background:var(--surface);border-color:var(--border);padding:14px}
-.settings-section .backup-actions{margin:0;gap:14px}.settings-screen>#closeInfo{width:100%;min-height:50px}
+.settings-section .backup-actions{margin:0;gap:14px}
 .player-screen{background:var(--bg)}.player-screen .screen-header{border:0}.player-controls{gap:8px}.player-controls button,.player-controls select{background:var(--surface);border-radius:10px;color:var(--text)}
 .player-controls #playPause{background:var(--purple);color:var(--primary-text);border-color:var(--purple)}
 .player-description{margin:6px 14px 12px;padding:12px;background:var(--surface);border-radius:12px;color:var(--text)}

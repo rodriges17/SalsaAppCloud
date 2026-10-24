@@ -259,12 +259,12 @@ test('installed shell update bypasses stale HTTP CSS and preserves offline video
   await page.locator('#editorBack').tap(); await page.locator('#confirmOK').tap();
   await expect(page.locator('#editor')).not.toBeVisible();
   await page.locator('#applyUpdate').tap();
-  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-24-storage-confirm-v1');
+  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-24-settings-back-v1');
   await expect(page.locator('#importFigure')).toHaveCSS('pointer-events', 'auto');
   await expect(page.locator('.figure-card')).toHaveCount(1);
   const file = await exportPackage(page, info);
   await context.setOffline(true); await page.reload();
-  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-24-storage-confirm-v1');
+  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-24-settings-back-v1');
   await page.getByRole('button', { name: 'Ocho lernen' }).tap();
   await expect(page.locator('#learningVideo')).toHaveJSProperty('videoWidth', 320);
   await page.locator('#playPause').tap();
@@ -290,7 +290,7 @@ test('installation and storage opens at the beginning on first open and reopen',
     await expect(page.locator('#infoTitle')).toBeFocused();
     await expect.poll(() => dialog.evaluate(node => node.scrollTop)).toBe(0);
     await expect(page.locator('#infoTitle')).toBeInViewport();
-    await page.locator('#closeInfo').tap();
+    await page.locator('#closeInfoTop').tap();
     await expect(dialog).not.toBeVisible();
   }
 });
