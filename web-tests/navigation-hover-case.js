@@ -1,6 +1,16 @@
 export async function runNavigationHoverCase(page, { root, native = false, cloud = true }) {
  const assert = (value, message) => { if (!value) throw new Error(message); };
  assert(await page.evaluate(()=>matchMedia('(hover: none) and (pointer: coarse)').matches),'Regression must run with a touch primary pointer');
+ // Simulate the platform picker committing a selection after pointer activation.
+ const sort=page.locator('#sort');
+ await sort.dispatchEvent('pointerdown',{pointerType:'touch'});
+ await sort.focus();
+ await sort.evaluate(e=>{e.selectedIndex=(e.selectedIndex+1)%e.options.length;e.dispatchEvent(new Event('change',{bubbles:true}));});
+ assert(await sort.evaluate(e=>document.activeElement!==e),'Touch sorting retained the focus frame');
+ await sort.focus();await sort.press('ArrowDown');
+ await sort.dispatchEvent('change');
+ assert(await sort.evaluate(e=>document.activeElement===e),'Sorting removed keyboard focus');
+ await sort.evaluate(e=>e.blur());
  const figures=page.locator('.overview + .bottom-nav [data-nav=figures]');
  // The overview navigation can be inside or immediately after the main element.
  const homeFigures=await figures.count()?figures:page.locator('nav.bottom-nav [data-nav=figures]').first();

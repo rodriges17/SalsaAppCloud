@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-24-touch-navigation-v1';
+const APP_VERSION = '2026-10-24-sort-focus-v1';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';
@@ -123,7 +123,17 @@ function renderFilters() {
 function changed() { channel?.postMessage('changed'); }
 channel?.addEventListener('message', () => refresh());
 window.addEventListener('focus', () => refresh());
-$('search').addEventListener('input', renderOverview); $('sort').addEventListener('change', renderOverview);
+$('search').addEventListener('input', renderOverview);
+// Native select pickers can retain :focus-visible after a touch selection.
+// Keep focus for keyboard users, but dismiss the completed touch interaction.
+let sortPointerType = '';
+$('sort').addEventListener('pointerdown', event => { sortPointerType = event.pointerType; });
+$('sort').addEventListener('keydown', () => { sortPointerType = ''; });
+$('sort').addEventListener('change', () => {
+  renderOverview();
+  if (sortPointerType === 'touch' || sortPointerType === 'pen') $('sort').blur();
+  sortPointerType = '';
+});
 document.addEventListener('click', event => { if (!event.target.closest('.card-menu,.card-options')) closeMenus(); });
 $('tagsButton').onclick = () => {
   const tags = [...new Set(figures.flatMap(f => f.tags))].sort((a, b) => a.localeCompare(b, 'de'));
