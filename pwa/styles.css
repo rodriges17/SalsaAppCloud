@@ -210,5 +210,12 @@ html{scroll-padding-top:calc(var(--brand-header-height,73px) + var(--overview-in
 
 .cloud-card p.cloud-local-status[data-access-required=true]{background:var(--peach);color:var(--bg)}
 
-/* Fulfilled storage actions remain legible instead of looking unavailable. */
-button.storage-confirmed:disabled{opacity:1;color:var(--success);border-color:var(--success);background:color-mix(in srgb,var(--success) 9%,transparent);cursor:default}
+/* Storage destination choices: selection stays unchanged until confirmation. */
+.storage-options,.storage-folder{display:grid;gap:12px;min-width:0}.storage-folder{gap:8px}
+button.storage-choice{display:grid;grid-template-columns:22px minmax(0,1fr);column-gap:12px;row-gap:5px;align-items:center;text-align:left;width:100%;padding:14px;min-height:76px;background:var(--surface);border:1px solid var(--border)}
+button.storage-choice[aria-pressed=true]{border:2px solid var(--lavender);background:var(--selection);padding:13px}
+button.storage-choice:disabled{opacity:1;cursor:default}
+.storage-choice-title{font-size:16px;font-weight:650;overflow-wrap:anywhere}.storage-choice-detail{grid-column:2;font-size:13px;color:var(--muted);font-weight:400;line-height:1.45;overflow-wrap:anywhere}
+.storage-choice-mark{grid-column:1;grid-row:1 / 3;display:grid;place-items:center;width:20px;height:20px;border:2px solid var(--muted);border-radius:50%}
+.storage-choice[aria-pressed=true] .storage-choice-mark{border-color:var(--lavender)}.storage-choice[aria-pressed=true] .storage-choice-mark:after{content:"";width:10px;height:10px;border-radius:50%;background:var(--lavender)}
+.settings-section p.storage-access-state{font-size:13px;margin:0 4px;color:var(--peach)}.settings-section p.storage-access-state[data-state=granted]{color:var(--success)}

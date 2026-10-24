@@ -25,7 +25,7 @@ test('unsupported browser offers no device-folder action',async({page})=>{
  await page.addInitScript(()=>{window.showDirectoryPicker=undefined;});await start(page);await page.locator('#infoButton').tap();
  await expect(page.getByRole('button',{name:'Geräteordner auswählen',exact:true})).toHaveCount(0);
  await expect(page.getByText('Geräteordner werden in diesem Browser nicht unterstützt.',{exact:false})).toBeVisible();
- await expect(page.getByRole('button',{name:'✓ App-Speicher für neue Figuren aktiv',exact:true})).toBeDisabled();
+ await expect(page.locator('#deviceStorageControls [data-storage-target=app]')).toBeDisabled();
  await page.locator('#closeInfo').tap();await seed(page,'Nur App');await page.reload();await page.getByRole('button',{name:'Optionen für Nur App',exact:true}).tap();await expect(page.getByRole('button',{name:'In Geräteordner übertragen',exact:true})).toHaveCount(0);
 });
 test('device folder persists real files, plays offline and can be restored after losing its registry',async({page,context,browserName},info)=>{
