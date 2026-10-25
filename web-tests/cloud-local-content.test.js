@@ -27,3 +27,24 @@ test('unverified hashes, denied access and cancelled views never imply local ava
   for(const read of [async()=>({content_hash:null}),async()=>{throw Error('Denied');}])assert.equal((await matchingLocalVideos(rev,content,read)).size,0);
   let called=false;assert.equal((await matchingLocalVideos(rev,content,async()=>{called=true;},()=>false)).size,0);assert.equal(called,false);
 });
+
+test('unchanged media hashes survive reopening and a fresh memo without loading bytes again',async()=>{
+ const {createVideoHashMemo}=await import('../pwa/cloud-local-content.js');
+ const saved=new Map(),cache=()=>createVideoHashMemo(async k=>saved.get(k),async(k,v)=>saved.set(k,v));
+ let reads=0,key='immutable-video-1',missing=false;
+ const read=async()=>[{contentKey:async()=>{if(missing)throw Error('Missing');return key;},load:async()=>{reads++;return {blob:new Blob(['video'])};}}];
+ const scan=memo=>localVideoContent([{id:'f'}],read,()=>true,memo);
+ const first=await scan(cache());await scan(cache());assert.equal(reads,1);assert.equal(first.size,1);
+ key='replacement-video';await scan(cache());assert.equal(reads,2);
+ missing=true;assert.equal((await scan(cache())).size,0);assert.equal(reads,2);
+});
+
+test('concurrent scans share hash work; unavailable persistence and failed reads can retry',async()=>{
+ const {createVideoHashMemo}=await import('../pwa/cloud-local-content.js');
+ const values=new Map(),cache=createVideoHashMemo(async k=>values.get(k),async(k,v)=>values.set(k,v));
+ let reads=0;const compute=async()=>{reads++;return {size:3,hash:'a'.repeat(64)};};
+ await Promise.all([cache.get('same',compute),cache.get('same',compute)]);assert.equal(reads,1);
+ const broken=createVideoHashMemo(async()=>{throw Error('Unavailable');},async()=>{throw Error('Quota');});
+ assert.equal((await broken.get('key',compute)).size,3);
+ await assert.rejects(cache.get('retry',async()=>{throw Error('Missing');}));await cache.get('retry',compute);assert.equal(reads,3);
+});

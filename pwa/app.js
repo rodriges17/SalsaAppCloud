@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-25-local-content-v2';
+const APP_VERSION = '2026-10-25-local-content-cache-v3';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';

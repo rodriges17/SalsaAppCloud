@@ -26,6 +26,11 @@ export async function getVideo(id) {
   if (!response) throw new Error('Eine lokale Videodatei fehlt. Bitte die Figur bearbeiten und das Video ersetzen.');
   return { ...hydratePoster(record), blob: await response.blob() };
 }
+// Staged media keys are immutable. Check existence without consuming the body.
+export async function videoContentKey(record) {
+  if (!record.cacheKey || !await (await caches.open(MEDIA_CACHE)).match(record.cacheKey)) throw new Error('Eine lokale Videodatei fehlt.');
+  return JSON.stringify(['app', record.cacheKey]);
+}
 // Metadata is available without opening video bytes in Cache Storage.
 export async function figureVideoRecords(figure) {
   const records = await Promise.all(figure.videoIds.map(id => read('videos', id)));

@@ -539,3 +539,19 @@ for (const authenticated of [false, true]) test(`content matching detects indepe
  expect(calls.filter(c=>c.action==='media_url')).toHaveLength(0);
  expect(await localCloudFigures(page)).toHaveLength(1);
 });
+
+test('local hash cache avoids rereading video bytes across scans and page reloads',async({page})=>{
+ await mock(page);await start(page);await seedCloudLocal(page);
+ const scan=()=>page.evaluate(async()=>{
+  const {localVideoContent}=await import('/pwa/cloud-local-content.js');
+  const {listFigures,figureMedia}=await import('/pwa/storage.js');
+  let reads=0;const original=Blob.prototype.arrayBuffer;
+  Blob.prototype.arrayBuffer=function(){if(this.type==='video/mp4')reads++;return original.call(this);};
+  try {const result=await localVideoContent(await listFigures(),figureMedia);return {reads,matches:result.size};}
+  finally {Blob.prototype.arrayBuffer=original;}
+ });
+ expect(await scan()).toEqual({reads:1,matches:1});
+ expect(await scan()).toEqual({reads:0,matches:1});
+ await page.reload();await expect(page.locator('#cloudButton')).toBeVisible();
+ expect(await scan()).toEqual({reads:0,matches:1});
+});

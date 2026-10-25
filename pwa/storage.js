@@ -128,9 +128,10 @@ async function folderFor(figure) {
 // lasts only for this view; a newly opened view verifies folder bytes again.
 export async function figureMedia(figure, { verifyAccess = false, signal } = {}) {
   signal?.throwIfAborted();
-  let records, read;
+  let records, read, contentKey;
   if (!figure.storageFolder) {
     records = await app.figureVideoRecords(figure);
+    contentKey = record => app.videoContentKey(record);
     read = async record => {
       const loaded = await app.getVideo(record.id);
       if (!loaded || loaded.figureId !== figure.id) throw new Error('Eine lokale Videodatei fehlt. Bitte die Figur bearbeiten.');
@@ -141,6 +142,13 @@ export async function figureMedia(figure, { verifyAccess = false, signal } = {})
     if (!current || current.revision !== figure.revision) throw new Error('Figur wurde inzwischen geändert. Bitte neu laden.');
     if (verifyAccess) await permission(folder.handle);
     records = current.videos;
+    contentKey = async record => {
+      const media = await folder.handle.getDirectoryHandle('media');
+      const file = await (await media.getFileHandle(record.file)).getFile();
+      if (file.size !== record.size || (record.modifiedAt != null && file.lastModified !== record.modifiedAt)) throw new Error('Videodatei wurde verändert.');
+      // Without a reliable timestamp, verify the bytes instead of reusing a hash.
+      return file.lastModified > 0 ? JSON.stringify(['folder', folder.id, current.id, record.file, record.size, record.crc, file.lastModified]) : null;
+    };
     read = record => readFolderVideo(folder, current, record, signal);
   }
   return records.map(record => {
@@ -152,7 +160,7 @@ export async function figureMedia(figure, { verifyAccess = false, signal } = {})
       }).catch(error => { pending = null; throw error; });
       return pending;
     };
-    return { ...record, load, async describe() {
+    return { ...record, load, contentKey: () => contentKey(record), async describe() {
       // Older app-cache records predate size/type metadata. An explicitly empty
       // MIME type is valid metadata and does not require reading video bytes.
       if (record.size != null && typeof record.type === 'string') return { ...record };
@@ -177,7 +185,7 @@ export async function figureVideos(figure, repair = false, { signal, progress = 
       signal?.throwIfAborted();
       if (!repair || !figure.storageFolder) throw error;
       progress({ done: ++done, total: records.length });
-      const { load, describe, ...metadata } = record;
+      const { load, describe, contentKey, ...metadata } = record;
       return { ...metadata, figureId: figure.id, storageFolder: figure.storageFolder, blob: new Blob(), missing: true, problem: error.message, poster: null };
     }
   }));
