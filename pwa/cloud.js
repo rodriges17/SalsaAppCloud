@@ -155,11 +155,14 @@ async function renderCloud(library, detail) {
   if (state.me?.is_admin) utilities.append(action('Plattformverwaltung', () => navigate('admin')));
   utilities.append(action('Aktualisieren', () => load(current, 'refresh')));
   if (signedIn()) utilities.append(action('Abmelden', async () => { await logout(); await run('Laden …', () => load(null)); }));
-  body.append(toolbar, utilities);
+  if (state.me) body.append(toolbar, utilities);
   if (state.me?.is_admin) body.append(node('p', 'Plattform-Administrator', 'cloud-role-badge'));
   if (state.me) body.append(node('p', `${state.me.email} · ${MB(state.me.used)} / ${MB(state.me.quota)} belegt${state.me.upload_enabled ? '' : ' · Lesen erlaubt, Uploads gesperrt'}`, 'cloud-account'));
   else {
-    if (current) await libraryView(current, detail);
+    if (current) {
+      const back = action('‹ Alle öffentlichen Bibliotheken', () => load(null, true)); back.className = 'cloud-public-back'; body.append(back);
+      await libraryView(current, detail);
+    }
     else publicLibraries();
     guestLogin();
     return;
@@ -477,7 +480,10 @@ async function publishForm() {
 }
 function publicLibraries() {
   const intro = node('div', undefined, 'cloud-public-intro');
-  intro.append(node('h3', 'Öffentliche Bibliotheken'), node('p', 'Entdecke Figuren und übernimm sie zum Üben auf dein Gerät. Öffentliche Bibliotheken sind ohne Anmeldung lesbar.'));
+  const heading = node('div', undefined, 'cloud-public-heading');
+  const refresh = action('↻', () => load(null, 'refresh')); refresh.className = 'cloud-public-refresh'; refresh.setAttribute('aria-label', 'Bibliotheken aktualisieren'); refresh.title = 'Bibliotheken aktualisieren';
+  heading.append(node('h3', 'Öffentliche Bibliotheken'), refresh);
+  intro.append(heading, node('p', 'Entdecke Figuren und übernimm sie zum Üben auf dein Gerät. Öffentliche Bibliotheken sind ohne Anmeldung lesbar.'));
   body.append(intro);
   const catalog = node('div', undefined, 'cloud-public-libraries');
   body.append(catalog);
@@ -520,6 +526,7 @@ function guestLogin() {
   form.append(action('Anmelden', () => run('Anmelden …', async () => { await loginWithLink(link.value.trim()); area = 'initial'; await load(null); }, error)), error);
   form.onsubmit = event => event.preventDefault();
   adminLoginForm(adminPanel);
+  if (signedIn()) content.append(action('Abmelden', async () => { await logout(); await run('Laden …', () => load(null)); }));
   body.append(details);
 }
 function adminLoginForm(parent) {

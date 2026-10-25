@@ -252,3 +252,8 @@ button.storage-choice:disabled{opacity:1;cursor:default}
 .cloud-login-panel input { width: 100%; min-width: 0; }
 .cloud-login-panel form > button { justify-self: start; }
 .cloud-guest-login summary:focus-visible { outline: 2px solid var(--lavender); outline-offset: 3px; border-radius: 12px; }
+
+.cloud-public-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.cloud-public-heading h3 { flex: 1; }
+.cloud-public-refresh { width: 42px; min-height: 42px; flex-shrink: 0; padding: 6px; border-color: var(--border); background: transparent; color: var(--muted); font-size: 23px; }
+.cloud-public-back { justify-self: start; padding: 6px 0; min-height: 42px; border: 0; background: transparent; color: var(--lavender); font-size: 14px; }

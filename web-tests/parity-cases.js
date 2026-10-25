@@ -229,6 +229,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
    await route.fulfill({contentType:'application/json',body:JSON.stringify(result)});
   });
   await page.locator('#cloudButton').click();await page.getByRole('heading',{name:'Öffentliche Bibliotheken',exact:true}).waitFor();
+  assert(await page.locator('.cloud-tabs').count()===0,'Guests must not see a cloud area switch');
   const login=page.locator('.cloud-guest-login');
   assert(await login.getAttribute('open')===null,'Guest sign-in should start collapsed');
   assert(!await page.getByLabel('Anmeldelink einfügen',{exact:true}).isVisible(),'Guest sign-in fields should be hidden');
@@ -240,6 +241,9 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   await login.locator(':scope > summary').click();
   await page.getByRole('button',{name:'Öffnen',exact:true}).click();await page.getByRole('heading',{name:library.title,exact:true}).waitFor();
   assert(await page.locator('.cloud-guest-login').getAttribute('open')===null,'Library detail sign-in should remain collapsed');
+  assert(await page.locator('.cloud-tabs').count()===0,'Guest library details must not show an account switch');
+  await page.getByRole('button',{name:'‹ Alle öffentlichen Bibliotheken',exact:true}).click();
+  await page.getByRole('heading',{name:'Öffentliche Bibliotheken',exact:true}).waitFor();
   return;
  }
  if(scenario==='csp-and-storage-styles'){
