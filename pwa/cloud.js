@@ -1,3 +1,4 @@
+import { createMemberView } from './cloud-members.js';
 import { createPeopleView } from './cloud-people.js';
 import { cloudReadState, contentState } from './cloud-read-state.js';
 import { cloudCall, signedIn, uploadMedia, logout, loginWithLink, cloudIdentity } from './cloud-api.js';
@@ -195,29 +196,7 @@ async function libraryView(id, detail) {
   }
   if (detail.manage) {
     libraryForm(lib);
-    const members = section('Mitglieder & Zugriff');
-    members.append(node('p', 'Personen werden über ihre vollständige E-Mail-Adresse hinzugefügt. Mitwirken erfordert eine Upload-Freigabe und eine gemeinschaftliche Bibliothek.'));
-    for (const m of detail.members) {
-      const row = node('div', undefined, 'cloud-person-library'); members.append(row);
-      row.append(node('p', `${m.email} · ${m.role === 'reader' ? 'Lesen' : 'Mitwirken'}${m.role === 'contributor' && !m.upload_enabled ? ' · Upload-Freigabe fehlt' : ''}`));
-      row.append(action('Mitglied entfernen', async () => {
-        if (!await hooks.confirm({ title: `${m.email}: Mitglied entfernen?`, message: lib.visibility === 'private' ? 'Der Zugriff auf diese private Bibliothek entfällt. Bereits heruntergeladene lokale Kopien bleiben erhalten.' : 'Die Mitgliedschaft entfällt. Die öffentliche Bibliothek bleibt lesbar. Bereits heruntergeladene lokale Kopien bleiben erhalten.', ok: 'Mitglied entfernen', destructive: true })) return;
-        await run('Entfernen …', async () => { await cloudCall('member', { library: id, email: m.email, role: 'remove' }); await load(id); });
-      }));
-    }
-    const form = node('form'); members.append(form); const email = field(form, 'Vollständige E-Mail-Adresse', '', 'email'); email.required = true;
-    const role = select(form, 'Bibliotheksrolle', [['reader', 'Lesen']]);
-    const check = action('Person prüfen', () => run('Person prüfen …', async () => {
-      if (!email.reportValidity()) return;
-      const result = await cloudCall('member_check', { library: id, email: email.value });
-      role.replaceChildren(); for (const [value, text] of [['reader', 'Lesen'], ...(lib.collaborative && result.upload_enabled ? [['contributor', 'Mitwirken']] : [])]) { const option = node('option', text); option.value = value; role.append(option); }
-      explanation.textContent = !lib.collaborative ? 'Diese Bibliothek erlaubt nur den Besitzer als Beitragenden.' : result.upload_enabled ? 'Person angelegt. Lesen oder Mitwirken möglich.' : 'Person angelegt. Mitwirken benötigt die Upload-Freigabe des Administrators.';
-      checkedEmail = email.value.trim().toLowerCase(); save.disabled = false;
-    }));
-    let checkedEmail = null; const explanation = node('p');
-    const save = action('Mitglied speichern', () => { if (form.reportValidity() && checkedEmail === email.value.trim().toLowerCase()) return run('Speichern …', async () => { await cloudCall('member', { library: id, email: email.value, role: role.value }); await load(id); }); }); save.disabled = true;
-    email.oninput = () => { checkedEmail = null; save.disabled = true; role.replaceChildren(node('option', 'Lesen')); role.firstChild.value = 'reader'; explanation.textContent = ''; };
-    form.append(check, explanation, save); form.onsubmit = e => e.preventDefault();
+    createMemberView({ box: section('Mitglieder & Zugriff'), lib, members: detail.members, me: state.me, people: state.people ?? [], node, action, field, select, call: cloudCall, run, confirm: options => hooks.confirm(options), refresh: () => load(id) });
     const danger = section('Gefahrenbereich'); danger.classList.add('danger-zone');
     danger.append(node('p', 'Beim Löschen werden diese Bibliothek und ihre Mitgliedschaften entfernt. Cloud-Figuren, Videos und lokale Kopien bleiben erhalten.'));
     const remove = action('Bibliothek löschen', async () => {

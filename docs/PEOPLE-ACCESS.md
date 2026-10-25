@@ -27,3 +27,7 @@ Nach Verifikation von `mailer_otp_exp` im Live-Projekt kann der Betreiber `CLOUD
 ## Auslieferung und Grenzen
 
 Cloud-PWA und Android verwenden dasselbe Modul `cloud-people.js` und denselben Cloud-Endpunkt. Die lokale PWA ist unverändert. Kontolöschung, Kontosperre, Selbstregistrierung und zusätzliche Rollen sind nicht Bestandteil dieser Änderung.
+
+## Kompakte Mitgliederverwaltung
+
+In einer verwalteten Bibliothek stehen Mitgliederliste und Besitzerkennzeichnung zuerst. Ein Mitglied klappt zur Rollenänderung oder Entfernung auf. Rollenänderungen werden ausdrücklich gespeichert, Entzug von Mitwirken und Entfernen werden bestätigt. Hinzufügen öffnet einen separaten zweistufigen Bereich und schließt den aufgeklappten Eintrag. Plattformadministratoren laden dafür eine aktuelle Personenliste und wählen eine bereits angelegte Person aus. Bibliotheksbesitzer ohne Plattformrechte verwenden die vollständige E-Mail-Adresse; die Prüfung erfolgt beim Weitergehen. Die Rollenwahl bietet Mitwirken nur mit Upload-Freigabe und gemeinschaftlicher Bibliothek an. Nach Fehlern bleiben die Eingaben im Hinzufügen-Bereich erhalten. Es gibt keine zusätzliche Übersicht aller Zugriffswege oder aller Plattformadministratoren.

@@ -20,14 +20,14 @@ class Handler(SimpleHTTPRequestHandler):
             return super().do_GET()
         scenario, name = match.groups()
         name = name or 'index.html'
-        if name not in {'index.html', 'app.js', 'file-delivery.js', 'figure-zip.js', 'cloud.js', 'cloud-people.js', 'cloud-local.js', 'cloud-read-state.js', 'cloud-cache.js', 'cloud-posters.js', 'cloud-api.js', 'cloud-config.js', 'styles.css', 'appearance.js', 'zoom.js', 'fonts/Inter-400.woff', 'fonts/Inter-500.woff', 'fonts/Inter-600.woff', 'fonts/Inter-700.woff', 'sw.js', 'storage.js', 'app-storage.js', 'folder-storage.js', 'logic.js', 'package.js', 'backup-format.js', 'backup-ui.js', 'backup-workflow.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'}:
+        if name not in {'index.html', 'app.js', 'file-delivery.js', 'figure-zip.js', 'cloud.js', 'cloud-people.js', 'cloud-members.js', 'cloud-local.js', 'cloud-read-state.js', 'cloud-cache.js', 'cloud-posters.js', 'cloud-api.js', 'cloud-config.js', 'styles.css', 'appearance.js', 'zoom.js', 'fonts/Inter-400.woff', 'fonts/Inter-500.woff', 'fonts/Inter-600.woff', 'fonts/Inter-700.woff', 'sw.js', 'storage.js', 'app-storage.js', 'folder-storage.js', 'logic.js', 'package.js', 'backup-format.js', 'backup-ui.js', 'backup-workflow.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'}:
             return self.send_error(404)
         body = (Path('pwa') / name).read_bytes()
         legacy = versions.get(scenario) != 'current'
         if legacy and name == 'sw.js':
-            body = body.replace(b'2026-10-25-people-access-v1', b'qa-legacy-shell').replace(b"assets.map(url => new Request(url, { cache: 'reload' }))", b'assets')
+            body = body.replace(b'2026-10-25-library-members-v1', b'qa-legacy-shell').replace(b"assets.map(url => new Request(url, { cache: 'reload' }))", b'assets')
         if legacy and name == 'app.js':
-            body = body.replace(b'2026-10-25-people-access-v1', b'qa-legacy-shell')
+            body = body.replace(b'2026-10-25-library-members-v1', b'qa-legacy-shell')
         if legacy and name == 'styles.css':
             body += b'\n/* QA_STALE_HTTP_CSS */\n#importFigure { pointer-events: none !important; }\n'
         self.send_response(200)
