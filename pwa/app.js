@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-25-guides-v1';
+const APP_VERSION = '2026-10-25-shared-media-v1';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';
