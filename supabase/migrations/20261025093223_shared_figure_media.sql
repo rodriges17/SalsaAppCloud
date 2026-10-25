@@ -1,5 +1,6 @@
 begin;
 alter table public.cloud_figures add column deleted_at timestamptz;
+alter table public.cloud_revisions add column retired_at timestamptz;
 alter table public.cloud_jobs add column explicit_variant boolean not null default false;
 alter table public.cloud_media drop constraint cloud_media_path_key;
 alter table public.cloud_media add column content_hash text check(content_hash ~ '^[a-f0-9]{64}$');
@@ -221,28 +222,6 @@ begin
    lid:=(payload->>'library')::uuid; fid:=(payload->>'figure')::uuid;
    if not cloud_can_manage_library(lid) and not exists(select 1 from cloud_figures where id=fid and owner_id=me) then raise exception 'Keine Berechtigung.'; end if;
    delete from cloud_entries where library_id=lid and figure_id=fid;
- elsif action='reserve' then
-   if not who.upload_enabled then raise exception 'Uploads sind nicht freigeschaltet.'; end if;
-   if jsonb_typeof(payload->'videos') is distinct from 'array' then raise exception 'Videoliste fehlt.'; end if;
-   n:=jsonb_array_length(payload->'videos');
-   if n not between 1 and 100 then raise exception 'Bitte 1 bis 100 Videos auswählen.'; end if;
-   perform pg_advisory_xact_lock(7193902);
-   select * into cfg from cloud_settings;
-   reserved:=n*cfg.file_limit;
-   if reserved+cloud_used_bytes()>cfg.total_limit or reserved+cloud_used_bytes(me)>who.quota then raise exception 'Nicht genug freier Speicher für den Upload. Laufende Uploads zählen mit.'; end if;
-   for item in select * from jsonb_array_elements(payload->'videos') loop
-     if (item->>'size')::bigint not between 1 and cfg.file_limit then raise exception 'Ein Video überschreitet das 50-MB-Limit des Free-Tarifs.'; end if;
-   end loop;
-   fid:=nullif(payload->>'figure','')::uuid;
-   if fid is null then insert into cloud_figures(owner_id) values(me) returning id into fid;
-   elsif not cloud_can_edit_figure(fid) then raise exception 'Nur eigene Figuren können bearbeitet werden.'; end if;
-   insert into cloud_jobs(owner_id,figure_id,explicit_variant) values(me,fid,coalesce((payload->>'variant')::boolean,false)) returning * into job;
-   for item in select * from jsonb_array_elements(payload->'videos') loop
-     mid:=gen_random_uuid();
-     insert into cloud_media(id,figure_id,owner_id,job_id,path,bytes,mime) values(mid,fid,me,job.id,me::text||'/'||mid::text,cfg.file_limit,item->>'type');
-     ids:=ids||jsonb_build_array(jsonb_build_object('id',mid,'path',me::text||'/'||mid::text));
-   end loop;
-   return jsonb_build_object('job',job.id,'figure',fid,'media',ids);
  elsif action='commit' then
    perform pg_advisory_xact_lock(7193902);
    jid:=(payload->>'job')::uuid;
@@ -270,6 +249,7 @@ begin
      if jsonb_typeof(payload->'public_allowed')<>'boolean' then raise exception 'Ungültige Veröffentlichungsfreigabe.'; end if;
      update cloud_figures set public_allowed=(payload->>'public_allowed')::boolean where id=job.figure_id and owner_id=me;
    end if;
+   update cloud_revisions set retired_at=coalesce(retired_at,now()) where figure_id=job.figure_id;
    insert into cloud_revisions(figure_id,title,description,tags,videos) values(job.figure_id,trim(payload->>'title'),coalesce(payload->>'description',''),coalesce(payload->'tags','[]'),videos) returning id into rid;
    if payload->'poster' is not null and payload->'poster'<>'null'::jsonb then perform cloud_save_poster(rid,payload->'poster'->>'data',coalesce(payload->'poster'->>'kind','local')); end if;
    -- Moderation approves initial membership, never a divergent copy of a figure.
@@ -368,7 +348,7 @@ begin
  perform pg_advisory_xact_lock(7193902);
  insert into media_garbage(path,eligible_at)
  select distinct m.path,now() from cloud_media m join cloud_figures f on f.id=m.figure_id where f.deleted_at<now()-interval '30 days' on conflict do nothing;
- delete from cloud_revisions r where r.created_at<now()-interval '30 days' and r.id<>(select newest.id from cloud_revisions newest where newest.figure_id=r.figure_id order by newest.created_at desc,newest.id desc limit 1) and not exists(select 1 from cloud_entries e where e.published_id=r.id or e.pending_id=r.id);
+ delete from cloud_revisions r where r.retired_at<now()-interval '30 days' and r.id<>(select newest.id from cloud_revisions newest where newest.figure_id=r.figure_id order by newest.created_at desc,newest.id desc limit 1) and not exists(select 1 from cloud_entries e where e.published_id=r.id or e.pending_id=r.id);
  delete from cloud_revisions r using cloud_figures f where r.figure_id=f.id and f.deleted_at<now()-interval '30 days';
  delete from cloud_media m using cloud_figures f where m.figure_id=f.id and f.deleted_at<now()-interval '30 days';
  delete from cloud_figures f where f.deleted_at<now()-interval '30 days' and not exists(select 1 from cloud_jobs where figure_id=f.id);
@@ -377,7 +357,7 @@ begin
  select distinct m.path,now() from cloud_media m where m.job_id is null and not exists(select 1 from cloud_revisions r,jsonb_array_elements(r.videos) v where (v->>'id')::uuid=m.id) on conflict do nothing;
  delete from cloud_media m where m.job_id is null and not exists(select 1 from cloud_revisions r,jsonb_array_elements(r.videos) v where (v->>'id')::uuid=m.id);
  delete from poster_blobs b where not exists(select 1 from poster_refs r where r.hash=b.hash);
- return jsonb_build_object('paths',coalesce((select jsonb_agg(path) from media_garbage g where eligible_at<=now() and not exists(select 1 from cloud_media m where m.path=g.path)),'[]'));
+ return jsonb_build_object('paths',coalesce((select jsonb_agg(path) from (select path from media_garbage g where eligible_at<=now() and not exists(select 1 from cloud_media m where m.path=g.path) limit 100) garbage),'[]'));
 end $$;
 revoke all on function cloud_private.cloud_collect_trash() from public,anon,authenticated;
 create function public.cloud_collect_trash() returns jsonb language sql security invoker set search_path='' as $$ select cloud_private.cloud_collect_trash() $$;
@@ -385,6 +365,10 @@ revoke all on function public.cloud_collect_trash() from public,anon,authenticat
 grant execute on function public.cloud_collect_trash(),cloud_private.cloud_collect_trash() to service_role;
 grant all on cloud_private.figure_editors,cloud_private.poster_refs,cloud_private.poster_blobs,cloud_private.media_garbage to service_role;
 grant select on cloud_private.revision_posters to service_role;
+create function public.cloud_ack_garbage(paths text[]) returns void language sql security invoker set search_path='' as $$ delete from cloud_private.media_garbage g where g.path=any(paths) and not exists(select 1 from public.cloud_media m where m.path=g.path) $$;
+revoke all on function public.cloud_ack_garbage(text[]) from public,anon,authenticated;
+grant execute on function public.cloud_ack_garbage(text[]) to service_role;
+update cloud_revisions r set retired_at=now() where r.id<>(select id from cloud_revisions latest where latest.figure_id=r.figure_id order by created_at desc,id desc limit 1);
 -- Normalize existing approved references to the current shared figure content.
 update cloud_entries e set published_id=(select id from cloud_revisions r where r.figure_id=e.figure_id order by created_at desc,id desc limit 1),pending_id=null where e.published_id is not null;
 update cloud_entries e set pending_id=(select id from cloud_revisions r where r.figure_id=e.figure_id order by created_at desc,id desc limit 1) where e.published_id is null and e.pending_id is not null;

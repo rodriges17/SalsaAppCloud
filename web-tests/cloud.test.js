@@ -215,3 +215,25 @@ test('server role can verify and collect without postgres privileges; clients ca
  await role(B);await assert.rejects(db.query('select cloud_verify_content($1,$2)',[mid,'b'.repeat(64)]));await assert.rejects(db.query('select cloud_collect_trash()'));
  await role(null,'service_role');await db.query('select cloud_verify_content($1,$2)',[mid,'b'.repeat(64)]);await db.query('select cloud_collect_trash()');
 });
+test('superseded media receives a full protection period from replacement, independent of original upload date',async()=>{
+ const first=await uploaded(B);const old=(await api(B,'state')).own_figures.find(f=>f.id===first.figure).revisions[0].videos[0];
+ await root("update cloud_revisions set created_at=now()-interval '100 days' where id=$1",[first.revision]);
+ const job=await api(B,'reserve',{figure:first.figure,videos:[{...videos[0],reuse:old.id}]});
+ const next=await api(B,'commit',{job:job.job,title:'Aktualisiert',tags:[],videos:[{id:job.media[0].id,name:'Video'}]});
+ await root('select cloud_collect_trash()');
+ assert.equal((await root('select count(*)::int n from cloud_revisions where id=$1',[first.revision])).rows[0].n,1);
+ await root("update cloud_revisions set retired_at=now()-interval '31 days' where id=$1",[first.revision]);
+ const garbage=(await root('select cloud_collect_trash() result')).rows[0].result.paths;
+ assert.equal((await root('select count(*)::int n from cloud_revisions where id=$1',[first.revision])).rows[0].n,0);
+ assert.ok(!garbage.includes((await api(B,'media',{revision:next.revision,media:job.media[0].id})).path));
+});
+test('server rejects accidental duplicate figures while permitting an explicit independent variant',async()=>{
+ const first=await uploaded(B);const old=(await api(B,'state')).own_figures.find(f=>f.id===first.figure).revisions[0].videos[0];
+ await root('select cloud_verify_content($1,$2)',[old.id,'c'.repeat(64)]);
+ const job=await api(B,'reserve',{videos:[{...videos[0],reuse:old.id}]});
+ await assert.rejects(api(B,'commit',{job:job.job,title:'Duplikat',tags:[],videos:[{id:job.media[0].id,name:'Video'}]}),/bereits/);
+ await root('select cloud_release_job($1)',[job.job]);
+ const explicit=await api(B,'reserve',{variant:true,videos:[{...videos[0],reuse:old.id}]});
+ const done=await api(B,'commit',{job:explicit.job,title:'Eigene Variante',tags:[],videos:[{id:explicit.media[0].id,name:'Video'}]});
+ assert.notEqual(done.figure,first.figure);
+});

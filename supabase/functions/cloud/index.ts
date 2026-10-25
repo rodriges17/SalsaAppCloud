@@ -51,7 +51,7 @@ Deno.serve(async req => {
       const items = checked(await adminClient.from('cloud_media').select('id,path').eq('ready', true).is('content_hash', null).limit(4));
       for (const item of items) await verifyContent(adminClient, item);
       const garbage = checked(await adminClient.rpc('cloud_collect_trash'));
-      if (garbage.paths.length) checked(await adminClient.storage.from('salsa-cloud').remove(garbage.paths));
+      if (garbage.paths.length) { checked(await adminClient.storage.from('salsa-cloud').remove(garbage.paths)); checked(await adminClient.rpc('cloud_ack_garbage', { paths: garbage.paths })); }
       return response({ processed: items.length, cleaned: garbage.paths.length });
     }
     if (action === 'admin_optimize') {
@@ -139,7 +139,7 @@ Deno.serve(async req => {
         checked(await adminClient.rpc('cloud_release_job', { jid: job.id }));
       }
       const garbage = checked(await adminClient.rpc('cloud_collect_trash'));
-      if (garbage.paths.length) checked(await adminClient.storage.from('salsa-cloud').remove(garbage.paths));
+      if (garbage.paths.length) { checked(await adminClient.storage.from('salsa-cloud').remove(garbage.paths)); checked(await adminClient.rpc('cloud_ack_garbage', { paths: garbage.paths })); }
       return response({ ok: true, cleaned: jobs.length });
     }
     return response(await rpc(action));
