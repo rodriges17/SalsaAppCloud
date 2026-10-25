@@ -20,10 +20,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: 'npm'
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm test
       - uses: denoland/setup-deno@v2
         with:
@@ -37,8 +38,6 @@ jobs:
           ffmpeg -f lavfi -i testsrc2=size=320x180:rate=12 -t 6 -c:v libx264 -pix_fmt yuv420p -movflags +faststart web-tests/fixtures/clip.mp4
           ffmpeg -f lavfi -i testsrc2=size=180x320:rate=12 -t 5 -c:v libx264 -pix_fmt yuv420p -movflags +faststart web-tests/fixtures/portrait.mp4
       - run: npm run test:browser
-        env:
-          DEBUG: pw:browser
       - name: Upload browser results
         if: always()
         uses: actions/upload-artifact@v4
@@ -76,7 +75,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --ignore-scripts --no-audit --no-fund
+          cache: 'npm'
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npx playwright install chromium webkit
       - name: Verify touch import on the published PWA
         run: node web-tests/live-check.mjs

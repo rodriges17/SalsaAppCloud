@@ -6,6 +6,11 @@ import json, re
 
 versions = {}
 class Handler(SimpleHTTPRequestHandler):
+    def log_request(self, code='-', size='-'):
+        # Keep failed requests visible without printing every app-shell asset.
+        if str(code).isdigit() and int(code) >= 400:
+            super().log_request(code, size)
+
     def do_POST(self):
         match = re.fullmatch(r'/__qa/upgrade/([a-zA-Z0-9-]+)', urlsplit(self.path).path)
         if not match:
