@@ -523,7 +523,7 @@ test('failed password login keeps public access and clears the rejected password
 
 for (const authenticated of [false, true]) test(`content matching detects independent renamed local video (${authenticated?'signed in':'guest'})`, async ({page}) => {
  if(authenticated) await signIn(page);
- const calls=await mock(page,authenticated,authenticated);
+ const calls=await mock(page,authenticated,authenticated,true,{posters:new Map([['rev-1',{poster:POSTER,kind:'local'}]])});
  const {createHash}=await import('node:crypto');
  const digest=createHash('sha256').update(await readFile('web-tests/fixtures/clip.mp4')).digest('hex');
  await page.route(new RegExp('^'+host+'/functions/'),async route=>{
