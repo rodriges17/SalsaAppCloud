@@ -64,7 +64,7 @@ async function refreshSession() {
     const invalid = ['refresh_token_not_found', 'refresh_token_already_used', 'session_not_found', 'session_expired', 'user_not_found', 'user_banned', 'invalid_grant'].includes(error.code);
     if (invalid && [400, 401, 403].includes(error.status) && storedSession()?.refresh_token === previous.refresh_token) {
       await replaceSession(null, true);
-      throw new Error('Deine Anmeldung ist abgelaufen oder wurde widerrufen. Bitte mit einem neuen persönlichen Link anmelden.');
+      throw new Error('Deine Anmeldung ist abgelaufen oder wurde widerrufen. Bitte erneut anmelden: als Plattform-Admin mit E-Mail und Passwort oder mit einem neuen persönlichen Link.');
     }
     // Timeouts, network failures and server errors must never erase the session.
     throw error;
@@ -114,6 +114,49 @@ export async function loginWithLink(link) {
   if (!data.access_token || !data.refresh_token) throw new Error('Anmeldung unvollständig. Bitte einen neuen Link anfordern.');
   if (epoch !== loginEpoch || owner !== cloudIdentity()) throw new Error('Diese Anmeldung wurde inzwischen abgebrochen.');
   await replaceSession({ ...data, expires_at: Date.now() + data.expires_in * 1000 });
+}
+// Authenticate with Supabase first, then verify the database-backed platform role
+// before publishing the candidate session or exposing cached admin content.
+export async function loginWithPassword(email, password) {
+  const epoch = ++loginEpoch, owner = cloudIdentity();
+  email = String(email ?? '').trim().toLowerCase();
+  if (!email.includes('@') || !password) throw new Error('Bitte E-Mail-Adresse und Passwort eingeben.');
+  let data, adopted = false;
+  try {
+    try {
+      data = await parse(await fetch(`${CLOUD_URL}/auth/v1/token?grant_type=password`, { method: 'POST', headers: { apikey: CLOUD_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }), signal: AbortSignal.timeout(30000) }));
+    } catch (error) {
+      if (['invalid_credentials', 'email_not_confirmed', 'user_banned'].includes(error.code)) throw new Error('Anmeldung nicht möglich. Bitte E-Mail-Adresse und Passwort prüfen.');
+      if (error.status === 429) throw new Error('Zu viele Anmeldeversuche. Bitte später erneut versuchen.');
+      throw error;
+    }
+    if (!data.access_token || !data.refresh_token || !(data.expires_in > 0)) throw new Error('Anmeldung unvollständig. Bitte erneut versuchen.');
+    if (epoch !== loginEpoch || owner !== cloudIdentity()) throw new Error('Diese Anmeldung wurde inzwischen abgebrochen.');
+    const state = await parse(await fetch(`${CLOUD_URL}/functions/v1/cloud`, { method: 'POST', headers: { apikey: CLOUD_KEY, Authorization: `Bearer ${data.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'state', payload: {} }), signal: AbortSignal.timeout(45000) }));
+    if (epoch !== loginEpoch || owner !== cloudIdentity()) throw new Error('Diese Anmeldung wurde inzwischen abgebrochen.');
+    if (!state.me?.is_admin) throw new Error('Diese Anmeldung ist nur für Plattform-Admins. Bitte deinen persönlichen Anmeldelink verwenden.');
+    adopted = true;
+    await replaceSession({ access_token: data.access_token, refresh_token: data.refresh_token, expires_at: Date.now() + data.expires_in * 1000 });
+  } finally {
+    // Discard only this candidate; never revoke another tab's accepted login.
+    if (data?.access_token && !adopted) await fetch(`${CLOUD_URL}/auth/v1/logout?scope=local`, { method: 'POST', headers: { apikey: CLOUD_KEY, Authorization: `Bearer ${data.access_token}` }, signal: AbortSignal.timeout(10000) }).catch(() => {});
+  }
+}
+export async function setAdminPassword(password, currentPassword = '') {
+  if (typeof password !== 'string' || password.length < 12) throw new Error('Bitte ein Passwort mit mindestens 12 Zeichen wählen.');
+  const owner = cloudIdentity(), state = await cloudCall('state');
+  if (!state.me?.is_admin) throw new Error('Nur Plattform-Admins können hier ihr Passwort einrichten.');
+  const token = await accessToken();
+  if (!token || owner !== cloudIdentity()) throw new Error('Das angemeldete Konto wurde inzwischen gewechselt. Bitte erneut anmelden.');
+  try {
+    await parse(await fetch(`${CLOUD_URL}/auth/v1/user`, { method: 'PUT', headers: { apikey: CLOUD_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ password, ...(currentPassword ? { current_password: currentPassword } : {}) }), signal: AbortSignal.timeout(30000) }));
+  } catch (error) {
+    if (error.code === 'reauthentication_needed') throw new Error('Bitte erneut anmelden und danach das Passwort setzen. Für die erste Einrichtung kannst du einen neuen persönlichen Anmeldelink verwenden.');
+    if (['current_password_required', 'missing_current_password', 'invalid_current_password'].includes(error.code)) throw new Error('Bitte dein bisheriges Passwort eingeben und erneut versuchen.');
+    if (error.code === 'same_password') throw new Error('Das neue Passwort entspricht bereits deinem bisherigen Passwort.');
+    throw error;
+  }
+  if (owner !== cloudIdentity()) throw new Error('Das Konto wurde gewechselt. Das Passwort wurde für das zuvor angemeldete Konto gespeichert.');
 }
 let finishingLogin = null;
 export async function finishLogin() {

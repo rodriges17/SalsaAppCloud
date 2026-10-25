@@ -492,3 +492,31 @@ test('explicit variant reuses accessible video without uploading it again',async
  expect(calls.find(c=>c.action==='reserve').payload).toMatchObject({variant:true,videos:[{reuse:'existing-video'}]});
  expect(calls.some(c=>['upload','finalize'].includes(c.action))).toBe(false);expect(calls.some(c=>c.action==='commit')).toBe(true);
 });
+test('platform admin signs in again with email and password without redeeming a magic link',async({page})=>{
+ const calls=await mock(page,true);const credentials=[];
+ await page.route(`${host}/auth/v1/token?grant_type=password`,r=>{credentials.push(r.request().postDataJSON());return r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({access_token:'test-user-jwt',refresh_token:'test-refresh',expires_in:3600})});});
+ await page.route(`${host}/auth/v1/logout*`,r=>r.fulfill({status:200,contentType:'application/json',body:'{}'}));
+ await start(page);await page.locator('#cloudButton').tap();
+ await page.getByText('Mit E-Mail und Passwort anmelden',{exact:true}).tap();
+ await page.getByLabel('Admin-E-Mail-Adresse',{exact:true}).fill('admin@example.test');await page.getByLabel('Admin-Passwort',{exact:true}).fill('demo-admin-password');await page.getByRole('button',{name:'Als Admin anmelden',exact:true}).tap();
+ await expect(page.getByRole('button',{name:'Plattformverwaltung',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Abmelden',exact:true}).tap();await expect(page.getByRole('button',{name:'Plattformverwaltung',exact:true})).toHaveCount(0);
+ await page.getByText('Mit E-Mail und Passwort anmelden',{exact:true}).tap();await page.getByLabel('Admin-E-Mail-Adresse',{exact:true}).fill('admin@example.test');await page.getByLabel('Admin-Passwort',{exact:true}).fill('demo-admin-password');await page.getByRole('button',{name:'Als Admin anmelden',exact:true}).tap();
+ await expect(page.getByRole('button',{name:'Plattformverwaltung',exact:true})).toBeVisible();expect(credentials).toHaveLength(2);expect(credentials[0].email).toBe('admin@example.test');
+ expect(calls.filter(c=>c.action==='state'&&c.authorization==='Bearer test-user-jwt').length).toBeGreaterThanOrEqual(2);
+});
+test('admin sets an own password with matching confirmation; secrets are cleared and never sent to the cloud function',async({page})=>{
+ await signIn(page);const calls=await mock(page,true);const writes=[];
+ await page.route(`${host}/auth/v1/user`,r=>{writes.push(r.request().postDataJSON());return r.fulfill({status:200,contentType:'application/json',body:'{"id":"admin"}'});});
+ await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Plattformverwaltung',exact:true}).tap();
+ await page.getByLabel('Neues Admin-Passwort',{exact:true}).fill('a-new-demo-password');await page.getByLabel('Neues Admin-Passwort wiederholen',{exact:true}).fill('does-not-match');await page.getByRole('button',{name:'Admin-Passwort speichern',exact:true}).tap();
+ await expect(page.locator('#cloudBody')).toContainText('Die neuen Passwörter stimmen nicht überein.');expect(writes).toHaveLength(0);
+ await page.getByLabel('Neues Admin-Passwort wiederholen',{exact:true}).fill('a-new-demo-password');await page.getByRole('button',{name:'Admin-Passwort speichern',exact:true}).tap();
+ await expect(page.locator('#cloudBody')).toContainText('Passwort gespeichert.');expect(writes).toEqual([{password:'a-new-demo-password'}]);await expect(page.getByLabel('Neues Admin-Passwort',{exact:true})).toHaveValue('');await expect(page.getByLabel('Neues Admin-Passwort wiederholen',{exact:true})).toHaveValue('');
+ expect(JSON.stringify(calls)).not.toContain('a-new-demo-password');
+});
+test('failed password login keeps public access and clears the rejected password for retry',async({page})=>{
+ await mock(page,false);await page.route(`${host}/auth/v1/token?grant_type=password`,r=>r.fulfill({status:400,contentType:'application/json',body:'{"code":"invalid_credentials","msg":"Invalid login credentials"}'}));
+ await start(page);await page.locator('#cloudButton').tap();await page.getByText('Mit E-Mail und Passwort anmelden',{exact:true}).tap();await page.getByLabel('Admin-E-Mail-Adresse',{exact:true}).fill('admin@example.test');await page.getByLabel('Admin-Passwort',{exact:true}).fill('wrong-password');await page.getByRole('button',{name:'Als Admin anmelden',exact:true}).tap();
+ await expect(page.locator('#cloudBody')).toContainText('Bitte E-Mail-Adresse und Passwort prüfen.');await expect(page.getByLabel('Admin-Passwort',{exact:true})).toHaveValue('');await expect(page.getByRole('button',{name:'Als Admin anmelden',exact:true})).toBeEnabled();await expect(page.getByRole('button',{name:'Abmelden',exact:true})).toHaveCount(0);
+});

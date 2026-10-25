@@ -2,7 +2,7 @@ import { videoHash } from './cloud-dedup.js';
 import { createMemberView } from './cloud-members.js';
 import { createPeopleView } from './cloud-people.js';
 import { cloudReadState, contentState } from './cloud-read-state.js';
-import { cloudCall, signedIn, uploadMedia, logout, loginWithLink, cloudIdentity } from './cloud-api.js';
+import { cloudCall, signedIn, uploadMedia, logout, loginWithLink, loginWithPassword, setAdminPassword, cloudIdentity } from './cloud-api.js';
 import { CLOUD_FILE_LIMIT } from './cloud-config.js';
 import { figureVideos } from './storage.js';
 import { createCloudLocalIndex } from './cloud-local.js';
@@ -134,6 +134,7 @@ async function renderCloud(library, detail) {
     if (area === 'figures') body.append(node('h3', 'Meine Cloud-Figuren'), node('p', 'Melde dich an, um deine hochgeladenen Figuren zu sehen.'));
     else body.append(node('p', 'Öffentliche Bibliotheken sind ohne Anmeldung lesbar. Für private Bibliotheken und Beiträge erhältst du einen persönlichen Anmeldelink vom Administrator.'));
     body.append(node('p', 'Du bist derzeit nicht angemeldet. Bibliotheken erstellen und Verwaltung erscheinen nach der Anmeldung mit einem berechtigten Konto.'));
+    adminLoginForm();
     const box = section('Mit Anmeldelink anmelden'), form = node('form'); box.append(form);
     const link = field(form, 'Anmeldelink einfügen', '', 'password'); link.autocomplete = 'off';
     box.append(node('p', 'Füge deinen persönlichen Anmeldelink hier ein, um dich in dieser App anzumelden. Die Anmeldung in einer anderen App oder einem anderen Browser wird nicht automatisch übernommen.'));
@@ -443,7 +444,49 @@ async function publishForm() {
   }, uploadError));
   upload.className = 'primary'; box.append(upload, uploadError);
 }
+function adminLoginForm() {
+  const box = section('Admin-Anmeldung'), details = node('details');
+  details.append(node('summary', 'Mit E-Mail und Passwort anmelden')); box.append(details);
+  const form = node('form'); details.append(form);
+  const email = field(form, 'Admin-E-Mail-Adresse', '', 'email'); email.autocomplete = 'username'; email.required = true;
+  const password = field(form, 'Admin-Passwort', '', 'password'); password.autocomplete = 'current-password'; password.required = true;
+  const error = node('p', '', 'error'); error.setAttribute('role', 'alert'); error.hidden = true;
+  const submit = async () => {
+    if (!form.reportValidity()) return;
+    await run('Admin anmelden …', async () => {
+      try { await loginWithPassword(email.value, password.value); area = 'initial'; await load(null); }
+      finally { password.value = ''; }
+    }, error);
+  };
+  form.append(action('Als Admin anmelden', submit), error);
+  form.onsubmit = event => { event.preventDefault(); void submit(); };
+  const help = node('details'); help.append(node('summary', 'Erstes Passwort oder Passwort vergessen?'), node('p', 'Wenn du noch angemeldet bist: Plattformverwaltung → Admin-Passwort. Sonst einmalig mit einem neuen persönlichen Anmeldelink anmelden und dort ein Passwort setzen. Einen neuen Link kann ein anderer Plattform-Admin erzeugen; wenn niemand mehr angemeldet ist, erfolgt die Wiederherstellung über Supabase.'));
+  details.append(help);
+}
+function adminPasswordForm() {
+  const box = section('Admin-Passwort'), form = node('form'); box.append(form);
+  box.append(node('p', 'Einmal einrichten und nach dem Abmelden mit E-Mail und Passwort zurückkehren. Dein Passwort gilt für dein eigenes Admin-Konto in Cloud-PWA und Android.'));
+  const email = field(form, 'Deine Admin-E-Mail-Adresse', state.me.email, 'email'); email.readOnly = true; email.autocomplete = 'username';
+  const current = field(form, 'Bisheriges Passwort (falls bereits gesetzt)', '', 'password'); current.autocomplete = 'current-password';
+  const password = field(form, 'Neues Admin-Passwort', '', 'password'); password.autocomplete = 'new-password'; password.minLength = 12; password.required = true;
+  const repeat = field(form, 'Neues Admin-Passwort wiederholen', '', 'password'); repeat.autocomplete = 'new-password'; repeat.required = true;
+  form.append(node('p', 'Mindestens 12 Zeichen. Du kannst ein Passwort aus deinem Passwortmanager einfügen.'));
+  const error = node('p', '', 'error'); error.setAttribute('role', 'alert'); error.hidden = true;
+  const status = node('p'); status.setAttribute('role', 'status');
+  const submit = async () => {
+    status.textContent = ''; error.hidden = true;
+    if (!form.reportValidity()) return;
+    if (password.value !== repeat.value) { report(new Error('Die neuen Passwörter stimmen nicht überein.'), error); return; }
+    await run('Admin-Passwort speichern …', async () => {
+      try { await setAdminPassword(password.value, current.value); status.textContent = 'Passwort gespeichert. Du kannst dich jetzt mit deiner E-Mail-Adresse und diesem Passwort wieder anmelden.'; }
+      finally { current.value = ''; password.value = ''; repeat.value = ''; }
+    }, error);
+  };
+  form.append(action('Admin-Passwort speichern', submit), error, status);
+  form.onsubmit = event => { event.preventDefault(); void submit(); };
+}
 function adminForm() {
+  adminPasswordForm();
   const box = section('Plattformverwaltung');
   peopleView.mount(box);
   box.append(action('Bestehende Videos auf Duplikate prüfen', () => run('Videos prüfen …', async () => {

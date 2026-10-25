@@ -53,3 +53,34 @@ test('cloud session: changed identity during token refresh prevents sending clou
  let release,calls=0;const gate=new Promise(r=>release=r);const {api}=await setup(async url=>{if(String(url).includes('/logout'))return json({});calls++;await gate;return json(renewed());});
  const pending=api.cloudCall('state');await api.logout();release();await assert.rejects(pending,/Konto/);assert.equal(calls,1);
 });
+test('admin password login verifies the server role before publishing a session and never stores credentials',async()=>{
+ const calls=[];const {api,values}=await setup(async(url,init)=>{calls.push({url:String(url),init});return String(url).includes('/functions/')?json({me:{is_admin:true}}):json(renewed());});
+ await api.loginWithPassword(' Admin@Example.Test ','test-password-only');
+ assert.equal(JSON.parse(calls[0].init.body).email,'admin@example.test');assert.equal(calls[1].init.headers.Authorization,'Bearer new-access');
+ assert.equal(JSON.parse(values.get(key)).access_token,'new-access');assert.ok(!values.get(key).includes('test-password-only'));assert.ok(!values.get(key).includes('admin@example.test'));
+});
+test('password login rejects non-admins, revokes only the candidate and preserves an existing session',async()=>{
+ const calls=[];const {api,values}=await setup(async(url,init)=>{calls.push({url:String(url),init});return String(url).includes('/functions/')?json({me:{is_admin:false}}):json(renewed());});
+ api.cloudIdentity();api.cloudIdentity();const before=values.get(key);await assert.rejects(api.loginWithPassword('reader@example.test','password'),/nur für Plattform-Admins/);
+ assert.equal(values.get(key),before);assert.ok(calls.some(c=>c.url.endsWith('/logout?scope=local')&&c.init.headers.Authorization==='Bearer new-access'));
+});
+test('password login errors and failed role checks preserve the current account',async()=>{
+ for(const failure of ['credentials','role']){const {api,values}=await setup(async url=>failure==='credentials'?json({error_code:'invalid_credentials',msg:'Invalid login credentials'},400):String(url).includes('/functions/')?json({error:'Temporary outage'},503):json(renewed()));api.cloudIdentity();const before=values.get(key);await assert.rejects(api.loginWithPassword('admin@example.test','bad'));assert.equal(values.get(key),before);}
+});
+test('a late password login cannot undo logout or a newer accepted login',async()=>{
+ let release;const gate=new Promise(r=>release=r);let count=0;
+ const {api,values}=await setup(async url=>String(url).includes('/functions/')?json({me:{is_admin:true}}):String(url).includes('/logout')?json({}):++count===1?(await gate,json({...renewed(),access_token:'late-candidate'})):json({...renewed(),access_token:'accepted'}));
+ const pending=api.loginWithPassword('admin@example.test','one');await api.loginWithPassword('admin@example.test','two');release();await assert.rejects(pending,/abgebrochen/);assert.equal(JSON.parse(values.get(key)).access_token,'accepted');
+ let release2;const gate2=new Promise(r=>release2=r);const second=await setup(async url=>String(url).includes('/logout')?json({}):(await gate2,json(renewed())));
+ const late=second.api.loginWithPassword('admin@example.test','one');await second.api.logout();release2();await assert.rejects(late,/abgebrochen/);assert.equal(second.api.signedIn(),false);
+});
+test('password setup checks admin rights and identity and sends secrets only to the authenticated Auth endpoint',async()=>{
+ const calls=[];const {api,values}=await setup(async(url,init)=>{calls.push({url:String(url),init});return String(url).includes('/token')?json(renewed()):String(url).includes('/functions/')?json({me:{is_admin:true}}):json({id:'admin'});});
+ await api.setAdminPassword('new-password-long','previous-password');
+ const write=calls.find(c=>c.init.method==='PUT');assert.ok(write.url.endsWith('/auth/v1/user'));assert.deepEqual(JSON.parse(write.init.body),{password:'new-password-long',current_password:'previous-password'});
+ assert.ok(calls.filter(c=>c.url.includes('/functions/')).every(c=>!c.init.body.includes('password')));assert.ok(!values.get(key).includes('new-password-long'));
+});
+test('password setup blocks short passwords and non-admins before sending a password update',async()=>{
+ let puts=0;const {api}=await setup(async(url,init)=>{if(init.method==='PUT')puts++;return String(url).includes('/token')?json(renewed()):json({me:{is_admin:false}});});
+ await assert.rejects(api.setAdminPassword('short'),/12 Zeichen/);await assert.rejects(api.setAdminPassword('long-password-here'),/Nur Plattform-Admins/);assert.equal(puts,0);
+});

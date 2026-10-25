@@ -2,6 +2,8 @@
 
 [Cloud-Speicher und Figurenreferenzen](docs/CLOUD-SPEICHER.md)
 
+[Admin-Anmeldung mit E-Mail und Passwort](docs/ADMIN-ANMELDUNG.md)
+
 ## Kurzanleitungen
 
 - **[Bibliotheken teilen – Anleitung öffnen](https://rodriges17.github.io/SalsaAppCloud/anleitungen/teilen.html)** · [HTML-Datei](pwa/anleitungen/teilen.html)
