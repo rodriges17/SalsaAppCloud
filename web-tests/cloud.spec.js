@@ -520,3 +520,22 @@ test('failed password login keeps public access and clears the rejected password
  await start(page);await page.locator('#cloudButton').tap();await page.getByText('Mit E-Mail und Passwort anmelden',{exact:true}).tap();await page.getByLabel('Admin-E-Mail-Adresse',{exact:true}).fill('admin@example.test');await page.getByLabel('Admin-Passwort',{exact:true}).fill('wrong-password');await page.getByRole('button',{name:'Als Admin anmelden',exact:true}).tap();
  await expect(page.locator('#cloudBody')).toContainText('Bitte E-Mail-Adresse und Passwort prüfen.');await expect(page.getByLabel('Admin-Passwort',{exact:true})).toHaveValue('');await expect(page.getByRole('button',{name:'Als Admin anmelden',exact:true})).toBeEnabled();await expect(page.getByRole('button',{name:'Abmelden',exact:true})).toHaveCount(0);
 });
+
+for (const authenticated of [false, true]) test(`content matching detects independent renamed local video (${authenticated?'signed in':'guest'})`, async ({page}) => {
+ if(authenticated) await signIn(page);
+ const calls=await mock(page,authenticated,authenticated);
+ const {createHash}=await import('node:crypto');
+ const digest=createHash('sha256').update(await readFile('web-tests/fixtures/clip.mp4')).digest('hex');
+ await page.route(new RegExp('^'+host+'/functions/'),async route=>{
+  const input=route.request().postDataJSON();
+  if(input.action==='media')return route.fulfill({contentType:'application/json',body:JSON.stringify({content_hash:digest})});
+  await route.fallback();
+ });
+ await start(page);await seedCloudLocal(page,{title:'Anderer lokaler Name'});
+ await page.locator('#cloudButton').tap();
+ if(!authenticated)await page.getByRole('button',{name:'Öffnen',exact:true}).tap();
+ await expect(page.getByRole('button',{name:'✓ Lokal vorhanden',exact:true})).toBeDisabled();
+ await expect(page.locator('.cloud-local-status').first()).toHaveText('✓ Bereits lokal vorhanden');
+ expect(calls.filter(c=>c.action==='media_url')).toHaveLength(0);
+ expect(await localCloudFigures(page)).toHaveLength(1);
+});
