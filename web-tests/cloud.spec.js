@@ -540,8 +540,13 @@ for (const authenticated of [false, true]) test(`content matching detects indepe
  expect(await localCloudFigures(page)).toHaveLength(1);
 });
 
-test('local hash cache avoids rereading video bytes across scans and page reloads',async({page})=>{
- await mock(page);await start(page);await seedCloudLocal(page);
+test.describe('installed PWA hash persistence',()=>{
+ test.use({serviceWorkers:'allow'});
+ test('local hash cache avoids rereading video bytes across scans and page reloads',async({page})=>{
+ await start(page);
+ await expect(page.locator('html')).toHaveAttribute('data-offline-status','ready',{timeout:30000});
+ await page.evaluate(async()=>{await navigator.serviceWorker.ready;if(!navigator.serviceWorker.controller)await new Promise(resolve=>navigator.serviceWorker.addEventListener('controllerchange',resolve,{once:true}));});
+ await seedCloudLocal(page);
  const scan=()=>page.evaluate(async()=>{
   const {localVideoContent}=await import('/pwa/cloud-local-content.js');
   const {listFigures,figureMedia}=await import('/pwa/storage.js');
@@ -558,4 +563,5 @@ test('local hash cache avoids rereading video bytes across scans and page reload
  expect(await scan()).toEqual({reads:0,matches:1});
  await page.reload();await expect(page.locator('#cloudButton')).toBeVisible();
  expect(await scan()).toEqual({reads:0,matches:1});
+});
 });
