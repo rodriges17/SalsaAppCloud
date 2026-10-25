@@ -45,11 +45,12 @@ async function mock(page,admin=false, own=false, contribute=true, options={}){
  });return calls;
 }
 async function start(page){await page.goto('/pwa/');await expect(page.getByRole('heading',{name:'Step by Step',exact:true})).toBeVisible();}
-test('public cloud download requires confirmed previews and becomes an offline copy',async({page,context})=>{
+test('public cloud download saves directly with cloud metadata and becomes an offline copy',async({page,context})=>{
  await mock(page);await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Öffnen',exact:true}).tap();
  await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();await expect(page.locator('#cloudBody input[type=checkbox]')).toHaveCount(0);await page.getByRole('button',{name:'In meine Figuren übernehmen',exact:true}).tap();
- await expect(page.locator('#editor')).toBeVisible();await expect(page.locator('#figureTitle')).toHaveValue('Cloud Drehung');await expect(page.locator('#saveFigure')).toBeDisabled();
- await page.locator('#reviewAll').tap();await expect(page.locator('#acceptVideo')).toBeEnabled();await page.locator('#acceptVideo').tap();await page.locator('#saveFigure').tap();await expect(page.locator('#editor')).not.toBeVisible();
+ await finishCloudImport(page);
+ const saved=await page.evaluate(async()=>(await(await import('/pwa/storage.js')).listFigures())[0]);
+ expect(saved).toMatchObject({title:'Cloud Drehung',description:'Aus der Cloud',tags:['Salsa'],status:'Neu'});
  await context.setOffline(true);await page.getByRole('button',{name:'Cloud Drehung lernen',exact:true}).tap();await expect(page.locator('#learningVideo')).toHaveJSProperty('videoWidth',320);
 });
 test('offline cloud failure stays closable and local editing works',async({page,context})=>{
@@ -295,7 +296,7 @@ test('multiple cloud videos have an explicit download selection and only selecte
  const checks=page.locator('#cloudBody input[type=checkbox]');await expect(checks).toHaveCount(2);await checks.nth(0).uncheck();await checks.nth(1).uncheck();
  const download=page.getByRole('button',{name:'Ausgewählte Videos in meine Figuren übernehmen',exact:true});await download.tap();await expect(page.locator('#cloudError')).toContainText('Bitte mindestens ein Video auswählen');
  expect(calls.filter(call=>call.action==='media_url')).toHaveLength(0);
- await checks.nth(1).check();await download.tap();await expect(page.locator('#editor')).toBeVisible();await expect(page.locator('.draft-card')).toHaveCount(1);
+ await checks.nth(1).check();await download.tap();await finishCloudImport(page);expect((await localCloudFigures(page))[0].videoIds).toHaveLength(1);
  expect(calls.filter(call=>call.action==='media_url').map(call=>call.payload.media)).toEqual(['video-2']);
 });
 
@@ -320,7 +321,7 @@ test('failed poster loading keeps a neutral placeholder and the figure actions u
   const data=route.request().postDataJSON();if(data.action==='poster_get')return route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({error:'Test: Vorschaubild nicht verfügbar'})});await route.fallback();
  });
  await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Öffnen',exact:true}).tap();await page.locator('.revision-heading').scrollIntoViewIfNeeded();await expect(page.locator('.cloud-thumbnail-placeholder')).toBeVisible();await expect(page.locator('.cloud-thumbnail')).toHaveCount(0);
- await page.getByRole('button',{name:'In meine Figuren übernehmen',exact:true}).tap();await expect(page.locator('#editor')).toBeVisible();
+ await page.getByRole('button',{name:'In meine Figuren übernehmen',exact:true}).tap();await finishCloudImport(page);
 });
 
 async function seedCloudLocal(page, {title='Cloud Drehung', fingerprint=null}={}) {
@@ -331,8 +332,9 @@ async function seedCloudLocal(page, {title='Cloud Drehung', fingerprint=null}={}
  },{title,fingerprint});
 }
 async function finishCloudImport(page) {
- await page.locator('#reviewAll').tap();await expect(page.locator('#acceptVideo')).toBeEnabled();await page.locator('#acceptVideo').tap();
- await page.locator('#saveFigure').tap();await expect(page.locator('#editor')).not.toBeVisible();
+ await expect(page.locator('#cloudDialog')).not.toBeVisible();
+ await expect(page.locator('#editor')).not.toBeVisible();
+ await expect(page.getByRole('button',{name:'Cloud Drehung lernen',exact:true}).first()).toBeVisible();
 }
 async function localCloudFigures(page) { return page.evaluate(async()=> (await (await import('/pwa/storage.js')).listFigures()).map(f=>({id:f.id,title:f.title,status:f.status,createdAt:f.createdAt,revision:f.revision,videoIds:f.videoIds,importFingerprint:f.importFingerprint}))); }
 
@@ -341,7 +343,7 @@ test('own cloud figure downloads directly without a library and marks identical 
  await start(page);await page.locator('#cloudButton').tap();
  await page.getByLabel('Führung ·',{exact:false}).uncheck();
  await page.getByRole('button',{name:'Lokal übernehmen',exact:true}).tap();
- await expect(page.locator('#editor')).toBeVisible();await expect(page.locator('.draft-card')).toHaveCount(1);await expect(page.locator('#saveFigure')).toBeDisabled();
+ await finishCloudImport(page);expect((await localCloudFigures(page))[0].videoIds).toHaveLength(1);
  expect(calls.filter(c=>['attach','library_save','library'].includes(c.action))).toHaveLength(0);
  await finishCloudImport(page);
  const local=await localCloudFigures(page);expect(local).toHaveLength(1);expect(local[0].importFingerprint).toBe('cloud:rev-1:video-2');
@@ -360,9 +362,7 @@ test('direct cloud replacement can be cancelled and preserves identity and learn
  await conflict.getByRole('button',{name:'Abbrechen',exact:true}).tap();await expect(conflict).toHaveCount(0);await expect(page.locator('#cloudDialog')).toBeVisible();
  expect((await localCloudFigures(page))[0].revision).toBe(before.revision);
  await page.getByRole('button',{name:'Lokal übernehmen',exact:true}).tap();await conflict.getByRole('button',{name:'Vorhandene Figur ersetzen',exact:true}).tap();
- await expect(page.locator('#editor')).toBeVisible();await expect(page.locator('#figureStatus')).toHaveValue('Sitzt');await expect(page.locator('#saveFigure')).toBeDisabled();
- await page.locator('#editorBack').tap();await page.locator('#confirmOK').tap();await expect(page.locator('#editor')).not.toBeVisible();expect((await localCloudFigures(page))[0].revision).toBe(before.revision);
- await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Lokal übernehmen',exact:true}).tap();await conflict.getByRole('button',{name:'Vorhandene Figur ersetzen',exact:true}).tap();await finishCloudImport(page);
+ await finishCloudImport(page);
  const local=await localCloudFigures(page);expect(local).toHaveLength(1);expect(local[0]).toMatchObject({id:before.id,status:'Sitzt',createdAt:before.createdAt,importFingerprint:'cloud:rev-1:video-1'});expect(local[0].revision).not.toBe(before.revision);expect(local[0].videoIds).not.toEqual(before.videoIds);
  expect(calls.filter(c=>['attach','library_save','public_permission','delete_figure'].includes(c.action))).toHaveLength(0);
 });
@@ -385,8 +385,8 @@ test('older cloud version has its own download and can create a separate copy of
 
  await page.locator('.cloud-history summary').tap();const older=page.locator('.cloud-history article').nth(1);
  await older.getByRole('button',{name:'Lokal übernehmen',exact:true}).tap();await page.locator('#cloudImportConflict').getByRole('button',{name:'Als neue Figur speichern',exact:true}).tap();
- await expect(page.locator('#figureStatus')).toHaveValue('Neu');await finishCloudImport(page);
- const local=await localCloudFigures(page);expect(local).toHaveLength(2);expect(local.find(f=>f.id===before.id)).toMatchObject({revision:before.revision,title:'Mein anderer Name',status:'Sitzt'});expect(local.find(f=>f.id!==before.id).importFingerprint).toBe('cloud:old:video-old');
+ await finishCloudImport(page);
+ const local=await localCloudFigures(page);expect(local).toHaveLength(2);expect(local.find(f=>f.id===before.id)).toMatchObject({revision:before.revision,title:'Mein anderer Name',status:'Sitzt'});expect(local.find(f=>f.id!==before.id)).toMatchObject({status:'Neu',importFingerprint:'cloud:old:video-old'});
  expect(calls.filter(c=>['attach','library_save','library'].includes(c.action))).toHaveLength(0);
 });
 

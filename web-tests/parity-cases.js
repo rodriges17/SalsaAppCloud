@@ -1,7 +1,7 @@
 import { runNavigationHoverCase } from './navigation-hover-case.js';
 import { runStorageSettingsCase } from './storage-settings-case.js';
 // The same behavior contract runs against the PWA and the bundled Android UI.
-export const PARITY_CASES = ['navigation-return-hover', 'storage-settings-status', 'library-share-links', 'zip-save-feedback', 'menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change', 'cloud-cache-frame-reuse', 'cloud-guest-public-first', 'cloud-library-download', 'cloud-guest-no-publish'];
+export const PARITY_CASES = ['navigation-return-hover', 'storage-settings-status', 'library-share-links', 'zip-save-feedback', 'menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change', 'cloud-cache-frame-reuse', 'cloud-guest-public-first', 'cloud-library-download', 'cloud-guest-no-publish', 'cloud-single-direct-download'];
 export async function runParityCase(page, { root, fixture, native = false, scenario, consoleErrors = [], browserName = 'chromium' }) {
  const assert = (value, message) => { if (!value) throw new Error(message); };
  const frame = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -197,9 +197,8 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   }
   await page.locator('#cloudButton').click();const again=page.getByRole('button',{name:'Lokale Kopie erneut herunterladen',exact:true});await again.waitFor();assert(await again.isEnabled(),'Cloud recovery is disabled');
   await again.click();await page.locator('#cloudImportConflict').getByRole('button',{name:'Abbrechen',exact:true}).click();assert(await page.locator('#cloudDialog').isVisible(),'Cancelling repair closed cloud');
-  await again.click();await page.locator('#cloudImportConflict').getByRole('button',{name:'Vorhandene Figur ersetzen',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#editor').open);
-  assert(await page.locator('#figureStatus').inputValue()==='Sitzt','Repair lost learning status');
-  await page.locator('#reviewAll').click();await page.waitForFunction(()=>!document.querySelector('#acceptVideo').disabled);await page.locator('#acceptVideo').click();await page.locator('#saveFigure').click();await page.waitForFunction(()=>!document.querySelector('#editor').open);
+  await again.click();await page.locator('#cloudImportConflict').getByRole('button',{name:'Vorhandene Figur ersetzen',exact:true}).click();await page.waitForFunction(()=>!document.querySelector('#cloudDialog').open);
+  assert(!await page.locator('#editor').isVisible(),'Cloud repair must save without an editor');
   const saved=await page.evaluate(async root=>{const s=await import(root+'storage.js'),f=(await s.listFigures())[0],v=(await s.figureVideos(f))[0];return{id:f.id,status:f.status,size:v.blob.size,count:(await s.listFigures()).length}},root);
   assert(saved.id==='parity-0'&&saved.status==='Sitzt'&&saved.count===1&&saved.size===bytes.length,'Repair changed identity/status or failed to restore original bytes');
  }
@@ -236,7 +235,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   await page.locator('.card-options').click();
   assert(await page.getByRole('button',{name:'In Cloud veröffentlichen',exact:true}).count()===0,'Logout leaves publishing available');
  }
- if(scenario==='cloud-library-download'){
+ if(scenario==='cloud-library-download'||scenario==='cloud-single-direct-download'){
   const bytes=await page.evaluate(async fixture=>Array.from(new Uint8Array(await(await fetch(fixture)).arrayBuffer())),fixture);
   const hash=await page.evaluate(async({root,bytes})=>(await import(root+'cloud-dedup.js')).videoHash(new Blob([new Uint8Array(bytes)])),{root,bytes});
   const library={id:'batch-library',owner_id:'other',title:'Gemeinsam üben',visibility:'public',description:'Sammeldownload',manage:false};
@@ -252,6 +251,16 @@ export async function runParityCase(page, { root, fixture, native = false, scena
    await route.fulfill({contentType:'application/json',body:JSON.stringify(result)});
   });
   async function openLibrary(){await page.locator('#cloudButton').click();await page.getByRole('button',{name:'Öffnen',exact:true}).click();}
+  if(scenario==='cloud-single-direct-download'){
+   await openLibrary();await page.getByRole('button',{name:'In meine Figuren übernehmen',exact:true}).first().click();
+   await page.waitForFunction(()=>!document.querySelector('#cloudDialog').open);
+   assert(!await page.locator('#editor').isVisible(),'Single cloud download opened the editor');
+   const saved=await page.evaluate(async root=>{const s=await import(root+'storage.js'),f=(await s.listFigures())[0];return {title:f.title,status:f.status,description:f.description,tags:f.tags,duration:(await s.figureVideos(f))[0].duration};},root);
+   assert(saved.title==='Cloud eins'&&saved.status==='Neu'&&saved.description==='Lernfigur'&&saved.tags[0]==='Salsa'&&saved.duration>0,'Single cloud download lost metadata');
+   assert(downloads===1,'Single download fetched more than its selected video');
+   await page.getByRole('button',{name:'Cloud eins lernen',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#learningVideo').videoWidth>0);
+   return;
+  }
   await openLibrary();await page.getByRole('button',{name:'Alle Figuren lokal verfügbar machen',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('.cloud-library-download-result')?.textContent.startsWith('Fertig: 1 gespeichert · 1 bereits vorhanden'));
   await page.waitForFunction(()=>!document.getElementById('cloudBody').inert);

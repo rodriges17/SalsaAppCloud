@@ -130,3 +130,44 @@ export async function inspectCloudVideo(blob, signal) {
     return { duration: player.duration, width: player.videoWidth, height: player.videoHeight, poster };
   } finally { player.pause(); player.removeAttribute('src'); player.load(); URL.revokeObjectURL(url); }
 }
+
+// A single explicit import saves immediately; only replacing an existing figure
+// needs the caller's conflict choice. Local file imports still use their editor.
+export async function downloadFigure(revision, services, { target = null, targetFolder = null, signal } = {}) {
+  const { listFigures, readMedia, readCloudMedia, fetchVideo, inspectVideo, saveFigure } = services;
+  const sources = new Map(), drafts = [], verified = [];
+  await abortable(async () => localVideoContent(await listFigures(), readMedia, () => !signal?.aborted, undefined, ({figure, record, size, hash}) => {
+    sources.set(hashKey(size, hash), {figure, recordId: record.id});
+  }), signal);
+  for (const video of revision.videos) {
+    signal?.throwIfAborted();
+    const metadata = await abortable(() => readCloudMedia({ revision: revision.id, media: video.id }), signal);
+    const hash = validHash(metadata.content_hash) ? metadata.content_hash : null;
+    const source = hash && sources.get(hashKey(video.size, hash));
+    let blob;
+    if (source) blob = await abortable(async () => {
+      const record = (await readMedia(source.figure)).find(record => record.id === source.recordId);
+      if (!record) throw new Error('Eine lokale Videodatei fehlt.');
+      return (await record.load()).blob;
+    }, signal);
+    else blob = await abortable(() => fetchVideo(revision, video, signal), signal);
+    if (blob.size !== video.size) throw new Error('Unvollständiger Download.');
+    if (hash && await abortable(() => videoHash(blob), signal) !== hash) throw new Error('Die Prüfsumme des Downloads stimmt nicht.');
+    const info = await abortable(() => inspectVideo(blob, signal), signal);
+    const draft = { ...info, blob, id: crypto.randomUUID(), name: video.name || 'Video', confirmed: true, existing: false };
+    drafts.push(draft); verified.push({draft, hash});
+  }
+  if (services.readPoster) {
+    try { const poster = await abortable(() => services.readPoster(revision), signal); if (poster && drafts[0]) drafts[0].poster = poster; }
+    catch (error) { if (signal?.aborted) throw error; }
+  }
+  signal?.throwIfAborted();
+  const figure = { ...target, id: target?.id ?? crypto.randomUUID(), title: revision.title, description: revision.description ?? '', tags: revision.tags ?? [], status: target?.status ?? 'Neu', importFingerprint: `cloud:${revision.id}:${revision.videos.map(v => v.id).join(',')}` };
+  const saved = await saveFigure(figure, drafts, target?.revision ?? null, { targetFolder });
+  const records = await readMedia(saved).catch(() => []);
+  for (const {draft, hash} of verified) {
+    const record = records.find(record => record.id === draft.id);
+    if (record && hash) await rememberLocalVideoHash(record, draft.blob.size, hash).catch(() => {});
+  }
+  return saved;
+}

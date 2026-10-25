@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { downloadLibrary } from '../pwa/cloud-library-download.js';
+import { downloadLibrary, downloadFigure } from '../pwa/cloud-library-download.js';
 import { videoHash } from '../pwa/cloud-dedup.js';
 async function fixture() {
  const figures=[],records=new Map(),network=[],saves=[];
@@ -67,4 +67,25 @@ test('completed folder copies refresh their source revision before later byte re
  const read=f.services.readMedia;f.services.readMedia=async figure=>{assert.equal(figure.revision,f.figures.find(current=>current.id===figure.id).revision);return read(figure);};
  const result=await downloadLibrary([f.rev('one',['a','b']),f.rev('two',['a','c'])],f.services);
  assert.equal(result.saved,2);assert.equal(result.failed.length,0);assert.deepEqual(f.network,['b','c']);
+});
+
+test('single import saves cloud description and tags with status Neu without review', async()=>{
+ const f=await fixture();const saved=await downloadFigure(f.rev('one',['a','b']),f.services,{targetFolder:'chosen-folder'});
+ assert.equal(saved.status,'Neu');assert.equal(saved.description,'Cloud description');assert.deepEqual(saved.tags,['Salsa']);
+ assert.equal(f.saves.length,1);assert.equal(f.saves[0].options.targetFolder,'chosen-folder');
+ assert.ok(f.saves[0].drafts.every(d=>d.confirmed&&d.duration>0));assert.deepEqual(f.network,['a','b']);
+});
+test('single replacement reuses local videos and preserves identity and learning status', async()=>{
+ const f=await fixture(),target=f.add({storageFolder:'folder'},['a']);
+ const saved=await downloadFigure(f.rev('one',['a']),f.services,{target});
+ assert.deepEqual(f.network,[]);assert.equal(saved.id,target.id);assert.equal(saved.status,'Sitzt');assert.equal(saved.createdAt,target.createdAt);
+ assert.equal(saved.description,'Cloud description');assert.equal(f.saves[0].expected,target.revision);
+});
+test('single import never saves corrupted downloads or cancelled metadata reads', async()=>{
+ const f=await fixture();
+ await assert.rejects(downloadFigure(f.rev('one',['a']),{...f.services,fetchVideo:async()=>f.files.b}),/Prüfsumme/);
+ assert.equal(f.saves.length,0);
+ const controller=new AbortController();
+ const pending=downloadFigure(f.rev('one',['a']),{...f.services,readCloudMedia:async()=>{controller.abort();return {content_hash:f.hashes.a};}},{signal:controller.signal});
+ await assert.rejects(pending);assert.equal(f.saves.length,0);assert.deepEqual(f.network,[]);
 });

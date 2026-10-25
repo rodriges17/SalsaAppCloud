@@ -5,7 +5,7 @@ import { cloudReadState, contentState } from './cloud-read-state.js';
 import { cloudCall, signedIn, uploadMedia, logout, loginWithLink, loginWithPassword, setAdminPassword, cloudIdentity } from './cloud-api.js';
 import { CLOUD_FILE_LIMIT } from './cloud-config.js';
 import { figureVideos, figureMedia, listFigures, saveFigure, storageSettings } from './storage.js';
-import { downloadLibrary, inspectCloudVideo } from './cloud-library-download.js';
+import { downloadLibrary, downloadFigure, inspectCloudVideo } from './cloud-library-download.js';
 import { localVideoContent, matchingLocalVideos } from './cloud-local-content.js';
 import { readCloudCache, writeCloudCache, cloudCacheRevision } from './cloud-cache.js';
 import { createCloudLocalIndex } from './cloud-local.js';
@@ -328,16 +328,30 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
     if (selected.reduce((n, v) => n + v.size, 0) > 250 * 1024 * 1024) throw new Error('Bitte weniger Videos wählen: maximal 250 MB pro Übernahme.');
     const target = await hooks.chooseImport({ title: rev.title, fingerprint: fingerprint(selected), revisionIds });
     if (!target) return;
-    const drafts = [];
-    for (const v of selected) {
-      const signed = await cloudCall('media_url', { revision: rev.id, media: v.id });
-      const response = await fetch(signed.url, { signal: AbortSignal.timeout(120000) }); if (!response.ok) throw new Error('Video konnte nicht geladen werden. Bitte erneut versuchen.');
-      const blob = await response.blob(); if (blob.size !== v.size) throw new Error('Unvollständiger Download.');
-      drafts.push({ name: v.name, blob: blob.slice(0, blob.size, v.type), confirmed: false, existing: false, duration: 0, poster: null });
-    }
-    const imported = { title: rev.title, description: rev.description, tags: rev.tags, fingerprint: fingerprint(selected), drafts };
-    // Leave the busy state before opening the local editor.
-    busy = false; close(); await hooks.imported(imported, target.figure);
+    const settings = await storageSettings();
+    if (!target.figure && settings.activeFolder && settings.folders.find(folder => folder.id === settings.activeFolder)?.access !== 'granted') throw new Error('Bitte den gewählten Geräteordner in den Einstellungen freigeben.');
+    controller = new AbortController(); const signal = controller.signal;
+    const cancel = document.getElementById('cloudCancelUpload'); cancel.textContent = 'Download abbrechen'; cancel.hidden = false;
+    try {
+      await downloadFigure({ ...rev, videos: selected }, {
+        listFigures, readMedia: figureMedia, readCloudMedia: cloudMediaHash, inspectVideo: inspectCloudVideo, saveFigure,
+        async fetchVideo(revision, video, signal) {
+          const signed = await cloudCall('media_url', { revision: revision.id, media: video.id }); signal.throwIfAborted();
+          const response = await fetch(signed.url, { signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]) });
+          if (!response.ok) throw new Error('Video konnte nicht geladen werden. Bitte erneut versuchen.');
+          const blob = await response.blob(); return blob.slice(0, blob.size, video.type);
+        },
+        async readPoster(revision) {
+          const cached = await readCloudCache(cloudIdentity(), `poster:${revision.id}`);
+          if (cached?.value.bytes) return new Blob([cached.value.bytes], { type: 'image/jpeg' });
+          const value = await cloudCall('poster_get', { revision: revision.id });
+          return value.poster ? new Blob([Uint8Array.from(atob(value.poster), character => character.charCodeAt(0))], { type: 'image/jpeg' }) : null;
+        }
+      }, { signal, target: target.figure ?? null, targetFolder: settings.activeFolder ?? null });
+      await hooks.localChanged?.();
+      busy = false; close(); hooks.localSaved?.();
+    } finally { controller = null; cancel.hidden = true; cancel.textContent = 'Upload abbrechen'; }
+
   });
   const take = action(label, download);
   // Keep recovery available when files were removed or modified outside the app.
