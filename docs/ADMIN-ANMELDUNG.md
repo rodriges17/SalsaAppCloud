@@ -3,7 +3,7 @@
 ## Nach dem Abmelden zurückkehren
 
 1. **Cloud-Speicher** öffnen.
-2. Unter **Admin-Anmeldung** den Bereich **Mit E-Mail und Passwort anmelden** öffnen.
+2. Unterhalb der öffentlichen Bibliotheken **Anmelden** aufklappen und **Admin-Anmeldung** wählen.
 3. Die E-Mail-Adresse des Plattform-Admin-Kontos und dessen Passwort eingeben.
 4. **Als Admin anmelden** wählen.
 

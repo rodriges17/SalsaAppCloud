@@ -26,7 +26,7 @@ function select(form, label, options, selected) {
   if (selected !== undefined) input.value = selected; wrap.append(input); form.append(wrap); return input;
 }
 function checkbox(form, label, checked = false) { const wrap = node('label', undefined, 'cloud-check'), input = node('input'); input.type = 'checkbox'; input.checked = checked; wrap.append(input, node('span', label)); form.append(wrap); return input; }
-function section(title) { const s = node('section', undefined, 'cloud-card'); s.append(node('h3', title)); body.append(s); return s; }
+function section(title, parent = body) { const s = node('section', undefined, 'cloud-card'); s.append(node('h3', title)); parent.append(s); return s; }
 async function run(message, work, errorTarget = errorBox) {
   if (busy) return; busy = true; errorBox.hidden = true; errorTarget.hidden = true; statusBox.textContent = message;
   body.inert = true; document.getElementById('cloudBack').disabled = true; dialog.querySelectorAll('[data-nav]').forEach(button => { button.disabled = true; });
@@ -159,16 +159,11 @@ async function renderCloud(library, detail) {
   if (state.me?.is_admin) body.append(node('p', 'Plattform-Administrator', 'cloud-role-badge'));
   if (state.me) body.append(node('p', `${state.me.email} · ${MB(state.me.used)} / ${MB(state.me.quota)} belegt${state.me.upload_enabled ? '' : ' · Lesen erlaubt, Uploads gesperrt'}`, 'cloud-account'));
   else {
-    if (area === 'figures') body.append(node('h3', 'Meine Cloud-Figuren'), node('p', 'Melde dich an, um deine hochgeladenen Figuren zu sehen.'));
-    else body.append(node('p', 'Öffentliche Bibliotheken sind ohne Anmeldung lesbar. Für private Bibliotheken und Beiträge erhältst du einen persönlichen Anmeldelink vom Administrator.'));
-    body.append(node('p', 'Du bist derzeit nicht angemeldet. Bibliotheken erstellen und Verwaltung erscheinen nach der Anmeldung mit einem berechtigten Konto.'));
-    adminLoginForm();
-    const box = section('Mit Anmeldelink anmelden'), form = node('form'); box.append(form);
-    const link = field(form, 'Anmeldelink einfügen', '', 'password'); link.autocomplete = 'off';
-    box.append(node('p', 'Füge deinen persönlichen Anmeldelink hier ein, um dich in dieser App anzumelden. Die Anmeldung in einer anderen App oder einem anderen Browser wird nicht automatisch übernommen.'));
-    form.append(action('Anmelden', () => run('Anmelden …', async () => { await loginWithLink(link.value.trim()); area = 'initial'; await load(null); }))); form.onsubmit = e => e.preventDefault();
+    if (current) await libraryView(current, detail);
+    else publicLibraries();
+    guestLogin();
+    return;
   }
-  if (!state.me && area === 'figures') return;
   if (source) { await publishForm(); return; }
   if (current) { await libraryView(current, detail); return; }
   if (area === 'create') { libraryForm(); return; }
@@ -480,10 +475,55 @@ async function publishForm() {
   }, uploadError));
   upload.className = 'primary'; box.append(upload, uploadError);
 }
-function adminLoginForm() {
-  const box = section('Admin-Anmeldung'), details = node('details');
-  details.append(node('summary', 'Mit E-Mail und Passwort anmelden')); box.append(details);
-  const form = node('form'); details.append(form);
+function publicLibraries() {
+  const intro = node('div', undefined, 'cloud-public-intro');
+  intro.append(node('h3', 'Öffentliche Bibliotheken'), node('p', 'Entdecke Figuren und übernimm sie zum Üben auf dein Gerät. Öffentliche Bibliotheken sind ohne Anmeldung lesbar.'));
+  body.append(intro);
+  const catalog = node('div', undefined, 'cloud-public-libraries');
+  body.append(catalog);
+  for (const library of state.libraries.filter(library => library.visibility === 'public')) {
+    const card = section(library.title, catalog);
+    card.append(node('p', 'Öffentlich', 'cloud-public-badge'));
+    if (library.description) card.append(node('p', library.description));
+    card.append(action('Öffnen', () => load(library.id, true)));
+  }
+  if (!catalog.childElementCount) catalog.append(node('p', 'Noch keine öffentlichen Bibliotheken.'));
+}
+function guestLogin() {
+  const details = node('details', undefined, 'cloud-guest-login');
+  const summary = node('summary');
+  summary.append(node('span', 'Anmelden', 'cloud-guest-login-title'), node('span', 'Für private Bibliotheken und Verwaltung', 'cloud-guest-login-hint'));
+  details.append(summary);
+  const content = node('div', undefined, 'cloud-guest-login-content'); details.append(content);
+  content.append(node('p', 'Du bist derzeit nicht angemeldet. Nutze deinen persönlichen Anmeldelink oder melde dich als Admin mit E-Mail und Passwort an.'));
+  const tabs = node('div', undefined, 'cloud-login-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', 'Anmeldemethode');
+  const linkPanel = node('div', undefined, 'cloud-login-panel'), adminPanel = node('div', undefined, 'cloud-login-panel');
+  const panels = [linkPanel, adminPanel];
+  const buttons = ['Mit Anmeldelink', 'Admin-Anmeldung'].map((label, index) => {
+    const button = action(label, () => choose(index));
+    button.id = `cloudLoginTab${index}`; button.setAttribute('role', 'tab'); button.setAttribute('aria-controls', `cloudLoginPanel${index}`);
+    panels[index].id = `cloudLoginPanel${index}`; panels[index].setAttribute('role', 'tabpanel'); panels[index].setAttribute('aria-labelledby', button.id);
+    button.onkeydown = event => {
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? 1 : ['ArrowLeft', 'ArrowRight'].includes(event.key) ? 1 - index : null;
+      if (next !== null) { event.preventDefault(); choose(next); buttons[next].focus(); }
+    };
+    tabs.append(button); return button;
+  });
+  function choose(selected) {
+    buttons.forEach((button, index) => { button.setAttribute('aria-selected', String(index === selected)); button.tabIndex = index === selected ? 0 : -1; panels[index].hidden = index !== selected; });
+  }
+  content.append(tabs, ...panels); choose(0);
+  const form = node('form'); linkPanel.append(form);
+  const link = field(form, 'Anmeldelink einfügen', '', 'password'); link.autocomplete = 'off';
+  linkPanel.append(node('p', 'Füge deinen persönlichen Anmeldelink hier ein. Die Anmeldung in einer anderen App oder einem anderen Browser wird nicht automatisch übernommen.'));
+  const error = node('p', '', 'error'); error.setAttribute('role', 'alert'); error.hidden = true;
+  form.append(action('Anmelden', () => run('Anmelden …', async () => { await loginWithLink(link.value.trim()); area = 'initial'; await load(null); }, error)), error);
+  form.onsubmit = event => event.preventDefault();
+  adminLoginForm(adminPanel);
+  body.append(details);
+}
+function adminLoginForm(parent) {
+  const form = node('form'); parent.append(form);
   const email = field(form, 'Admin-E-Mail-Adresse', '', 'email'); email.autocomplete = 'username'; email.required = true;
   const password = field(form, 'Admin-Passwort', '', 'password'); password.autocomplete = 'current-password'; password.required = true;
   const error = node('p', '', 'error'); error.setAttribute('role', 'alert'); error.hidden = true;
@@ -497,7 +537,7 @@ function adminLoginForm() {
   form.append(action('Als Admin anmelden', submit), error);
   form.onsubmit = event => { event.preventDefault(); void submit(); };
   const help = node('details'); help.append(node('summary', 'Erstes Passwort oder Passwort vergessen?'), node('p', 'Wenn du noch angemeldet bist: Plattformverwaltung → Admin-Passwort. Sonst einmalig mit einem neuen persönlichen Anmeldelink anmelden und dort ein Passwort setzen. Einen neuen Link kann ein anderer Plattform-Admin erzeugen; wenn niemand mehr angemeldet ist, erfolgt die Wiederherstellung über Supabase.'));
-  details.append(help);
+  parent.append(help);
 }
 function adminPasswordForm() {
   const box = section('Admin-Passwort'), form = node('form'); box.append(form);

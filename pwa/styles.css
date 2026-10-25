@@ -228,3 +228,27 @@ button.storage-choice:disabled{opacity:1;cursor:default}
 
 /* Compact library membership list and on-demand addition. */
 .cloud-member-entry{border:1px solid var(--border);border-radius:14px;overflow:hidden;min-width:0}.cloud-member-summary{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px;width:100%;text-align:left;border:0;border-radius:0}.cloud-member-summary>span:first-child{display:grid;gap:5px;min-width:0}.cloud-member-summary strong{overflow-wrap:anywhere}.cloud-member-summary span span{font-size:13px;color:var(--muted);font-weight:400}.cloud-member-summary[aria-expanded=true]{background:var(--selection)}.cloud-member-summary:focus-visible{outline-offset:-4px}.cloud-member-details,.cloud-member-add{display:grid;gap:14px;padding:16px;border-top:1px solid var(--border)}.cloud-member-add{margin-top:12px;border:1px solid var(--border);border-radius:14px}.cloud-member-candidates{display:grid;gap:8px;max-height:240px;overflow-y:auto}.cloud-member-candidates button{text-align:left;overflow-wrap:anywhere}
+
+/* Guest Cloud: public content first; sign-in is secondary and closed by default. */
+.cloud-public-intro { display: grid; gap: 8px; }
+.cloud-public-intro h3 { margin: 0; font-size: 22px; }
+.cloud-public-intro p, .cloud-guest-login-content > p, .cloud-login-panel > p { color: var(--muted); font-size: 14px; line-height: 1.6; }
+.cloud-public-libraries { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 14px; }
+.cloud-public-libraries .cloud-card { background: var(--card); align-content: start; }
+.cloud-public-libraries .cloud-card > button { align-self: end; }
+.cloud-public-badge { color: var(--success); font-size: 12px; }
+.cloud-guest-login { margin-top: 14px; border: 1px solid var(--border); border-radius: 14px; }
+.cloud-guest-login > summary { padding: 16px; min-height: 60px; cursor: pointer; color: var(--muted); }
+.cloud-guest-login-title { font-size: 14px; }
+.cloud-guest-login-hint { display: block; margin: 6px 0 0 17px; font-size: 12px; }
+.cloud-guest-login[open] > summary { border-bottom: 1px solid var(--border); color: var(--text); }
+.cloud-guest-login-content { display: grid; gap: 16px; padding: 16px; }
+.cloud-login-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.cloud-login-tabs > button { background: transparent; font-size: 14px; min-height: 42px; padding: 9px 12px; }
+.cloud-login-tabs > button[aria-selected=true] { background: var(--selection); border-color: var(--lavender); color: var(--text); }
+.cloud-login-panel { display: grid; gap: 14px; }
+.cloud-login-panel form { display: grid; gap: 14px; }
+.cloud-login-panel label { display: grid; gap: 8px; }
+.cloud-login-panel input { width: 100%; min-width: 0; }
+.cloud-login-panel form > button { justify-self: start; }
+.cloud-guest-login summary:focus-visible { outline: 2px solid var(--lavender); outline-offset: 3px; border-radius: 12px; }

@@ -1,7 +1,7 @@
 import { runNavigationHoverCase } from './navigation-hover-case.js';
 import { runStorageSettingsCase } from './storage-settings-case.js';
 // The same behavior contract runs against the PWA and the bundled Android UI.
-export const PARITY_CASES = ['navigation-return-hover', 'storage-settings-status', 'library-share-links', 'zip-save-feedback', 'menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change', 'cloud-cache-frame-reuse'];
+export const PARITY_CASES = ['navigation-return-hover', 'storage-settings-status', 'library-share-links', 'zip-save-feedback', 'menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change', 'cloud-cache-frame-reuse', 'cloud-guest-public-first'];
 export async function runParityCase(page, { root, fixture, native = false, scenario, consoleErrors = [], browserName = 'chromium' }) {
  const assert = (value, message) => { if (!value) throw new Error(message); };
  const frame = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -125,7 +125,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
    assert((await page.locator('#cloudStatus').textContent()).includes('Offline'),'Offline snapshot lacks a freshness notice');await page.context().setOffline(false);
    await page.locator('#cloudBack').click();await page.route('**/auth/v1/token?grant_type=refresh_token',r=>r.fulfill({status:400,contentType:'application/json',body:JSON.stringify({code:'refresh_token_not_found',msg:'Session revoked'})}));
    await page.evaluate(key=>{const s=JSON.parse(localStorage.getItem(key));localStorage.setItem(key,JSON.stringify({...s,expires_at:0}))},key);await page.clock.setFixedTime(new Date(await page.evaluate(()=>Date.now())+61000));
-   await page.locator('#cloudButton').click();await page.getByText('Du bist derzeit nicht angemeldet.',{exact:false}).waitFor();
+   await page.locator('#cloudButton').click();await page.locator('.cloud-guest-login > summary').waitFor();
    assert(await page.getByRole('heading',{name:'Cache A 1',exact:true}).count()===0,'Revoked session left private contents visible');
    assert(await page.evaluate(async({root,owner})=>!(await(await import(root+'cloud-cache.js')).readCloudCache(owner,'state')),{root,owner}),'Revoked session retained private snapshots');
   }else if(scenario==='cloud-cache-permission-change'){
@@ -151,7 +151,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
     await page.waitForFunction(()=>document.querySelector('#cloudStatus').textContent.includes('Aktualisierung nicht möglich'));
     fail=false;version=3;await page.getByRole('button',{name:'Aktualisieren',exact:true}).click();await page.getByRole('heading',{name:'Cache A 3',exact:true}).waitFor();
    }else{
-    await page.getByRole('button',{name:'Abmelden',exact:true}).click();await page.getByText('Du bist derzeit nicht angemeldet.',{exact:false}).waitFor();
+    await page.getByRole('button',{name:'Abmelden',exact:true}).click();await page.locator('.cloud-guest-login > summary').waitFor();
     assert(await page.evaluate(async({root,owner})=>!(await(await import(root+'cloud-cache.js')).readCloudCache(owner,'state'))&&!await(await import(root+'cloud-cache.js')).readCloudCache(owner,'poster:cache-revision'),{root,owner}),'Logout retained private snapshots or posters');
     const other=await page.context().newPage();await other.goto(page.url());await other.evaluate(key=>localStorage.setItem(key,JSON.stringify({access_token:'account-b',refresh_token:'refresh-b',cache_id:'account-b-session',expires_at:Date.now()+3600000})),key);
     await page.getByRole('heading',{name:'Cache B 1',exact:true}).waitFor();stall=false;release();
@@ -220,6 +220,27 @@ export async function runParityCase(page, { root, fixture, native = false, scena
    await page.waitForFunction(()=>document.querySelector('#cloudDialog').open);
    assert(await page.evaluate(()=>window.parityFullscreen===false&&window.parityRotation===false),'Navigation leaked native fullscreen or orientation');
   }
+ }
+ if(scenario==='cloud-guest-public-first'){
+  const library={id:'guest-public',title:'Öffentlich tanzen',description:'Öffentliche Figuren zum Üben',visibility:'public',manage:false};
+  await page.route('**/functions/v1/cloud',async route=>{
+   const {action}=route.request().postDataJSON();
+   const result=action==='library'?{library,entries:[],members:[],manage:false,contribute:false}:{me:null,own_figures:[],libraries:[library,{...library,id:'guest-private',title:'Nicht öffentlich',visibility:'private'}]};
+   await route.fulfill({contentType:'application/json',body:JSON.stringify(result)});
+  });
+  await page.locator('#cloudButton').click();await page.getByRole('heading',{name:'Öffentliche Bibliotheken',exact:true}).waitFor();
+  const login=page.locator('.cloud-guest-login');
+  assert(await login.getAttribute('open')===null,'Guest sign-in should start collapsed');
+  assert(!await page.getByLabel('Anmeldelink einfügen',{exact:true}).isVisible(),'Guest sign-in fields should be hidden');
+  assert(await page.getByRole('heading',{name:'Nicht öffentlich',exact:true}).count()===0,'Guest list must contain only public libraries');
+  assert(await page.evaluate(()=>!!(document.querySelector('.cloud-public-libraries').compareDocumentPosition(document.querySelector('.cloud-guest-login'))&Node.DOCUMENT_POSITION_FOLLOWING)),'Public libraries must precede sign-in');
+  await login.locator(':scope > summary').click();await page.getByLabel('Anmeldelink einfügen',{exact:true}).waitFor();
+  await page.getByRole('tab',{name:'Admin-Anmeldung',exact:true}).click();await page.getByLabel('Admin-E-Mail-Adresse',{exact:true}).waitFor();
+  assert(!await page.getByLabel('Anmeldelink einfügen',{exact:true}).isVisible(),'Only selected login method should be visible');
+  await login.locator(':scope > summary').click();
+  await page.getByRole('button',{name:'Öffnen',exact:true}).click();await page.getByRole('heading',{name:library.title,exact:true}).waitFor();
+  assert(await page.locator('.cloud-guest-login').getAttribute('open')===null,'Library detail sign-in should remain collapsed');
+  return;
  }
  if(scenario==='csp-and-storage-styles'){
   // WebKit 27.2 emits a known false style-src alarm for each native select.

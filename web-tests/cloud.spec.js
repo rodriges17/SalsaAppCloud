@@ -83,6 +83,7 @@ test('manual sign-in link is redeemed inside the current app without navigating 
  await expect(page.locator('.cloud-tabs button')).toHaveText(['Bibliotheken']);
  await expect(page.locator('.cloud-tabs button').first()).toHaveAttribute('aria-pressed','true');
  await expect(page.locator('#cloudBody')).toContainText('Öffentliche Bibliotheken sind ohne Anmeldung lesbar.');
+ await page.locator('.cloud-guest-login > summary').tap();
  await page.getByLabel('Anmeldelink einfügen',{exact:true}).fill('https://rodriges17.github.io/SalsaAppCloud/?cloud=1&type=magiclink&token_hash=test-once');
  await page.getByRole('button',{name:'Anmelden',exact:true}).tap();
  await expect(page.locator('#cloudBody')).toContainText('admin@example.test');
@@ -497,11 +498,11 @@ test('platform admin signs in again with email and password without redeeming a 
  await page.route(`${host}/auth/v1/token?grant_type=password`,r=>{credentials.push(r.request().postDataJSON());return r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({access_token:'test-user-jwt',refresh_token:'test-refresh',expires_in:3600})});});
  await page.route(`${host}/auth/v1/logout*`,r=>r.fulfill({status:200,contentType:'application/json',body:'{}'}));
  await start(page);await page.locator('#cloudButton').tap();
- await page.getByText('Mit E-Mail und Passwort anmelden',{exact:true}).tap();
+ await page.locator('.cloud-guest-login > summary').tap();await page.getByRole('tab',{name:'Admin-Anmeldung',exact:true}).tap();
  await page.getByLabel('Admin-E-Mail-Adresse',{exact:true}).fill('admin@example.test');await page.getByLabel('Admin-Passwort',{exact:true}).fill('demo-admin-password');await page.getByRole('button',{name:'Als Admin anmelden',exact:true}).tap();
  await expect(page.getByRole('button',{name:'Plattformverwaltung',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Abmelden',exact:true}).tap();await expect(page.getByRole('button',{name:'Plattformverwaltung',exact:true})).toHaveCount(0);
- await page.getByText('Mit E-Mail und Passwort anmelden',{exact:true}).tap();await page.getByLabel('Admin-E-Mail-Adresse',{exact:true}).fill('admin@example.test');await page.getByLabel('Admin-Passwort',{exact:true}).fill('demo-admin-password');await page.getByRole('button',{name:'Als Admin anmelden',exact:true}).tap();
+ await page.locator('.cloud-guest-login > summary').tap();await page.getByRole('tab',{name:'Admin-Anmeldung',exact:true}).tap();await page.getByLabel('Admin-E-Mail-Adresse',{exact:true}).fill('admin@example.test');await page.getByLabel('Admin-Passwort',{exact:true}).fill('demo-admin-password');await page.getByRole('button',{name:'Als Admin anmelden',exact:true}).tap();
  await expect(page.getByRole('button',{name:'Plattformverwaltung',exact:true})).toBeVisible();expect(credentials).toHaveLength(2);expect(credentials[0].email).toBe('admin@example.test');
  expect(calls.filter(c=>c.action==='state'&&c.authorization==='Bearer test-user-jwt').length).toBeGreaterThanOrEqual(2);
 });
@@ -517,7 +518,7 @@ test('admin sets an own password with matching confirmation; secrets are cleared
 });
 test('failed password login keeps public access and clears the rejected password for retry',async({page})=>{
  await mock(page,false);await page.route(`${host}/auth/v1/token?grant_type=password`,r=>r.fulfill({status:400,contentType:'application/json',body:'{"code":"invalid_credentials","msg":"Invalid login credentials"}'}));
- await start(page);await page.locator('#cloudButton').tap();await page.getByText('Mit E-Mail und Passwort anmelden',{exact:true}).tap();await page.getByLabel('Admin-E-Mail-Adresse',{exact:true}).fill('admin@example.test');await page.getByLabel('Admin-Passwort',{exact:true}).fill('wrong-password');await page.getByRole('button',{name:'Als Admin anmelden',exact:true}).tap();
+ await start(page);await page.locator('#cloudButton').tap();await page.locator('.cloud-guest-login > summary').tap();await page.getByRole('tab',{name:'Admin-Anmeldung',exact:true}).tap();await page.getByLabel('Admin-E-Mail-Adresse',{exact:true}).fill('admin@example.test');await page.getByLabel('Admin-Passwort',{exact:true}).fill('wrong-password');await page.getByRole('button',{name:'Als Admin anmelden',exact:true}).tap();
  await expect(page.locator('#cloudBody')).toContainText('Bitte E-Mail-Adresse und Passwort prüfen.');await expect(page.getByLabel('Admin-Passwort',{exact:true})).toHaveValue('');await expect(page.getByRole('button',{name:'Als Admin anmelden',exact:true})).toBeEnabled();await expect(page.getByRole('button',{name:'Abmelden',exact:true})).toHaveCount(0);
 });
 
