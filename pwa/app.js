@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-25-guest-navigation-v2';
+const APP_VERSION = '2026-10-25-library-download-v1';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';
@@ -670,7 +670,7 @@ async function chooseCloudImport({ title, fingerprint, revisionIds }) {
     document.body.append(dialog); dialog.showModal(); actions.firstChild.focus();
   });
 }
-initCloud({ confirm: confirmAction, closed: () => { if (!$('overview').hidden) focusFiguresNavigation(); }, localFigures: listFigures, chooseImport: chooseCloudImport, imported: async (imported, figure) => {
+initCloud({ confirm: confirmAction, closed: () => { if (!$('overview').hidden) focusFiguresNavigation(); }, localChanged: async () => { changed(); await refresh(); }, localFigures: listFigures, chooseImport: chooseCloudImport, imported: async (imported, figure) => {
   await openEditor(figure ?? null, imported);
 } });
 try { await cleanupInterruptedImports(); } catch { /* Refresh reports unavailable storage. */ }

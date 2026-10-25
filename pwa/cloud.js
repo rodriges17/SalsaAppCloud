@@ -4,7 +4,8 @@ import { createPeopleView } from './cloud-people.js';
 import { cloudReadState, contentState } from './cloud-read-state.js';
 import { cloudCall, signedIn, uploadMedia, logout, loginWithLink, loginWithPassword, setAdminPassword, cloudIdentity } from './cloud-api.js';
 import { CLOUD_FILE_LIMIT } from './cloud-config.js';
-import { figureVideos, figureMedia } from './storage.js';
+import { figureVideos, figureMedia, listFigures, saveFigure, storageSettings } from './storage.js';
+import { downloadLibrary, inspectCloudVideo } from './cloud-library-download.js';
 import { localVideoContent, matchingLocalVideos } from './cloud-local-content.js';
 import { readCloudCache, writeCloudCache, cloudCacheRevision } from './cloud-cache.js';
 import { createCloudLocalIndex } from './cloud-local.js';
@@ -211,6 +212,7 @@ async function libraryView(id, detail) {
   }));
   if (lib.visibility === 'private') intro.append(node('p', 'Zum Öffnen sind Anmeldung und Bibliotheksberechtigung erforderlich.'));
   if (lib.visibility === 'public') intro.append(node('p', 'Figuren ohne Zustimmung zur öffentlichen Veröffentlichung bleiben für Lesende verborgen.'));
+  libraryDownloadControls(intro, detail.entries);
   for (const entry of detail.entries) {
     const box = section(entry.published?.title ?? entry.pending?.title ?? 'Figur ohne veröffentlichte Version');
     if (entry.published) revisionCard(box, entry.published, 'Veröffentlicht');
@@ -234,6 +236,53 @@ async function libraryView(id, detail) {
       }
     }); remove.className = 'danger-button'; danger.append(remove);
   }
+}
+function libraryDownloadControls(parent, entries) {
+  const revisions = [...new Map(entries.filter(entry => entry.published?.videos?.length).map(entry => [entry.published.id, entry.published])).values()];
+  if (!revisions.length) return;
+  const box = node('div', undefined, 'cloud-library-download');
+  const resultText = node('p', undefined, 'cloud-library-download-result'); resultText.setAttribute('role', 'status'); resultText.hidden = true;
+  const failures = node('ul'); failures.hidden = true;
+  const progress = node('progress'); progress.setAttribute('aria-label', 'Bibliothek lokal verfügbar machen'); progress.hidden = true;
+  const start = action('Alle Figuren lokal verfügbar machen', () => run('Lokalen Bestand prüfen …', async () => {
+    const settings = await storageSettings();
+    if (settings.activeFolder && settings.folders.find(folder => folder.id === settings.activeFolder)?.access !== 'granted') throw new Error('Bitte den gewählten Geräteordner in den Einstellungen freigeben, bevor du die Bibliothek herunterlädst.');
+    controller = new AbortController(); const signal = controller.signal;
+    const cancel = document.getElementById('cloudCancelUpload'); cancel.textContent = 'Download abbrechen'; cancel.hidden = false;
+    progress.hidden = false; progress.max = revisions.length; progress.value = 0; resultText.hidden = false; failures.replaceChildren(); failures.hidden = true;
+    try {
+      const result = await downloadLibrary(revisions, {
+        listFigures, readMedia: figureMedia, readCloudMedia: cloudMediaHash, inspectVideo: inspectCloudVideo, saveFigure,
+        async fetchVideo(revision, video, signal) {
+          const signed = await cloudCall('media_url', { revision: revision.id, media: video.id }); signal.throwIfAborted();
+          const response = await fetch(signed.url, { signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]) });
+          if (!response.ok) throw new Error('Video konnte nicht geladen werden. Bitte erneut versuchen.');
+          const blob = await response.blob(); return blob.slice(0, blob.size, video.type);
+        },
+        async readPoster(revision) {
+          const cached = await readCloudCache(cloudIdentity(), `poster:${revision.id}`);
+          if (cached?.value.bytes) return new Blob([cached.value.bytes], { type: 'image/jpeg' });
+          const value = await cloudCall('poster_get', { revision: revision.id });
+          return value.poster ? new Blob([Uint8Array.from(atob(value.poster), character => character.charCodeAt(0))], { type: 'image/jpeg' }) : null;
+        }
+      }, { signal, targetFolder: settings.activeFolder ?? null, progress: state => {
+        progress.value = state.done;
+        const phase = { index: 'Lokalen Bestand prüfen', check: 'Vorhandene Videos prüfen', download: `Video ${state.video} von ${state.videos} laden`, save: 'Figur speichern', saved: 'Figur gespeichert', skip: 'Bereits vorhanden', error: 'Figur konnte nicht gespeichert werden', done: 'Abgeschlossen', cancelled: 'Abgebrochen' }[state.phase];
+        resultText.textContent = `${phase}${state.title ? `: ${state.title}` : ''} · ${state.done} / ${state.total} Figuren`;
+        statusBox.textContent = resultText.textContent;
+      } });
+      resultText.textContent = `${result.cancelled ? 'Abgebrochen' : 'Fertig'}: ${result.saved} gespeichert · ${result.skipped} bereits vorhanden${result.failed.length ? ` · ${result.failed.length} fehlgeschlagen` : ''}.`;
+      if (result.failed.length) { failures.hidden = false; result.failed.forEach(error => failures.append(node('li', `${error.title}: ${error.message}`))); }
+      if (result.remaining) resultText.textContent += ` ${result.remaining} Figuren noch offen.`;
+      if (result.cancelled || result.failed.length) resultText.textContent += ' Erneut starten lädt nur die noch fehlenden Figuren.';
+      await hooks.localChanged?.();
+      localFigures = await hooks.localFigures();
+      localContent = await localVideoContent(localFigures, figureMedia); localUpdates.forEach(update => update());
+    } finally { controller = null; cancel.hidden = true; cancel.textContent = 'Upload abbrechen'; progress.hidden = true; }
+  }));
+  start.className = 'primary';
+  box.append(start, node('p', 'Alle veröffentlichten Figuren direkt im gewählten lokalen Speicher sichern. Vorhandene Videos werden wiederverwendet; bestehende Lernstände und Notizen bleiben erhalten.'), progress, resultText, failures);
+  parent.append(box);
 }
 function versionLabel(revision) {
   const date = new Date(revision.created_at);

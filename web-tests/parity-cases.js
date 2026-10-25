@@ -1,7 +1,7 @@
 import { runNavigationHoverCase } from './navigation-hover-case.js';
 import { runStorageSettingsCase } from './storage-settings-case.js';
 // The same behavior contract runs against the PWA and the bundled Android UI.
-export const PARITY_CASES = ['navigation-return-hover', 'storage-settings-status', 'library-share-links', 'zip-save-feedback', 'menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change', 'cloud-cache-frame-reuse', 'cloud-guest-public-first'];
+export const PARITY_CASES = ['navigation-return-hover', 'storage-settings-status', 'library-share-links', 'zip-save-feedback', 'menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change', 'cloud-cache-frame-reuse', 'cloud-guest-public-first', 'cloud-library-download'];
 export async function runParityCase(page, { root, fixture, native = false, scenario, consoleErrors = [], browserName = 'chromium' }) {
  const assert = (value, message) => { if (!value) throw new Error(message); };
  const frame = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -220,6 +220,34 @@ export async function runParityCase(page, { root, fixture, native = false, scena
    await page.waitForFunction(()=>document.querySelector('#cloudDialog').open);
    assert(await page.evaluate(()=>window.parityFullscreen===false&&window.parityRotation===false),'Navigation leaked native fullscreen or orientation');
   }
+ }
+ if(scenario==='cloud-library-download'){
+  const bytes=await page.evaluate(async fixture=>Array.from(new Uint8Array(await(await fetch(fixture)).arrayBuffer())),fixture);
+  const hash=await page.evaluate(async({root,bytes})=>(await import(root+'cloud-dedup.js')).videoHash(new Blob([new Uint8Array(bytes)])),{root,bytes});
+  const library={id:'batch-library',owner_id:'other',title:'Gemeinsam üben',visibility:'public',description:'Sammeldownload',manage:false};
+  const revision=id=>({id,title:id==='batch-one'?'Cloud eins':'Cloud zwei',description:'Lernfigur',tags:['Salsa'],created_at:'2026-10-25T10:00:00Z',videos:[{id:'video-'+id,name:'Führung',size:bytes.length,type:'video/mp4'}]});
+  const revisions=[revision('batch-one'),revision('batch-two')];let downloads=0;
+  await page.route('**/functions/v1/cloud',async route=>{
+   const {action}=route.request().postDataJSON();let result={ok:true};
+   if(action==='state')result={me:null,libraries:[library],own_figures:[]};
+   if(action==='library')result={library,manage:false,contribute:false,members:[],entries:revisions.map(published=>({figure_id:published.id,owner_id:'other',published,pending:null}))};
+   if(action==='media')result={content_hash:hash};
+   if(action==='media_url'){downloads++;result={url:fixture};}
+   if(action==='poster_get')result={poster:'/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHBwgHBgoICAgLCgoLDhgQDg0NDh0VFhEYIx8lJCIfIiEmKzcvJik0KSEiMEExNDk7Pj4+JS5ESUM8SDc9Pjv/2wBDAQoLCw4NDhwQEBw7KCIoOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozv/wAARCAAMAAwDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwBtFFFYnin/2Q==',kind:'local',can_write:false};
+   await route.fulfill({contentType:'application/json',body:JSON.stringify(result)});
+  });
+  async function openLibrary(){await page.locator('#cloudButton').click();await page.getByRole('button',{name:'Öffnen',exact:true}).click();}
+  await openLibrary();await page.getByRole('button',{name:'Alle Figuren lokal verfügbar machen',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('.cloud-library-download-result')?.textContent.startsWith('Fertig: 1 gespeichert · 1 bereits vorhanden'));
+  await page.waitForFunction(()=>!document.getElementById('cloudBody').inert);
+  assert(downloads===1,'Shared video content was downloaded more than once');
+  assert(!await page.locator('#editor').isVisible(),'Bulk downloads must not open one editor per figure');
+  const saved=await page.evaluate(async root=>{const s=await import(root+'storage.js');const figures=await s.listFigures();return {count:figures.length,status:figures[0].status,duration:(await s.figureVideos(figures[0]))[0].duration};},root);
+  assert(saved.count===1&&saved.status==='Neu'&&saved.duration>0,'Bulk download did not save usable local video metadata');
+  await page.locator('#cloudBack').click();await openLibrary();await page.getByRole('button',{name:'Alle Figuren lokal verfügbar machen',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('.cloud-library-download-result')?.textContent.startsWith('Fertig: 0 gespeichert · 2 bereits vorhanden'));
+  assert(downloads===1,'Repeated bulk download fetched already available video content');
+  return;
  }
  if(scenario==='cloud-guest-public-first'){
   const library={id:'guest-public',title:'Öffentlich tanzen',description:'Öffentliche Figuren zum Üben',visibility:'public',manage:false};

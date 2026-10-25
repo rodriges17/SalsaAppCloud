@@ -195,9 +195,9 @@ export async function getVideo(id) {
   for (const folder of all) for (const f of folder.library.figures) { const v = f.videos.find(v => v.id === id); if (v) return readFolderVideo(folder, f, v); }
   return app.getVideo(id);
 }
-export async function saveFigure(figure, drafts, expectedRevision = null) {
+export async function saveFigure(figure, drafts, expectedRevision = null, { targetFolder } = {}) {
   return locked(async () => {
-    const id = figure.storageFolder ?? (expectedRevision ? null : (await storageSettings()).activeFolder);
+    const id = expectedRevision ? (figure.storageFolder ?? null) : targetFolder !== undefined ? targetFolder : figure.storageFolder ?? (await storageSettings()).activeFolder;
     if (!id) return app.saveFigure(figure, drafts, expectedRevision);
     const folder = await entries(id); if (!folder) throw new Error('Geräteordner fehlt. Bitte erneut verbinden.');
     return writeFolderFigure(folder, figure, drafts, expectedRevision, mirror(folder));

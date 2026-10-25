@@ -27,8 +27,14 @@ const memo = createVideoHashMemo(
   (key, value) => writeCloudCache('@local-video-hashes', key, value)
 );
 
+// Call only after byte/hash verification and a successful atomic storage save.
+export async function rememberLocalVideoHash(record, size, hash) {
+  if (!validHash(hash) || !Number.isSafeInteger(size)) return;
+  await memo.get(await record.contentKey?.(), async () => ({ size, hash }));
+}
+
 // Reuse hashes only after checking the current file's identity and availability.
-export async function localVideoContent(figures, readMedia, active = () => true, cache = memo) {
+export async function localVideoContent(figures, readMedia, active = () => true, cache = memo, onVideo = () => {}) {
   const hashes = new Map();
   for (const figure of figures) {
     if (!active()) break;
@@ -45,6 +51,7 @@ export async function localVideoContent(figures, readMedia, active = () => true,
         });
         if (!hashes.has(size)) hashes.set(size, new Set());
         hashes.get(size).add(hash);
+        onVideo({ figure, record, size, hash });
       } catch { /* A missing file must not hide other readable local videos. */ }
     }
   }

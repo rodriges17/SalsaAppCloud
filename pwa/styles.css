@@ -257,3 +257,9 @@ button.storage-choice:disabled{opacity:1;cursor:default}
 .cloud-public-heading h3 { flex: 1; }
 .cloud-public-refresh { width: 42px; min-height: 42px; flex-shrink: 0; padding: 6px; border-color: var(--border); background: transparent; color: var(--muted); font-size: 23px; }
 .cloud-public-back { justify-self: start; padding: 6px 0; min-height: 42px; border: 0; background: transparent; color: var(--lavender); font-size: 14px; }
+
+.cloud-library-download { display: grid; gap: 12px; padding-top: 16px; margin-top: 8px; border-top: 1px solid var(--border); }
+.cloud-library-download > button { justify-self: start; }
+.cloud-library-download > p, .cloud-library-download li { font-size: 13px; color: var(--muted); line-height: 1.6; }
+.cloud-library-download progress { width: 100%; accent-color: var(--lavender); }
+.cloud-library-download-result { color: var(--text) !important; }
