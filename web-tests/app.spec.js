@@ -318,3 +318,9 @@ test('saving shows figure and video message with an activity indicator until the
  await expect(page.locator('#saveProgress')).toHaveText('Figur inkl. Video(s) werden gespeichert...');await expect(page.locator('#saveIndicator')).toBeVisible();await expect(page.locator('#saveFigure')).toBeDisabled();
  await page.evaluate(()=>window.releaseSaving());await expect(page.locator('#editor')).not.toBeVisible();await expect(page.getByRole('button',{name:'Speichertest lernen',exact:true})).toBeVisible();
 });
+
+test('standalone HTML guides open under an installed app shell and link to each other',async({page})=>{
+ await start(page);
+ await page.goto('/pwa/anleitungen/teilen.html');await expect(page.getByRole('heading',{name:'Bibliotheken teilen',exact:true})).toBeVisible();await expect(page.locator('img')).toHaveCount(2);
+ await page.getByRole('link',{name:'Zur Benutzerverwaltung',exact:false}).click();await expect(page.getByRole('heading',{name:'Personen & Zugriff verwalten',exact:true})).toBeVisible();await page.locator('img').evaluateAll(async images=>{for(const image of images){image.loading='eager';await image.decode();}});expect(await page.locator('img').evaluateAll(images=>images.every(image=>image.naturalWidth>0&&image.src.startsWith('data:image/png;base64,')))).toBe(true);
+});
