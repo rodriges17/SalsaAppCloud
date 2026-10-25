@@ -9,6 +9,13 @@ const root = () => createClient(url, secret, { auth: { persistSession: false, au
 const checked = (r: { data: any; error: any }): any => { if (r.error) throw Object.assign(new Error(r.error.message), { code: r.error.code, status: r.error.status }); return r.data; };
 const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
 
+async function verifyContent(client: any, media: { id: string; path: string }) {
+  const blob = checked(await client.storage.from('salsa-cloud').download(media.path));
+  const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer())), b => b.toString(16).padStart(2, '0')).join('');
+  const result = checked(await client.rpc('cloud_verify_content', { mid: media.id, digest: hash }));
+  if (result.discard) checked(await client.storage.from('salsa-cloud').remove([result.discard]));
+}
+
 Deno.serve(async req => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   if (req.method !== 'POST') return response({ error: 'POST required' }, 405);
@@ -39,6 +46,21 @@ Deno.serve(async req => {
     }
     const client = createClient(url, publishable, { global: { headers: authorization ? { Authorization: authorization } : {} }, auth: { persistSession: false, autoRefreshToken: false } });
     const rpc = async (name: string, data = payload) => checked(await client.rpc('cloud_api', { action: name, payload: data }));
+    if (action === 'maintenance') {
+      if (typeof payload.token !== 'string' || !checked(await adminClient.rpc('cloud_maintenance_authorize', { token: payload.token }))) return response({ error: 'Keine Berechtigung.' }, 403);
+      const items = checked(await adminClient.from('cloud_media').select('id,path').eq('ready', true).is('content_hash', null).limit(4));
+      for (const item of items) await verifyContent(adminClient, item);
+      const garbage = checked(await adminClient.rpc('cloud_collect_trash'));
+      if (garbage.paths.length) checked(await adminClient.storage.from('salsa-cloud').remove(garbage.paths));
+      return response({ processed: items.length, cleaned: garbage.paths.length });
+    }
+    if (action === 'admin_optimize') {
+      const state = await rpc('state', {});
+      if (!userId || !state.me?.is_admin) return response({ error: 'Nur für den Plattform-Administrator.' }, 403);
+      const items = checked(await adminClient.from('cloud_media').select('id,path').eq('ready', true).is('content_hash', null).limit(4));
+      for (const item of items) await verifyContent(adminClient, item);
+      return response({ processed: items.length });
+    }
     if (action === 'media_url') {
       const media = await rpc('media');
       const signed = checked(await adminClient.storage.from('salsa-cloud').createSignedUrl(media.path, 300));
@@ -92,21 +114,14 @@ Deno.serve(async req => {
       if (payload.role === 'contributor' && (!detail.library.collaborative || !person.upload_enabled)) throw new Error(!detail.library.collaborative ? 'Diese Bibliothek erlaubt keine gemeinschaftlichen Beiträge.' : 'Person hat keine Upload-Freigabe.');
       return response(await rpc('member'));
     }
-    if (action === 'delete_figure') {
-      const state = await rpc('state', {});
-      const figure = checked(await adminClient.from('cloud_figures').select('id,owner_id').eq('id', payload.figure).single());
-      if (!userId || (figure.owner_id !== userId && !state.me?.is_admin)) return response({ error: 'Keine Berechtigung.' }, 403);
-      const media = checked(await adminClient.from('cloud_media').select('path').eq('figure_id', figure.id));
-      if (media.length) checked(await adminClient.storage.from('salsa-cloud').remove(media.map((m: any) => m.path)));
-      checked(await adminClient.rpc('cloud_delete_figure', { fid: figure.id, uid: userId }));
-      return response({ ok: true });
-    }
     if (['finalize', 'abort', 'cleanup', 'admin_cleanup'].includes(action)) {
       if (!userId) return response({ error: 'Anmeldung erforderlich.' }, 401);
       if (action === 'finalize') {
         const media = checked(await adminClient.from('cloud_media').select('id,owner_id,job_id').eq('id', payload.id).single());
         if (media.owner_id !== userId || !media.job_id) return response({ error: 'Keine Berechtigung.' }, 403);
         checked(await adminClient.rpc('cloud_finish_media', { media_id: media.id, owner: userId }));
+        const current = checked(await adminClient.from('cloud_media').select('id,path').eq('id', media.id).single());
+        await verifyContent(adminClient, current);
         return response({ ok: true });
       }
       let query = adminClient.from('cloud_jobs').select('id,owner_id');
@@ -115,9 +130,16 @@ Deno.serve(async req => {
       const jobs = checked(await query);
       for (const job of jobs) {
         const media = checked(await adminClient.from('cloud_media').select('path').eq('job_id', job.id));
-        if (media.length) checked(await adminClient.storage.from('salsa-cloud').remove(media.map((m: any) => m.path)));
+        const paths = [];
+        for (const m of media) {
+          const others = checked(await adminClient.from('cloud_media').select('id').eq('path', m.path).or(`job_id.is.null,job_id.neq.${job.id}`));
+          if (!others.length) paths.push(m.path);
+        }
+        if (paths.length) checked(await adminClient.storage.from('salsa-cloud').remove([...new Set(paths)]));
         checked(await adminClient.rpc('cloud_release_job', { jid: job.id }));
       }
+      const garbage = checked(await adminClient.rpc('cloud_collect_trash'));
+      if (garbage.paths.length) checked(await adminClient.storage.from('salsa-cloud').remove(garbage.paths));
       return response({ ok: true, cleaned: jobs.length });
     }
     return response(await rpc(action));

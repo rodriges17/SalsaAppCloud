@@ -21,9 +21,12 @@ async function mock(page,admin=false, own=false, contribute=true, options={}){
   if(req.method()==='OPTIONS')return route.fulfill({status:204,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type','Access-Control-Allow-Methods':'POST, GET, OPTIONS'}});
   const {action,payload}=req.postDataJSON();calls.push({action,payload,authorization:req.headers().authorization});let result={ok:true};
   if(action==='state')result={me:options.me!==undefined?options.me:admin&&req.headers().authorization?{id:'admin',email:'admin@example.test',is_admin:true,upload_enabled:true,used:0,quota:500000000}:null,settings:{used:0,total_limit:900000000},people:options.people??[],libraries:options.noLibraries?[]:[{...library,manage:options.manage??false,owner_id:options.owner??library.owner_id,collaborative:options.collaborative??library.collaborative,contribute,visibility:options.visibility??library.visibility}],own_figures:Array.isArray(own)?own:own?[{id:'figure-1',public_allowed:options.publicAllowed??true,revisions:[{...rev,created_at:'2026-10-19T00:00:00Z'}]}]:[]};
+  if(action==='state') for(const f of result.own_figures) f.owner_id ??= 'admin';
+  if(action==='duplicates') result={matches:options.duplicate?[{figure:'existing-figure',revision:'existing-revision',title:'Vorhandene Figur',media:'existing-video',hash:payload.hashes[0]}]:[]};
+  if(action==='editor') result={editors:[]};
   if(action==='public_permission'){if(options.failPermission)return route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({error:'Test: Freigabe konnte nicht gespeichert werden'})});options.publicAllowed=payload.allowed;}
   if(action==='library')result={library:{...library,owner_id:options.owner??library.owner_id,collaborative:options.collaborative??library.collaborative},manage:options.manage??false,contribute:options.manage??false,members:options.members??[],entries:options.entries??[{figure_id:'figure-1',owner_id:'owner',public_allowed:true,published:rev,pending:null}]};
-  if(action==='reserve')result={job:'job-1',media:payload.videos.map((v,i)=>({id:'uploaded-'+i,path:'test/'+i+'.mp4'}))};
+  if(action==='reserve')result={job:'job-1',media:payload.videos.map((v,i)=>({id:'uploaded-'+i,path:'test/'+i+'.mp4',reused:!!v.reuse}))};
   if(action==='commit'){
    result={revision:'uploaded-revision'};
    if(options.reflectUpload)own=[{id:'figure-upload',public_allowed:payload.public_allowed,revisions:[{id:result.revision,title:payload.title,description:payload.description,tags:payload.tags,created_at:'2026-10-23T00:00:00Z',videos:payload.videos.map(v=>({...v,size:clip.length,type:'video/mp4'}))}]}];
@@ -249,7 +252,7 @@ test('direct public permission actions preserve state on failure and toggle only
  await expect(page.getByRole('button',{name:'Sichtbarkeit speichern',exact:true})).toHaveCount(0);await expect(page.locator('#cloudBody input[type=checkbox]')).toHaveCount(0);
  const allow=page.getByRole('button',{name:'Öffentliche Veröffentlichung erlauben',exact:true});await allow.tap();await expect(page.locator('#cloudError')).toContainText('Freigabe konnte nicht gespeichert werden');await expect(allow).toBeEnabled();await expect(page.locator('#cloudBody')).toContainText('Öffentliche Veröffentlichung: Nicht erlaubt');
  options.failPermission=false;await allow.tap();await expect(page.getByRole('button',{name:'Öffentliche Veröffentlichung widerrufen',exact:true})).toBeVisible();await expect(page.locator('#cloudBody')).toContainText('Öffentliche Veröffentlichung: Erlaubt');
- await page.getByRole('button',{name:'Öffentliche Veröffentlichung widerrufen',exact:true}).tap();await expect(allow).toBeVisible();await expect(page.locator('#cloudBody')).toContainText('Öffentliche Veröffentlichung: Nicht erlaubt');
+ await page.getByRole('button',{name:'Öffentliche Veröffentlichung widerrufen',exact:true}).tap();await page.locator('#confirmOK').tap();await expect(allow).toBeVisible();await expect(page.locator('#cloudBody')).toContainText('Öffentliche Veröffentlichung: Nicht erlaubt');
  expect(calls.filter(c=>c.action==='public_permission').map(c=>c.payload)).toEqual([{figure:'figure-1',allowed:true},{figure:'figure-1',allowed:true},{figure:'figure-1',allowed:false}]);
  await expect(page.locator('#cloudBody')).toContainText('Private Bibliotheken bleiben unverändert.');
 });
@@ -469,4 +472,23 @@ test('library owner adds by exact email without a directory and keeps input afte
 test('member role changes save explicitly and contribution removal can be cancelled',async({page})=>{
  await signIn(page);const options={manage:true,owner:'admin',collaborative:true,members:[{...testPeople[0],role:'contributor'}]};const calls=await mock(page,true,false,true,options);await openMembers(page);await page.locator('.cloud-member-summary').filter({hasText:'writer@example.test'}).tap();await page.getByLabel('Bibliotheksrolle',{exact:true}).selectOption('reader');expect(calls.some(c=>c.action==='member')).toBe(false);
  await page.getByRole('button',{name:'Rolle speichern',exact:true}).tap();await page.locator('#confirmCancel').tap();await expect(page.locator('.cloud-member-summary').filter({hasText:'writer@example.test'})).toContainText('Mitwirken');await page.getByRole('button',{name:'Rolle speichern',exact:true}).tap();await page.locator('#confirmOK').tap();await expect(page.locator('.cloud-member-summary').filter({hasText:'writer@example.test'})).toContainText('Lesen');
+});
+
+test('identical upload offers existing figure and attaches it without reserving or uploading bytes',async({page})=>{
+ await signIn(page);const calls=await mock(page,true,false,true,{duplicate:true,visibility:'private'});await localUpload(page);
+ await page.getByRole('combobox',{name:'Bibliothek',exact:true}).selectOption('lib-1');
+ await page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true}).tap();
+ await expect(page.getByRole('combobox',{name:'Bestehende Figur',exact:true})).toBeVisible();
+ expect(calls.some(c=>['reserve','upload','commit'].includes(c.action))).toBe(false);
+ await page.getByRole('button',{name:'Bestehende Figur verwenden',exact:true}).tap();
+ await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();
+ expect(calls.find(c=>c.action==='attach').payload.revision).toBe('existing-revision');
+});
+test('explicit variant reuses accessible video without uploading it again',async({page})=>{
+ await signIn(page);const calls=await mock(page,true,false,true,{duplicate:true,noLibraries:true});await localUpload(page);
+ await page.getByLabel('Bewusst eine eigene Figur / Variante erstellen, auch wenn das Video bereits existiert',{exact:true}).check();
+ await page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true}).tap();
+ await expect(page.getByRole('heading',{name:'Meine Cloud-Figuren',exact:true})).toBeVisible();
+ expect(calls.find(c=>c.action==='reserve').payload).toMatchObject({variant:true,videos:[{reuse:'existing-video'}]});
+ expect(calls.some(c=>['upload','finalize'].includes(c.action))).toBe(false);expect(calls.some(c=>c.action==='commit')).toBe(true);
 });

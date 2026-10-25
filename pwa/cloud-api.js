@@ -80,7 +80,7 @@ export async function accessToken() {
   }
   return refreshing;
 }
-const READS = new Set(['state', 'library', 'poster_get', 'poster_put', 'media_url', 'admin_link', 'admin_access', 'member_check']);
+const READS = new Set(['state', 'library', 'poster_get', 'poster_put', 'media_url', 'admin_link', 'admin_access', 'member_check', 'duplicates']);
 export async function cloudCall(action, payload = {}) {
   if (!navigator.onLine) throw new Error('Cloud-Bibliotheken benötigen eine Internetverbindung. Deine lokalen Figuren bleiben offline verfügbar.');
   const owner = cloudIdentity(), token = await accessToken();

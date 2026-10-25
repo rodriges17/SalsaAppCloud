@@ -1,3 +1,4 @@
+import { videoHash } from './cloud-dedup.js';
 import { createMemberView } from './cloud-members.js';
 import { createPeopleView } from './cloud-people.js';
 import { cloudReadState, contentState } from './cloud-read-state.js';
@@ -192,6 +193,7 @@ async function libraryView(id, detail) {
     }
     async function review(accept) { await run('Prüfung speichern …', async () => { await cloudCall('review', { library: id, figure: entry.figure_id, accept }); await load(id); }); }
     if (detail.manage || entry.owner_id === state.me?.id) box.append(action('Aus Bibliothek entfernen', () => run('Entfernen …', async () => { await cloudCall('detach', { library: id, figure: entry.figure_id }); await load(id); })));
+    if (state.me?.upload_enabled && entry.published) variantButton(box, entry.published);
     if (detail.contribute && entry.published) box.append(action('In weitere Bibliothek aufnehmen', () => attachForm(entry.published)));
   }
   if (detail.manage) {
@@ -300,18 +302,39 @@ let posterView;
 let localFigures = [];
 function cancelThumbnails() { posterView?.dispose(); posterView = null; }
 function thumbnail(heading, revision) { posterView?.add(heading, revision); }
+function variantButton(box, revision) {
+  box.append(action('Eigene Variante erstellen', async () => {
+    if (!await hooks.confirm({ title: 'Eigene Variante erstellen?', message: 'Die Variante ist unabhängig bearbeitbar. Vorhandene Videos und Bilder werden ohne zusätzliche Dateikopie referenziert.', ok: 'Variante erstellen' })) return;
+    await run('Variante erstellen …', async () => { await cloudCall('variant', { revision: revision.id }); area = 'figures'; await load(null); });
+  }));
+}
 function ownFigures() {
+  for (const f of state.trash ?? []) {
+    const box = section('Papierkorb · ' + f.title);
+    box.append(node('p', 'Wiederherstellbar bis ' + new Date(Date.parse(f.deleted_at) + 30 * 86400000).toLocaleDateString('de')));
+    box.append(action('Figur wiederherstellen', () => run('Wiederherstellen …', async () => { await cloudCall('restore_figure', { figure: f.id }); await load(null); })));
+  }
   if (!state.own_figures.length) body.append(node('p', 'Noch keine eigenen Cloud-Figuren. Lade eine lokale Figur über „In Cloud veröffentlichen“ hoch.'));
   for (const f of state.own_figures) {
     const revisions = [...f.revisions].sort((a, b) => (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0));
     const latest = revisions[0], box = section(latest?.title ?? 'Noch nicht fertig hochgeladene Figur');
     if (latest?.videos?.[0]) { box.querySelector('h3').classList.add('has-thumbnail'); thumbnail(box.querySelector('h3'), latest); }
     box.append(node('p', `Öffentliche Veröffentlichung: ${f.public_allowed ? 'Erlaubt' : 'Nicht erlaubt'}`));
-    box.append(action(f.public_allowed ? 'Öffentliche Veröffentlichung widerrufen' : 'Öffentliche Veröffentlichung erlauben', () => run('Freigabe ändern …', async () => {
+    if (f.owner_id === state.me?.id) box.append(action(f.public_allowed ? 'Öffentliche Veröffentlichung widerrufen' : 'Öffentliche Veröffentlichung erlauben', () => run('Freigabe ändern …', async () => {
+      if (f.public_allowed && !await hooks.confirm({ title: 'Öffentliche Freigabe widerrufen?', message: 'Alle Zuordnungen zu öffentlichen Bibliotheken werden entfernt. Private Zuordnungen bleiben bestehen.', ok: 'Freigabe widerrufen' })) return;
       await cloudCall('public_permission', { figure: f.id, allowed: !f.public_allowed }); await load(null);
     })));
-    box.append(node('p', 'Die Freigabe gilt für alle Versionen dieser Figur und alle öffentlichen Bibliotheken, denen sie zugeordnet ist. Ohne Freigabe bleibt sie dort für Lesende verborgen. Private Bibliotheken bleiben unverändert.'));
+    box.append(node('p', 'Die Freigabe gilt für alle Versionen dieser Figur und alle öffentlichen Bibliotheken, denen sie zugeordnet ist. Beim Widerrufen werden öffentliche Zuordnungen entfernt. Private Bibliotheken bleiben unverändert.'));
     if (latest) {
+      if (state.me.upload_enabled) variantButton(box, latest);
+      if (f.owner_id === state.me.id) {
+        const editors = node('details'); editors.append(node('summary', 'Bearbeiter verwalten')); box.append(editors);
+        const email = field(editors, 'E-Mail des Bearbeiters');
+        const list = node('p'); editors.append(list);
+        const refreshEditors = async () => { const result = await cloudCall('editor', { figure: f.id }); list.textContent = result.editors.map(e => e.email).join(', ') || 'Keine zusätzlichen Bearbeiter'; };
+        editors.addEventListener('toggle', () => { if (editors.open) void run('Bearbeiter laden …', refreshEditors); });
+        for (const [label, remove] of [['Bearbeiter hinzufügen', false], ['Bearbeiter entfernen', true]]) editors.append(action(label, () => run('Berechtigung speichern …', async () => { await cloudCall('editor', { figure: f.id, email: email.value, remove }); await refreshEditors(); })));
+      }
       downloadControls(box, latest, { own: true, revisionIds: revisions.map(r => r.id) });
       const assign = action('Einer Bibliothek zuordnen', () => attachForm(latest)); assign.className = 'secondary'; if (state.me.upload_enabled) box.append(assign);
       const history = node('details', undefined, 'cloud-history');
@@ -329,8 +352,8 @@ function ownFigures() {
       });
       box.append(history);
     }
-    box.append(action('Cloud-Figur samt Videos löschen', async () => {
-      if (!await hooks.confirm({ title: 'Cloud-Figur löschen?', message: 'Alle Cloud-Versionen und Verknüpfungen in Bibliotheken werden entfernt. Bereits lokal heruntergeladene Kopien bleiben bestehen.', ok: 'Cloud-Figur löschen' })) return;
+    if (f.owner_id === state.me?.id) box.append(action('Cloud-Figur samt Videos löschen', async () => {
+      if (!await hooks.confirm({ title: 'Cloud-Figur löschen?', message: 'Die Figur wird für 30 Tage in den Papierkorb verschoben. Entferne zuvor alle Bibliothekszuordnungen. Gemeinsam verwendete Dateien bleiben erhalten.', ok: 'Cloud-Figur löschen' })) return;
       await run('Cloud-Figur löschen …', async () => { await cloudCall('delete_figure', { figure: f.id }); await load(null); });
     }));
   }
@@ -343,7 +366,7 @@ async function publishForm() {
   const step = (number, title) => { const group = node('div', undefined, 'upload-step'); group.append(node('h4', `${number} · ${title}`)); box.append(group); return group; };
   const videoStep = step(1, 'Video'), targetStep = step(2, 'Ziel'), optionsStep = step(3, 'Hochladen');
   for (const record of records) selected.push([checkbox(videoStep, `${record.name || 'Video'} · ${MB(record.blob.size)}`, true), record]);
-  videoStep.append(node('p', 'Maximal 50 MB pro Video. Während eines Uploads wird vorübergehend der maximale Platz pro Video reserviert. Alte Versionen zählen weiterhin zum Speicher.'));
+  videoStep.append(node('p', 'Maximal 50 MB pro Video. Identische Videos werden erkannt und nur einmal gespeichert. Bereits zugängliche Videos können ohne erneuten Upload übernommen werden.'));
   const library = select(targetStep, 'Bibliothek', [['', 'Nur in Meine Cloud-Figuren hochladen'], ...libs.map(l => [l.id, l.title])]);
   // Reservations can create a figure before any revision exists. They are not
   // valid version targets until the first upload has completed.
@@ -355,6 +378,8 @@ async function publishForm() {
     return [f.id, names.get(title) > 1 ? `${title} · ${new Date(latest.created_at).toLocaleString('de')}` : title];
   })]);
   optionsStep.append(node('p', 'Hier stehen deine vorhandenen Cloud-Figuren. Lokales Löschen oder Entfernen aus einer Bibliothek löscht die Cloud-Figur nicht. Dauerhaft löschen kannst du sie unter „Meine Cloud-Figuren“ mit „Cloud-Figur samt Videos löschen“.'));
+  const explicitVariant = checkbox(optionsStep, 'Bewusst eine eigene Figur / Variante erstellen, auch wenn das Video bereits existiert');
+  const duplicateBox = node('div'); optionsStep.append(duplicateBox);
   const allowed = checkbox(optionsStep, 'Öffentliche Veröffentlichung dieser Figur erlauben');
   optionsStep.append(node('p', 'Mit Häkchen darf diese Figur in öffentlichen Bibliotheken ohne Anmeldung sichtbar sein. Ohne Häkchen ist sie nur in privaten Bibliotheken nutzbar. Das Häkchen allein veröffentlicht die Figur noch nicht.'));
   const visibilityHint = node('p'); visibilityHint.setAttribute('role', 'status'); targetStep.append(visibilityHint);
@@ -380,11 +405,29 @@ async function publishForm() {
     const owner = state.me.id;
     let job = null; controller = new AbortController(); document.getElementById('cloudCancelUpload').hidden = false;
     try {
-      const reserved = await cloudCall('reserve', { figure: figure.value || null, videos: videos.map(v => ({ size: v.blob.size, type: v.blob.type })) }); job = reserved.job;
+      statusBox.textContent = 'Videos auf Duplikate prüfen …';
+      const hashes = [];
+      for (const video of videos) { controller.signal.throwIfAborted(); hashes.push(await videoHash(video.blob)); }
+      const { matches } = await cloudCall('duplicates', { hashes });
+      duplicateBox.replaceChildren();
+      if (!figure.value && !explicitVariant.checked && matches.length) {
+        duplicateBox.append(node('p', 'Dieses Video gehört bereits zu einer zugänglichen Figur. Verwende die bestehende Figur oder wähle ausdrücklich eine eigene Variante.'));
+        const unique = [...new Map(matches.map(m => [m.figure, m])).values()];
+        const choice = select(duplicateBox, 'Bestehende Figur', unique.map(m => [m.revision, m.title]));
+        duplicateBox.append(action('Bestehende Figur verwenden', () => run('Figur referenzieren …', async () => {
+          if (library.value) { await cloudCall('attach', { library: library.value, revision: choice.value }); source = null; area = 'libraries'; await load(library.value); }
+          else { const match = unique.find(m => m.revision === choice.value); attachForm({ ...match, id: match.revision }); }
+        })));
+        return;
+      }
+      if (figure.value && !allowed.checked && state.own_figures.find(f => f.id === figure.value)?.public_allowed && !await hooks.confirm({ title: 'Öffentliche Freigabe widerrufen?', message: 'Öffentliche Bibliothekszuordnungen werden entfernt.', ok: 'Widerrufen und speichern' })) return;
+      const reserved = await cloudCall('reserve', { figure: figure.value || null, variant: explicitVariant.checked, videos: videos.map((v, i) => ({ size: v.blob.size, type: v.blob.type, reuse: matches.find(m => m.hash === hashes[i])?.media })) }); job = reserved.job;
       for (let i = 0; i < videos.length; i++) {
         controller.signal.throwIfAborted(); statusBox.textContent = `Video ${i + 1} von ${videos.length} hochladen …`;
-        await uploadMedia(reserved.media[i].path, videos[i].blob, controller.signal);
-        await cloudCall('finalize', { id: reserved.media[i].id });
+        if (!reserved.media[i].reused) {
+          await uploadMedia(reserved.media[i].path, videos[i].blob, controller.signal);
+          await cloudCall('finalize', { id: reserved.media[i].id });
+        }
       }
       controller.signal.throwIfAborted();
       const poster = await posterPayload(local.poster).catch(() => null);
@@ -403,6 +446,11 @@ async function publishForm() {
 function adminForm() {
   const box = section('Plattformverwaltung');
   peopleView.mount(box);
+  box.append(action('Bestehende Videos auf Duplikate prüfen', () => run('Videos prüfen …', async () => {
+    let result;
+    do { result = await cloudCall('admin_optimize'); statusBox.textContent = 'Vorhandene Videos werden geprüft und zusammengeführt …'; } while (result.processed > 0);
+    await load(null);
+  })));
 }
 export function initCloud(callbacks) {
   hooks = callbacks;
