@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test web-tests/*.test.js",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "prototype:cloud-guest": "python3 -m http.server 4174 --directory pwa"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.3.14",
