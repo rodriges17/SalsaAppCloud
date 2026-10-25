@@ -547,7 +547,11 @@ test('local hash cache avoids rereading video bytes across scans and page reload
   const {listFigures,figureMedia}=await import('/pwa/storage.js');
   let reads=0;const original=Blob.prototype.arrayBuffer;
   Blob.prototype.arrayBuffer=function(){if(this.type==='video/mp4')reads++;return original.call(this);};
-  try {const result=await localVideoContent(await listFigures(),figureMedia);return {reads,matches:result.size};}
+  try {
+   const errors=[];const figures=await listFigures();
+   const result=await localVideoContent(figures,async figure=>{try{return (await figureMedia(figure)).map(record=>({...record,contentKey:async()=>{try{return await record.contentKey();}catch(error){errors.push(error.message);throw error;}}}));}catch(error){errors.push(error.message);throw error;}});
+   return {reads,matches:result.size,...(errors.length?{errors}:{}),...(figures.length?{}:{figures:0})};
+  }
   finally {Blob.prototype.arrayBuffer=original;}
  });
  expect(await scan()).toEqual({reads:1,matches:1});
