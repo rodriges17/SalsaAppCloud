@@ -20,9 +20,9 @@ async function mock(page,admin=false, own=false, contribute=true, options={}){
   if(req.url().includes('/storage/'))return route.fulfill({status:200,contentType:'video/mp4',body:clip,headers:{'Access-Control-Allow-Origin':'*'}});
   if(req.method()==='OPTIONS')return route.fulfill({status:204,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type','Access-Control-Allow-Methods':'POST, GET, OPTIONS'}});
   const {action,payload}=req.postDataJSON();calls.push({action,payload,authorization:req.headers().authorization});let result={ok:true};
-  if(action==='state')result={me:admin&&req.headers().authorization?{id:'admin',email:'admin@example.test',is_admin:true,upload_enabled:true,used:0,quota:500000000}:null,settings:{used:0,total_limit:900000000},people:[],libraries:options.noLibraries?[]:[{...library,contribute,visibility:options.visibility??library.visibility}],own_figures:Array.isArray(own)?own:own?[{id:'figure-1',public_allowed:options.publicAllowed??true,revisions:[{...rev,created_at:'2026-10-19T00:00:00Z'}]}]:[]};
+  if(action==='state')result={me:options.me!==undefined?options.me:admin&&req.headers().authorization?{id:'admin',email:'admin@example.test',is_admin:true,upload_enabled:true,used:0,quota:500000000}:null,settings:{used:0,total_limit:900000000},people:options.people??[],libraries:options.noLibraries?[]:[{...library,manage:options.manage??false,owner_id:options.owner??library.owner_id,contribute,visibility:options.visibility??library.visibility}],own_figures:Array.isArray(own)?own:own?[{id:'figure-1',public_allowed:options.publicAllowed??true,revisions:[{...rev,created_at:'2026-10-19T00:00:00Z'}]}]:[]};
   if(action==='public_permission'){if(options.failPermission)return route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({error:'Test: Freigabe konnte nicht gespeichert werden'})});options.publicAllowed=payload.allowed;}
-  if(action==='library')result={library,manage:options.manage??false,contribute:options.manage??false,members:[],entries:options.entries??[{figure_id:'figure-1',owner_id:'owner',public_allowed:true,published:rev,pending:null}]};
+  if(action==='library')result={library:{...library,owner_id:options.owner??library.owner_id},manage:options.manage??false,contribute:options.manage??false,members:[],entries:options.entries??[{figure_id:'figure-1',owner_id:'owner',public_allowed:true,published:rev,pending:null}]};
   if(action==='reserve')result={job:'job-1',media:payload.videos.map((v,i)=>({id:'uploaded-'+i,path:'test/'+i+'.mp4'}))};
   if(action==='commit'){
    result={revision:'uploaded-revision'};
@@ -32,7 +32,11 @@ async function mock(page,admin=false, own=false, contribute=true, options={}){
   if(action==='poster_get')result={...(options.posters.get(payload.revision)??(!own&&!options.noPoster?{poster:POSTER,kind:'local'}:{poster:null})),can_write:admin&&!!req.headers().authorization};
   if(action==='poster_put'){result=options.posters.get(payload.revision);if(!result||result.kind==='frame'&&payload.kind==='local'){result={poster:payload.data,kind:payload.kind};options.posters.set(payload.revision,result);}}
   if(action==='media_url')result={url:host+'/storage/v1/object/sign/salsa-cloud/video-1?token=fake'};
-  if(action==='admin_link')result={link:'https://rodriges17.github.io/SalsaAppCloud/?cloud=1&type=magiclink&token_hash=one-time-test'};
+  if(action==='admin_access')result={memberships:options.memberships??[]};
+  if(action==='member_check')result={upload_enabled:true};
+  if(action==='admin_user'){if(options.failUser)return route.fulfill({status:403,contentType:'application/json',body:JSON.stringify({error:'Keine Berechtigung.',access_changed:true})}); const person={id:'person-'+payload.email,email:payload.email,upload_enabled:payload.enabled,quota:payload.quota,used:0};options.people??=[];const i=options.people.findIndex(p=>p.email===person.email);if(i>=0)options.people[i]={...options.people[i],...person};else options.people.push(person);}
+  if(action==='member'&&options.failMember){options.failMember=false;return route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({error:'Zuweisung fehlgeschlagen'})});}
+  if(action==='admin_link')result={expires_at:'2026-10-25T22:00:00Z',link:'https://rodriges17.github.io/SalsaAppCloud/?cloud=1&type=magiclink&token_hash=one-time-test'};
   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(result),headers:{'Access-Control-Allow-Origin':'*'}});
  });return calls;
 }
@@ -47,13 +51,19 @@ test('public cloud download requires confirmed previews and becomes an offline c
 test('offline cloud failure stays closable and local editing works',async({page,context})=>{
  await start(page);await context.setOffline(true);await page.locator('#cloudButton').tap();await expect(page.locator('#cloudError')).toContainText('Internetverbindung');await page.locator('#cloudBack').tap();await page.locator('#openAddFigure').tap(); await page.locator('#addFigure').tap();await expect(page.locator('#editor')).toBeVisible();
 });
-test('admin sets explicit quota and creates a manual link without sending a message',async({page})=>{
- await page.addInitScript(()=>localStorage.setItem('salsa-cloud-session:/pwa/:v1',JSON.stringify({access_token:'test-user-jwt',refresh_token:'test-refresh',expires_at:Date.now()+3600000})));
- const calls=await mock(page,true);await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Verwaltung',exact:true}).tap();
- await page.getByLabel('Person: E-Mail-Adresse',{exact:true}).fill('writer@example.test');await page.getByLabel('Speicherlimit dieser Person in MB',{exact:true}).fill('100');await page.getByLabel('Cloud-Bibliotheken und Uploads erlauben',{exact:true}).check();
- await page.getByRole('button',{name:'Person anlegen / Freigabe speichern',exact:true}).tap();await expect.poll(()=>calls.some(c=>c.action==='admin_user')).toBe(true);
- expect(calls.find(c=>c.action==='admin_user').payload).toEqual({email:'writer@example.test',enabled:true,quota:100000000});
- await page.getByLabel('Person: E-Mail-Adresse',{exact:true}).fill('writer@example.test');await page.getByRole('button',{name:'Anmeldelink erstellen',exact:true}).tap();await expect(page.getByLabel('Einmaliger persönlicher Anmeldelink',{exact:true})).toHaveValue(/token_hash=one-time-test/);expect(calls.every(c=>c.authorization==='Bearer test-user-jwt')).toBe(true);
+test('admin creates a person through three steps and explicitly generates a link',async({page})=>{
+ await signIn(page);const calls=await mock(page,true);await start(page);await page.locator('#cloudButton').tap();
+ await expect(page.getByText('Plattform-Administrator',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Plattformverwaltung',exact:true}).tap();await page.getByRole('button',{name:'Person hinzufügen',exact:true}).tap();
+ await page.getByLabel('E-Mail-Adresse der neuen Person',{exact:true}).fill('writer@example.test');await page.getByRole('button',{name:'Weiter',exact:true}).tap();
+ await expect(page.getByLabel('Figuren hochladen und Bibliotheken erstellen',{exact:true})).not.toBeChecked();
+ await page.getByLabel('Figuren hochladen und Bibliotheken erstellen',{exact:true}).check();await page.getByLabel('Speicherlimit in MB',{exact:true}).fill('100');
+ await page.getByRole('button',{name:'Weiter',exact:true}).tap();await page.getByRole('button',{name:'Person anlegen',exact:true}).tap();
+ await expect(page.locator('.cloud-person-summary[aria-expanded=true]')).toContainText('writer@example.test');
+ expect(calls.find(c=>c.action==='admin_user').payload).toEqual({email:'writer@example.test',enabled:true,quota:100000000,create_only:true});
+ expect(calls.some(c=>c.action==='admin_link')).toBe(false);
+ await page.getByRole('button',{name:'Neuen Anmeldelink erstellen',exact:true}).tap();await expect(page.getByLabel('Einmaliger persönlicher Anmeldelink',{exact:true})).toHaveValue(/token_hash=one-time-test/);await expect(page.locator('.cloud-login-link')).toContainText('gültig bis');
+ expect(calls.every(c=>c.authorization==='Bearer test-user-jwt')).toBe(true);
 });
 test('backend not yet configured shows a useful error and leaves ZIP import usable',async({page})=>{
  await page.route(`${host}/functions/v1/cloud`,r=>r.fulfill(r.request().method()==='OPTIONS'?{status:204,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type','Access-Control-Allow-Methods':'POST, OPTIONS'}}:{status:404,contentType:'application/json',body:JSON.stringify({error:'Cloud ist noch nicht eingerichtet.'}),headers:{'Access-Control-Allow-Origin':'*'}}));
@@ -66,10 +76,9 @@ test('manual sign-in link is redeemed inside the current app without navigating 
  await start(page);await page.locator('#cloudButton').tap();
  await expect(page.locator('#cloudBody')).not.toContainText('iPhone-App');
  await expect(page.locator('#cloudBody')).toContainText('Die Anmeldung in einer anderen App oder einem anderen Browser wird nicht automatisch übernommen.');
- await expect(page.locator('.cloud-tabs button')).toHaveText(['Meine Figuren','Bibliotheken']);
+ await expect(page.locator('.cloud-tabs button')).toHaveText(['Bibliotheken']);
  await expect(page.locator('.cloud-tabs button').first()).toHaveAttribute('aria-pressed','true');
- await expect(page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true})).toHaveAttribute('aria-pressed','true');
- await expect(page.locator('#cloudBody')).toContainText('Melde dich an, um deine hochgeladenen Figuren zu sehen.');
+ await expect(page.locator('#cloudBody')).toContainText('Öffentliche Bibliotheken sind ohne Anmeldung lesbar.');
  await page.getByLabel('Anmeldelink einfügen',{exact:true}).fill('https://rodriges17.github.io/SalsaAppCloud/?cloud=1&type=magiclink&token_hash=test-once');
  await page.getByRole('button',{name:'Anmelden',exact:true}).tap();
  await expect(page.locator('#cloudBody')).toContainText('admin@example.test');
@@ -144,8 +153,8 @@ test('temporary auth refresh failure preserves login and restores admin and libr
  await page.route(`${host}/auth/v1/token?grant_type=refresh_token`,r=>r.fulfill({status:++attempts===1?503:200,contentType:'application/json',body:JSON.stringify(attempts===1?{error:'Temporary auth outage'}:{access_token:'test-user-jwt',refresh_token:'rotated-refresh',expires_in:3600})}));
  await start(page);await page.locator('#cloudButton').tap();await expect(page.locator('#cloudError')).toContainText('Temporary auth outage');
  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('salsa-cloud-session:/pwa/:v1')).refresh_token)).toBe('test-refresh');
- await page.locator('#cloudBack').tap();await page.locator('#cloudButton').tap();await expect(page.getByRole('button',{name:'Verwaltung',exact:true})).toBeVisible();await page.getByRole('button',{name:'Bibliotheken',exact:true}).tap();await expect(page.getByRole('button',{name:'Bibliothek erstellen',exact:true})).toBeVisible();
- await page.reload();await page.locator('#cloudButton').tap();await expect(page.getByRole('button',{name:'Verwaltung',exact:true})).toBeVisible();expect(attempts).toBe(2);
+ await page.locator('#cloudBack').tap();await page.locator('#cloudButton').tap();await expect(page.getByRole('button',{name:'Plattformverwaltung',exact:true})).toBeVisible();await page.getByRole('button',{name:'Bibliotheken',exact:true}).tap();await expect(page.getByRole('button',{name:'Bibliothek erstellen',exact:true})).toBeVisible();
+ await page.reload();await page.locator('#cloudButton').tap();await expect(page.getByRole('button',{name:'Plattformverwaltung',exact:true})).toBeVisible();expect(attempts).toBe(2);
  expect(calls.filter(c=>c.action==='state').every(c=>c.authorization==='Bearer test-user-jwt')).toBe(true);
 });
 
@@ -394,4 +403,44 @@ for(const folder of [false,true])test(`uploaded ${folder?'folder':'app'} origina
   await expect(page.getByRole('button',{name:'Lokal übernehmen',exact:true})).toBeEnabled();
  }
 
+});
+
+const testPeople=[{id:'writer',email:'writer@example.test',upload_enabled:true,quota:250000000,used:34000000},{id:'reader',email:'reader@example.test',upload_enabled:false,quota:250000000,used:0}];
+test('person selection expands inline, collapses the previous entry and preserves drafts',async({page},info)=>{
+ await signIn(page);await mock(page,true,false,true,{people:structuredClone(testPeople)});await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Plattformverwaltung',exact:true}).tap();
+ const writer=page.locator('.cloud-person-summary').filter({hasText:'writer@example.test'}),reader=page.locator('.cloud-person-summary').filter({hasText:'reader@example.test'});
+ await writer.tap();await expect(writer).toHaveAttribute('aria-expanded','true');await page.getByLabel('Speicherlimit in MB',{exact:true}).fill('300');
+ await reader.tap();await expect(writer).toHaveAttribute('aria-expanded','false');await expect(page.locator('.cloud-person-details')).toHaveCount(1);
+ await writer.tap();await expect(page.getByLabel('Speicherlimit in MB',{exact:true})).toHaveValue('300');
+ await expect(page.getByRole('button',{name:'Änderungen speichern',exact:true})).toBeEnabled();
+ for(const theme of ['dark','light']){await page.evaluate(t=>window.stepAppearance.set(t),theme);await page.screenshot({path:info.outputPath(`people-${theme}.png`)});}
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await writer.tap();await expect(page.locator('.cloud-person-details')).toHaveCount(0);
+});
+test('upload removal requires confirmation and remains unchanged on cancel',async({page})=>{
+ await signIn(page);const calls=await mock(page,true,false,true,{people:structuredClone(testPeople)});await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Plattformverwaltung',exact:true}).tap();await page.locator('.cloud-person-summary').filter({hasText:'writer@example.test'}).tap();
+ await page.getByLabel('Figuren hochladen und Bibliotheken erstellen',{exact:true}).uncheck();await page.getByRole('button',{name:'Änderungen speichern',exact:true}).tap();
+ await expect(page.locator('#confirmDialog')).toContainText('Bestehende Cloud-Figuren und Leserechte bleiben erhalten');await page.locator('#confirmCancel').tap();expect(calls.some(c=>c.action==='admin_user')).toBe(false);
+ await page.getByRole('button',{name:'Änderungen speichern',exact:true}).tap();await page.locator('#confirmOK').tap();await expect(page.locator('.cloud-person-summary[aria-expanded=true]')).toContainText('Nur Lesen');
+});
+test('partial creation retries membership only and never recreates the account',async({page})=>{
+ await signIn(page);const calls=await mock(page,true,false,true,{failMember:true,manage:true});await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Plattformverwaltung',exact:true}).tap();await page.getByRole('button',{name:'Person hinzufügen',exact:true}).tap();await page.getByLabel('E-Mail-Adresse der neuen Person').fill('new@example.test');await page.getByRole('button',{name:'Weiter',exact:true}).tap();await page.getByRole('button',{name:'Weiter',exact:true}).tap();
+ await page.getByRole('combobox',{name:'Cloud Kurs',exact:true}).selectOption('reader');
+ await page.getByRole('button',{name:'Person anlegen',exact:true}).tap();await expect(page.locator('#cloudBody')).toContainText('Zuweisung fehlgeschlagen');
+ expect(calls.filter(c=>c.action==='admin_user')).toHaveLength(1);
+ await page.getByRole('button',{name:'Offene Zuweisungen erneut speichern',exact:true}).tap();await expect(page.locator('.cloud-person-summary[aria-expanded=true]')).toContainText('new@example.test');
+ expect(calls.filter(c=>c.action==='admin_user')).toHaveLength(1);expect(calls.filter(c=>c.action==='member')).toHaveLength(2);
+});
+for(const mode of ['reader','revoked','owner'])test(`role-aware navigation: ${mode}`,async({page})=>{
+ await signIn(page);const me={id:'viewer',email:'viewer@example.test',is_admin:false,upload_enabled:false,used:mode==='revoked'?3:0,quota:250000000};await mock(page,false,mode==='revoked',false,{me,manage:mode==='owner',owner:mode==='owner'?'viewer':'owner'});await start(page);await page.locator('#cloudButton').tap();
+ await expect(page.getByRole('button',{name:'Plattformverwaltung',exact:true})).toHaveCount(0);
+ if(mode==='revoked'){await expect(page.getByRole('heading',{name:'Meine Cloud-Figuren',exact:true})).toBeVisible();await expect(page.locator('#cloudBody')).toContainText('Uploads sind für dein Konto deaktiviert.');await expect(page.getByRole('button',{name:'Lokal übernehmen',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Einer Bibliothek zuordnen',exact:true})).toHaveCount(0);}else{await expect(page.locator('.cloud-tabs button')).toHaveText(['Bibliotheken']);}
+ if(mode==='owner'){await expect(page.getByText('Besitzer · Bibliothek verwalten',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Öffnen',exact:true}).tap();await expect(page.getByRole('heading',{name:'Mitglieder & Zugriff',exact:true})).toBeVisible();await expect(page.getByLabel('Vollständige E-Mail-Adresse',{exact:true})).toBeVisible();await expect(page.getByLabel('Personen suchen',{exact:true})).toHaveCount(0);}
+});
+
+test('server-side permission changes update navigation without deleting the login',async({page})=>{
+ await signIn(page);const options={people:structuredClone(testPeople),failUser:true};const calls=await mock(page,true,false,true,options);await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Plattformverwaltung',exact:true}).tap();await page.locator('.cloud-person-summary').filter({hasText:'writer@example.test'}).tap();await page.getByLabel('Speicherlimit in MB',{exact:true}).fill('300');
+ options.me={id:'admin',email:'admin@example.test',is_admin:false,upload_enabled:false,quota:500000000,used:0};
+ await page.getByRole('button',{name:'Änderungen speichern',exact:true}).tap();await expect(page.locator('#cloudError')).toContainText('Keine Berechtigung.');await expect(page.getByRole('button',{name:'Plattformverwaltung',exact:true})).toHaveCount(0);await expect(page.locator('.cloud-tabs button')).toHaveText(['Bibliotheken']);
+ expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('salsa-cloud-session:/pwa/:v1')).access_token)).toBe('test-user-jwt');expect(calls.filter(c=>c.action==='state').length).toBeGreaterThan(1);
 });

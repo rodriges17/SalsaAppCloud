@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
+const currentVersion = readFileSync('pwa/app.js', 'utf8').match(/const APP_VERSION = '([^']+)'/)[1];
 
 const clip = path.resolve('web-tests/fixtures/clip.mp4');
 const portrait = path.resolve('web-tests/fixtures/portrait.mp4');
@@ -259,12 +261,12 @@ test('installed shell update bypasses stale HTTP CSS and preserves offline video
   await page.locator('#editorBack').tap(); await page.locator('#confirmOK').tap();
   await expect(page.locator('#editor')).not.toBeVisible();
   await page.locator('#applyUpdate').tap();
-  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-24-sort-focus-v1');
+  await expect(page.locator('html')).toHaveAttribute('data-app-version', currentVersion);
   await expect(page.locator('#importFigure')).toHaveCSS('pointer-events', 'auto');
   await expect(page.locator('.figure-card')).toHaveCount(1);
   const file = await exportPackage(page, info);
   await context.setOffline(true); await page.reload();
-  await expect(page.locator('html')).toHaveAttribute('data-app-version', '2026-10-24-sort-focus-v1');
+  await expect(page.locator('html')).toHaveAttribute('data-app-version', currentVersion);
   await page.getByRole('button', { name: 'Ocho lernen' }).tap();
   await expect(page.locator('#learningVideo')).toHaveJSProperty('videoWidth', 320);
   await page.locator('#playPause').tap();

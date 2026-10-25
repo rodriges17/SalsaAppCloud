@@ -41,7 +41,7 @@ async function parse(response) {
   if (response.status === 404) { const error = new Error('Cloud ist noch nicht eingerichtet. Bitte den Administrator um die Supabase-Einrichtung bitten.'); error.status = 404; throw error; }
   if (!response.ok || data.error) {
     const error = new Error(data.error?.message ?? data.error_description ?? data.msg ?? data.message ?? (typeof data.error === 'string' ? data.error : 'Cloud ist noch nicht eingerichtet oder derzeit nicht erreichbar.'));
-    error.status = response.status; error.code = data.code ?? data.error_code ?? data.error; throw error;
+    error.accessChanged = data.access_changed === true || response.status === 403; error.status = response.status; error.code = data.code ?? data.error_code ?? data.error; throw error;
   }
   return data;
 }
@@ -80,7 +80,7 @@ export async function accessToken() {
   }
   return refreshing;
 }
-const READS = new Set(['state', 'library', 'poster_get', 'poster_put', 'media_url', 'admin_link']);
+const READS = new Set(['state', 'library', 'poster_get', 'poster_put', 'media_url', 'admin_link', 'admin_access', 'member_check']);
 export async function cloudCall(action, payload = {}) {
   if (!navigator.onLine) throw new Error('Cloud-Bibliotheken benötigen eine Internetverbindung. Deine lokalen Figuren bleiben offline verfügbar.');
   const owner = cloudIdentity(), token = await accessToken();

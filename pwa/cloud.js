@@ -1,3 +1,4 @@
+import { createPeopleView } from './cloud-people.js';
 import { cloudReadState, contentState } from './cloud-read-state.js';
 import { cloudCall, signedIn, uploadMedia, logout, loginWithLink, cloudIdentity } from './cloud-api.js';
 import { CLOUD_FILE_LIMIT } from './cloud-config.js';
@@ -8,6 +9,7 @@ import { createPosterView, posterPayload } from './cloud-posters.js';
 const node = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
 const MB = value => `${(Number(value ?? 0) / 1000000).toFixed(1)} MB`;
 const action = (label, work) => { const b = node('button', label, 'secondary'); b.type = 'button'; b.onclick = () => Promise.resolve().then(work).catch(report); return b; };
+let peopleView;
 let dialog, body, errorBox, statusBox, hooks, state, current, busy = false, controller, source = null, area = 'figures';
 function report(error, target = errorBox) { target.textContent = error?.message ?? 'Cloud-Aufruf fehlgeschlagen.'; target.hidden = false; target.scrollIntoView({ block: 'nearest' }); }
 function field(form, label, value = '', type = 'text') {
@@ -24,9 +26,21 @@ function section(title) { const s = node('section', undefined, 'cloud-card'); s.
 async function run(message, work, errorTarget = errorBox) {
   if (busy) return; busy = true; errorBox.hidden = true; errorTarget.hidden = true; statusBox.textContent = message;
   body.inert = true; document.getElementById('cloudBack').disabled = true; dialog.querySelectorAll('[data-nav]').forEach(button => { button.disabled = true; });
-  try { return await work(); } catch (error) { report(error, errorTarget); }
+  try { return await work(); } catch (error) { if (error.accessChanged) await recoverAccess(); report(error, errorTarget.isConnected ? errorTarget : errorBox); }
   finally { busy = false; body.inert = false; document.getElementById('cloudBack').disabled = false; dialog.querySelectorAll('[data-nav]').forEach(button => { button.disabled = false; }); statusBox.textContent = ''; if (authReloadPending && dialog.open) { authReloadPending = false; source = null; area = 'initial'; void load(null, true); } }
 }
+async function recoverAccess() {
+  const inputs = [...body.querySelectorAll('label')].map(label => { const input = label.querySelector('input,textarea,select'); return input && input.type !== 'password' ? { label: label.firstChild?.textContent, value: input.value, checked: input.checked } : null; }).filter(Boolean);
+  try {
+    state = await cloudCall('state'); let detail;
+    if (current) { try { detail = await cloudCall('library', { id: current }); } catch { current = null; area = 'libraries'; } }
+    if (area === 'admin' && !state.me?.is_admin) area = 'libraries';
+    await renderCloud(current, detail);
+    for (const saved of inputs) { const label = [...body.querySelectorAll('label')].find(l => l.firstChild?.textContent === saved.label); const input = label?.querySelector('input,textarea,select'); if (input && !input.readOnly && !input.disabled) { input.value = saved.value; if (input.type === 'checkbox') input.checked = saved.checked; input.dispatchEvent(new Event('input')); input.dispatchEvent(new Event('change')); } }
+  } catch { /* Keep drafts and the original error when refreshing is unavailable. */ }
+}
+const hasOwnArea = value => !!value?.me && (value.me.upload_enabled || value.own_figures?.length > 0);
+const initialArea = value => hasOwnArea(value) ? 'figures' : 'libraries';
 function close() { if (busy) return; viewEpoch++; renderedView = null; clearTimeout(statusTimer); cancelThumbnails(); dialog.close(); body.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); }); source = null; hooks.closed?.(); }
 async function navigate(next, library = null) {
   source = null; area = next; if (['admin', 'create'].includes(next)) await run('Laden …', () => load(library)); else await load(library, true);
@@ -97,36 +111,38 @@ async function load(library = current, allowCache = false) {
 }
 async function renderCloud(library, detail) {
   current = library; localUpdates = [];
-  if (area === 'initial') area = 'figures';
+  if (area === 'initial' || area === 'figures' && !source && !hasOwnArea(state)) area = initialArea(state);
   renderedView = { owner: cloudIdentity(), area, library };
   if (!state.me && !['figures', 'libraries'].includes(area)) area = 'libraries';
   cancelThumbnails(); clearPreviews(body); body.replaceChildren();
   posterView = createPosterView(body, state.me);
   const toolbar = node('div', undefined, 'cloud-tabs');
   toolbar.setAttribute('aria-label', 'Cloud-Bereiche');
-  for (const [key, label] of [['figures', 'Meine Figuren'], ['libraries', 'Bibliotheken']]) {
+  for (const [key, label] of [...(hasOwnArea(state) ? [['figures', 'Meine Figuren']] : []), ['libraries', 'Bibliotheken']]) {
     const button = action(label, () => navigate(key)); if (key === 'figures') button.setAttribute('aria-label', 'Meine Cloud-Figuren'); button.setAttribute('aria-pressed', String(!source && (current ? key === 'libraries' : area === key || (area === 'create' && key === 'libraries')))); toolbar.append(button);
   }
   const utilities = node('div', undefined, 'cloud-utilities');
-  if (state.me?.is_admin) utilities.append(action('Verwaltung', () => navigate('admin')));
+  if (state.me?.is_admin) utilities.append(action('Plattformverwaltung', () => navigate('admin')));
   utilities.append(action('Aktualisieren', () => load(current, 'refresh')));
   if (signedIn()) utilities.append(action('Abmelden', async () => { await logout(); await run('Laden …', () => load(null)); }));
   body.append(toolbar, utilities);
+  if (state.me?.is_admin) body.append(node('p', 'Plattform-Administrator', 'cloud-role-badge'));
   if (state.me) body.append(node('p', `${state.me.email} · ${MB(state.me.used)} / ${MB(state.me.quota)} belegt${state.me.upload_enabled ? '' : ' · Lesen erlaubt, Uploads gesperrt'}`, 'cloud-account'));
   else {
     if (area === 'figures') body.append(node('h3', 'Meine Cloud-Figuren'), node('p', 'Melde dich an, um deine hochgeladenen Figuren zu sehen.'));
     else body.append(node('p', 'Öffentliche Bibliotheken sind ohne Anmeldung lesbar. Für private Bibliotheken und Beiträge erhältst du einen persönlichen Anmeldelink vom Administrator.'));
     body.append(node('p', 'Du bist derzeit nicht angemeldet. Bibliotheken erstellen und Verwaltung erscheinen nach der Anmeldung mit einem berechtigten Konto.'));
-    const box = section('Mit persönlichem Link anmelden'), form = node('form'); box.append(form);
+    const box = section('Mit Anmeldelink anmelden'), form = node('form'); box.append(form);
     const link = field(form, 'Anmeldelink einfügen', '', 'password'); link.autocomplete = 'off';
     box.append(node('p', 'Füge deinen persönlichen Anmeldelink hier ein, um dich in dieser App anzumelden. Die Anmeldung in einer anderen App oder einem anderen Browser wird nicht automatisch übernommen.'));
-    form.append(action('Anmelden', () => run('Anmelden …', async () => { await loginWithLink(link.value.trim()); area = 'figures'; await load(null); }))); form.onsubmit = e => e.preventDefault();
+    form.append(action('Anmelden', () => run('Anmelden …', async () => { await loginWithLink(link.value.trim()); area = 'initial'; await load(null); }))); form.onsubmit = e => e.preventDefault();
   }
   if (!state.me && area === 'figures') return;
   if (source) { await publishForm(); return; }
   if (current) { await libraryView(current, detail); return; }
   if (area === 'create') { libraryForm(); return; }
   if (area === 'figures') {
+    if (!state.me.upload_enabled) body.append(node('p', 'Uploads sind für dein Konto deaktiviert. Vorhandene Cloud-Figuren bleiben erreichbar und lokal übernehmbar.', 'cloud-person-notice'));
     body.append(node('h3', 'Meine Cloud-Figuren'), node('p', 'Alle deine hochgeladenen Figuren – auch ohne Bibliothekszuordnung. Eine Figur kann in mehreren Bibliotheken verwendet werden.'));
     ownFigures(); return;
   }
@@ -134,7 +150,7 @@ async function renderCloud(library, detail) {
   body.append(node('h3', 'Bibliotheken'));
   if (state.me?.upload_enabled) { const create = action('Bibliothek erstellen', () => navigate('create')); create.className = 'primary'; body.append(create); }
   for (const lib of state.libraries) {
-    const box = section(lib.title); box.append(node('p', `${lib.visibility === 'public' ? 'Öffentlich' : 'Privat'} · ${lib.collaborative ? 'Mitwirkende erlaubt' : 'Nur Besitzer'} · ${lib.moderated ? 'Mit Freigabe' : 'Sofort veröffentlichen'}`));
+    const box = section(lib.title); if (lib.owner_id === state.me?.id) box.append(node('p', 'Besitzer · Bibliothek verwalten', 'cloud-role-badge')); else if (lib.manage) box.append(node('p', 'Plattform-Administrator · Bibliothek verwalten', 'cloud-role-badge')); else if (lib.contribute) box.append(node('p', 'Mitwirkender', 'cloud-role-badge')); else box.append(node('p', 'Lesen', 'cloud-role-badge')); box.append(node('p', `${lib.visibility === 'public' ? 'Öffentlich' : 'Privat'} · ${lib.collaborative ? 'Mitwirkende erlaubt' : 'Nur Besitzer'} · ${lib.moderated ? 'Mit Freigabe' : 'Sofort veröffentlichen'}`));
     box.append(action('Öffnen', () => load(lib.id, true)));
   }
   if (!state.libraries.length) body.append(node('p', 'Noch keine zugänglichen Bibliotheken.'));
@@ -155,6 +171,8 @@ function libraryForm(lib = null) {
 async function libraryView(id, detail) {
   const lib = detail.library;
   const intro = section(lib.title); intro.append(node('p', lib.description));
+  intro.append(node('p', lib.owner_id === state.me?.id ? 'Besitzer · Bibliothek verwalten' : detail.manage ? 'Plattform-Administrator · Bibliothek verwalten' : detail.contribute ? 'Mitwirkender' : 'Lesen', 'cloud-role-badge'));
+  if (state.me && !state.me.upload_enabled && detail.members?.some(m => m.id === state.me.id && m.role === 'contributor')) intro.append(node('p', 'Mitwirken benötigt eine Upload-Freigabe.', 'cloud-person-notice'));
   // Share the public entry point, never this WebView's internal or preview URL.
   const share = new URL('https://rodriges17.github.io/SalsaAppCloud/'); share.searchParams.set('library', id);
   const link = field(intro, 'Bibliothekslink', share.href); link.readOnly = true;
@@ -177,12 +195,29 @@ async function libraryView(id, detail) {
   }
   if (detail.manage) {
     libraryForm(lib);
-    const members = section('Mitglieder');
-    members.append(node('p', 'Mitwirkende müssen vom Plattform-Administrator zum Upload freigeschaltet sein.'));
-    for (const m of detail.members) members.append(node('p', `${m.email} · ${m.role === 'reader' ? 'Lesen' : 'Mitwirken'}`));
-    const form = node('form'); members.append(form); const email = field(form, 'E-Mail-Adresse', '', 'email'); email.required = true;
-    const role = select(form, 'Rolle', [['reader', 'Lesen'], ['contributor', 'Mitwirken'], ['remove', 'Entfernen']]);
-    form.append(action('Mitglied speichern', () => { if (form.reportValidity()) return run('Speichern …', async () => { await cloudCall('member', { library: id, email: email.value, role: role.value }); await load(id); }); })); form.onsubmit = e => e.preventDefault();
+    const members = section('Mitglieder & Zugriff');
+    members.append(node('p', 'Personen werden über ihre vollständige E-Mail-Adresse hinzugefügt. Mitwirken erfordert eine Upload-Freigabe und eine gemeinschaftliche Bibliothek.'));
+    for (const m of detail.members) {
+      const row = node('div', undefined, 'cloud-person-library'); members.append(row);
+      row.append(node('p', `${m.email} · ${m.role === 'reader' ? 'Lesen' : 'Mitwirken'}${m.role === 'contributor' && !m.upload_enabled ? ' · Upload-Freigabe fehlt' : ''}`));
+      row.append(action('Mitglied entfernen', async () => {
+        if (!await hooks.confirm({ title: `${m.email}: Mitglied entfernen?`, message: lib.visibility === 'private' ? 'Der Zugriff auf diese private Bibliothek entfällt. Bereits heruntergeladene lokale Kopien bleiben erhalten.' : 'Die Mitgliedschaft entfällt. Die öffentliche Bibliothek bleibt lesbar. Bereits heruntergeladene lokale Kopien bleiben erhalten.', ok: 'Mitglied entfernen', destructive: true })) return;
+        await run('Entfernen …', async () => { await cloudCall('member', { library: id, email: m.email, role: 'remove' }); await load(id); });
+      }));
+    }
+    const form = node('form'); members.append(form); const email = field(form, 'Vollständige E-Mail-Adresse', '', 'email'); email.required = true;
+    const role = select(form, 'Bibliotheksrolle', [['reader', 'Lesen']]);
+    const check = action('Person prüfen', () => run('Person prüfen …', async () => {
+      if (!email.reportValidity()) return;
+      const result = await cloudCall('member_check', { library: id, email: email.value });
+      role.replaceChildren(); for (const [value, text] of [['reader', 'Lesen'], ...(lib.collaborative && result.upload_enabled ? [['contributor', 'Mitwirken']] : [])]) { const option = node('option', text); option.value = value; role.append(option); }
+      explanation.textContent = !lib.collaborative ? 'Diese Bibliothek erlaubt nur den Besitzer als Beitragenden.' : result.upload_enabled ? 'Person angelegt. Lesen oder Mitwirken möglich.' : 'Person angelegt. Mitwirken benötigt die Upload-Freigabe des Administrators.';
+      checkedEmail = email.value.trim().toLowerCase(); save.disabled = false;
+    }));
+    let checkedEmail = null; const explanation = node('p');
+    const save = action('Mitglied speichern', () => { if (form.reportValidity() && checkedEmail === email.value.trim().toLowerCase()) return run('Speichern …', async () => { await cloudCall('member', { library: id, email: email.value, role: role.value }); await load(id); }); }); save.disabled = true;
+    email.oninput = () => { checkedEmail = null; save.disabled = true; role.replaceChildren(node('option', 'Lesen')); role.firstChild.value = 'reader'; explanation.textContent = ''; };
+    form.append(check, explanation, save); form.onsubmit = e => e.preventDefault();
     const danger = section('Gefahrenbereich'); danger.classList.add('danger-zone');
     danger.append(node('p', 'Beim Löschen werden diese Bibliothek und ihre Mitgliedschaften entfernt. Cloud-Figuren, Videos und lokale Kopien bleiben erhalten.'));
     const remove = action('Bibliothek löschen', async () => {
@@ -299,7 +334,7 @@ function ownFigures() {
     box.append(node('p', 'Die Freigabe gilt für alle Versionen dieser Figur und alle öffentlichen Bibliotheken, denen sie zugeordnet ist. Ohne Freigabe bleibt sie dort für Lesende verborgen. Private Bibliotheken bleiben unverändert.'));
     if (latest) {
       downloadControls(box, latest, { own: true, revisionIds: revisions.map(r => r.id) });
-      const assign = action('Einer Bibliothek zuordnen', () => attachForm(latest)); assign.className = 'secondary'; box.append(assign);
+      const assign = action('Einer Bibliothek zuordnen', () => attachForm(latest)); assign.className = 'secondary'; if (state.me.upload_enabled) box.append(assign);
       const history = node('details', undefined, 'cloud-history');
       history.append(node('summary', `Versionsverlauf · ${revisions.length} ${revisions.length === 1 ? 'Version' : 'Versionen'}`));
       for (const revision of revisions) {
@@ -307,7 +342,7 @@ function ownFigures() {
         entry.append(node('h4', `${versionLabel(revision)}${revision.id === latest.id ? ' · Neueste Version' : ''}`), node('p', revision.title));
         for (const video of revision.id === latest.id ? revision.videos : []) entry.append(action(`Video: ${video.name || 'Ohne Namen'}`, () => previewVideo(entry, revision, video)));
         if (revision.id !== latest.id) downloadControls(entry, revision, { own: true, revisionIds: revisions.map(r => r.id) });
-        if (revision.id !== latest.id) entry.append(action('Diese Version einer Bibliothek zuordnen', () => attachForm(revision)));
+        if (revision.id !== latest.id && state.me.upload_enabled) entry.append(action('Diese Version einer Bibliothek zuordnen', () => attachForm(revision)));
         history.append(entry);
       }
       history.addEventListener('toggle', () => {
@@ -387,21 +422,15 @@ async function publishForm() {
   upload.className = 'primary'; box.append(upload, uploadError);
 }
 function adminForm() {
-  const box = section('Plattform verwalten'); box.append(node('p', `${MB(state.settings.used)} / ${MB(state.settings.total_limit)} insgesamt belegt`));
-  const total = field(box, 'Gesamtlimit in MB (maximal 1000)', state.settings.total_limit / 1000000, 'number');
-  box.append(action('Gesamtlimit speichern', () => run('Speichern …', async () => { await cloudCall('admin_limit', { bytes: Math.floor(Number(total.value) * 1000000) }); await load(null); })));
-  for (const p of state.people) box.append(node('p', `${p.email}: ${p.upload_enabled ? 'Uploads erlaubt' : 'Nur Lesen'} · ${MB(p.used)} / ${MB(p.quota)}`));
-  const form = node('form'); box.append(form); const email = field(form, 'Person: E-Mail-Adresse', '', 'email'); email.required = true;
-  const quota = field(form, 'Speicherlimit dieser Person in MB', 250, 'number'), enabled = checkbox(form, 'Cloud-Bibliotheken und Uploads erlauben');
-  form.append(action('Person anlegen / Freigabe speichern', () => { if (form.reportValidity()) return run('Speichern …', async () => { await cloudCall('admin_user', { email: email.value, enabled: enabled.checked, quota: Math.floor(Number(quota.value) * 1000000) }); await load(null); }); }));
-  const link = field(form, 'Einmaliger persönlicher Anmeldelink'); link.readOnly = true; link.autocomplete = 'off';
-  form.append(action('Anmeldelink erstellen', () => run('Link erstellen …', async () => { const r = await cloudCall('admin_link', { email: email.value }); link.value = r.link; })), action('Anmeldelink kopieren', () => navigator.clipboard.writeText(link.value)));
-  form.append(node('p', 'Den Anmeldelink nur der betreffenden Person schicken. Er ist einmalig und zeitlich begrenzt. Es wird keine E-Mail versendet.')); form.onsubmit = e => e.preventDefault();
+  const box = section('Plattformverwaltung');
+  peopleView.mount(box);
 }
 export function initCloud(callbacks) {
-  hooks = callbacks; dialog = document.getElementById('cloudDialog'); body = document.getElementById('cloudBody'); errorBox = document.getElementById('cloudError'); statusBox = document.getElementById('cloudStatus');
+  hooks = callbacks;
+  peopleView = createPeopleView({ node, action, field, select, checkbox, call: cloudCall, run, confirm: options => hooks.confirm(options), state: () => state, refresh: () => load(null), report, section });
+  dialog = document.getElementById('cloudDialog'); body = document.getElementById('cloudBody'); errorBox = document.getElementById('cloudError'); statusBox = document.getElementById('cloudStatus');
   addEventListener('cloud-session-changed', event => {
-    viewEpoch++; renderedView = null; state = null; displayedOwner = null; localFigures = []; localUpdates = [];
+    peopleView.reset(); viewEpoch++; renderedView = null; state = null; displayedOwner = null; localFigures = []; localUpdates = [];
     cancelThumbnails(); clearPreviews(body); body.replaceChildren(); errorBox.hidden = true; cacheStatus('');
     // Explicit login/logout reload their own destination; token rotation leaves forms intact.
     if ((event.detail?.external || event.detail?.expired) && dialog.open) {
@@ -411,7 +440,7 @@ export function initCloud(callbacks) {
   });
   document.getElementById('cloudBack').onclick = close;
   dialog.querySelector('[data-nav=figures]').onclick = close;
-  dialog.querySelector('[data-nav=cloud]').onclick = () => { if (!busy) navigate('figures'); };
+  dialog.querySelector('[data-nav=cloud]').onclick = () => { if (!busy) navigate('initial'); };
   document.getElementById('cloudCancelUpload').onclick = () => controller?.abort();
   dialog.addEventListener('cancel', e => { e.preventDefault(); close(); });
   document.getElementById('cloudButton').onclick = () => openCloud();
