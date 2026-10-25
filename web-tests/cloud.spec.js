@@ -565,3 +565,18 @@ test.describe('installed PWA hash persistence',()=>{
  expect(await scan()).toEqual({reads:0,matches:1});
 });
 });
+
+test('guest cannot publish local figures or manage public libraries', async ({page}) => {
+ const calls = await mock(page,false,false,true,{manage:true});
+ await start(page); await seedCloudLocal(page); await page.reload();
+ await page.getByRole('button',{name:'Optionen für Cloud Drehung',exact:true}).tap();
+ await expect(page.getByRole('button',{name:'In Cloud veröffentlichen',exact:true})).toHaveCount(0);
+ await page.evaluate(async()=>{const s=await import('/pwa/storage.js');await(await import('/pwa/cloud.js')).openCloud((await s.listFigures())[0]);});
+ await expect(page.locator('#cloudDialog')).not.toBeVisible();
+ await page.locator('#cloudButton').tap();
+ await page.getByRole('button',{name:'Öffnen',exact:true}).first().tap();
+ await expect(page.getByRole('heading',{name:'Mitglieder & Zugriff',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Bibliothek löschen',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Aus Bibliothek entfernen',exact:true})).toHaveCount(0);
+ expect(calls.some(c=>['reserve','commit','upload','library_save'].includes(c.action))).toBe(false);
+});

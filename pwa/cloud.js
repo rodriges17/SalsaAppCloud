@@ -200,8 +200,10 @@ function libraryForm(lib = null) {
 }
 async function libraryView(id, detail) {
   const lib = detail.library;
+  const manage = !!state.me && !!detail.manage;
+  const contribute = !!state.me && !!detail.contribute;
   const intro = section(lib.title); intro.append(node('p', lib.description));
-  intro.append(node('p', lib.owner_id === state.me?.id ? 'Besitzer · Bibliothek verwalten' : detail.manage ? 'Plattform-Administrator · Bibliothek verwalten' : detail.contribute ? 'Mitwirkender' : 'Lesen', 'cloud-role-badge'));
+  intro.append(node('p', state.me && lib.owner_id === state.me.id ? 'Besitzer · Bibliothek verwalten' : manage ? 'Plattform-Administrator · Bibliothek verwalten' : contribute ? 'Mitwirkender' : 'Lesen', 'cloud-role-badge'));
   if (state.me && !state.me.upload_enabled && detail.members?.some(m => m.id === state.me.id && m.role === 'contributor')) intro.append(node('p', 'Mitwirken benötigt eine Upload-Freigabe.', 'cloud-person-notice'));
   // Share the public entry point, never this WebView's internal or preview URL.
   const share = new URL('https://rodriges17.github.io/SalsaAppCloud/'); share.searchParams.set('library', id);
@@ -218,14 +220,14 @@ async function libraryView(id, detail) {
     if (entry.published) revisionCard(box, entry.published, 'Veröffentlicht');
     if (entry.pending) {
       revisionCard(box, entry.pending, 'Zur Freigabe');
-      if (detail.manage) box.append(action('Freigeben', () => review(true)), action('Ablehnen', () => review(false)));
+      if (manage) box.append(action('Freigeben', () => review(true)), action('Ablehnen', () => review(false)));
     }
     async function review(accept) { await run('Prüfung speichern …', async () => { await cloudCall('review', { library: id, figure: entry.figure_id, accept }); await load(id); }); }
-    if (detail.manage || entry.owner_id === state.me?.id) box.append(action('Aus Bibliothek entfernen', () => run('Entfernen …', async () => { await cloudCall('detach', { library: id, figure: entry.figure_id }); await load(id); })));
+    if (manage || state.me && entry.owner_id === state.me.id) box.append(action('Aus Bibliothek entfernen', () => run('Entfernen …', async () => { await cloudCall('detach', { library: id, figure: entry.figure_id }); await load(id); })));
     if (state.me?.upload_enabled && entry.published) variantButton(box, entry.published);
-    if (detail.contribute && entry.published) box.append(action('In weitere Bibliothek aufnehmen', () => attachForm(entry.published)));
+    if (contribute && entry.published) box.append(action('In weitere Bibliothek aufnehmen', () => attachForm(entry.published)));
   }
-  if (detail.manage) {
+  if (manage) {
     libraryForm(lib);
     createMemberView({ box: section('Mitglieder & Zugriff'), lib, members: detail.members, me: state.me, people: state.people ?? [], node, action, field, select, call: cloudCall, run, confirm: options => hooks.confirm(options), refresh: () => load(id) });
     const danger = section('Gefahrenbereich'); danger.classList.add('danger-zone');
@@ -649,7 +651,7 @@ export function initCloud(callbacks) {
   const query = new URLSearchParams(location.search); if (query.has('library') || query.has('cloud')) setTimeout(() => openCloud(null, query.get('library')), 0);
 }
 export async function openCloud(local = null, library = null) {
-  if (busy || dialog.open) return; source = local; current = library; area = 'initial';
+  if (busy || dialog.open) return; if (local && !signedIn()) return; source = local; current = library; area = 'initial';
   errorBox.hidden = true; if (displayedOwner !== cloudIdentity() || local) { cancelThumbnails(); clearPreviews(body); body.replaceChildren(); }
   // Do not let dialog focus restoration reopen the search keyboard on return.
   if (document.activeElement?.matches('input, textarea, [contenteditable=true]')) document.activeElement.blur();

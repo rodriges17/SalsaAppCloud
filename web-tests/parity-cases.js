@@ -1,7 +1,7 @@
 import { runNavigationHoverCase } from './navigation-hover-case.js';
 import { runStorageSettingsCase } from './storage-settings-case.js';
 // The same behavior contract runs against the PWA and the bundled Android UI.
-export const PARITY_CASES = ['navigation-return-hover', 'storage-settings-status', 'library-share-links', 'zip-save-feedback', 'menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change', 'cloud-cache-frame-reuse', 'cloud-guest-public-first', 'cloud-library-download'];
+export const PARITY_CASES = ['navigation-return-hover', 'storage-settings-status', 'library-share-links', 'zip-save-feedback', 'menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change', 'cloud-cache-frame-reuse', 'cloud-guest-public-first', 'cloud-library-download', 'cloud-guest-no-publish'];
 export async function runParityCase(page, { root, fixture, native = false, scenario, consoleErrors = [], browserName = 'chromium' }) {
  const assert = (value, message) => { if (!value) throw new Error(message); };
  const frame = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -220,6 +220,21 @@ export async function runParityCase(page, { root, fixture, native = false, scena
    await page.waitForFunction(()=>document.querySelector('#cloudDialog').open);
    assert(await page.evaluate(()=>window.parityFullscreen===false&&window.parityRotation===false),'Navigation leaked native fullscreen or orientation');
   }
+ }
+ if(scenario==='cloud-guest-no-publish'){
+  await seed();
+  await page.locator('.card-options').click();
+  assert(await page.getByRole('button',{name:'In Cloud veröffentlichen',exact:true}).count()===0,'Guest sees publishing action');
+  await page.evaluate(async root=>{const storage=await import(root+'storage.js');await(await import(root+'cloud.js')).openCloud((await storage.listFigures())[0]);},root);
+  assert(!await page.locator('#cloudDialog').isVisible(),'Guest can open direct publishing flow');
+  const scope=new URL(root,page.url()).pathname;
+  await page.evaluate(scope=>localStorage.setItem(`salsa-cloud-session:${scope}:v1`,JSON.stringify({access_token:'contract',refresh_token:'contract',expires_at:Date.now()+3600000})),scope);
+  await page.locator('.card-options').click();await page.locator('.card-options').click();
+  assert(await page.getByRole('button',{name:'In Cloud veröffentlichen',exact:true}).isVisible(),'Signed-in user lost publishing action');
+  await page.evaluate(scope=>{localStorage.removeItem(`salsa-cloud-session:${scope}:v1`);dispatchEvent(new CustomEvent('cloud-session-changed'));},scope);
+  assert(await page.locator('.card-menu').count()===0,'Logout leaves publishing menu open');
+  await page.locator('.card-options').click();
+  assert(await page.getByRole('button',{name:'In Cloud veröffentlichen',exact:true}).count()===0,'Logout leaves publishing available');
  }
  if(scenario==='cloud-library-download'){
   const bytes=await page.evaluate(async fixture=>Array.from(new Uint8Array(await(await fetch(fixture)).arrayBuffer())),fixture);

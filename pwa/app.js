@@ -1,7 +1,8 @@
-const APP_VERSION = '2026-10-25-library-download-v1';
+const APP_VERSION = '2026-10-25-guest-publish-v1';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';
+import { signedIn } from './cloud-api.js';
 import { initCloud, openCloud } from './cloud.js';
 import { importFigure } from './package.js';
 import { checksum } from './package.js';
@@ -62,6 +63,7 @@ function placeFigureMenu(menu, anchor) {
 }
 window.addEventListener('scroll', () => closeMenus(), { passive: true });
 window.addEventListener('resize', () => closeMenus());
+addEventListener('cloud-session-changed', () => closeMenus());
 function closeMenus() { document.querySelectorAll('.card-menu').forEach(n => n.remove()); document.querySelectorAll('.card-options').forEach(n => n.setAttribute('aria-expanded', 'false')); }
 async function refresh() {
   try { figures = await listFigures(); renderOverview(); }
@@ -89,7 +91,8 @@ function renderOverview() {
     options.setAttribute('aria-label', `Optionen für ${figure.title}`); options.setAttribute('aria-expanded', 'false');
     function showMenu() {
       options.setAttribute('aria-expanded', 'true'); const menu = el('div', 'card-menu');
-      menu.append(button('In Cloud veröffentlichen', () => { closeMenus(); openCloud(figure); }), button('Figur teilen', () => { closeMenus(); openShare(figure); }), button('Bearbeiten', () => { closeMenus(); openEditor(figure); }), button('Löschen', async () => {
+      if (signedIn()) menu.append(button('In Cloud veröffentlichen', () => { closeMenus(); openCloud(figure); }));
+      menu.append(button('Figur teilen', () => { closeMenus(); openShare(figure); }), button('Bearbeiten', () => { closeMenus(); openEditor(figure); }), button('Löschen', async () => {
         closeMenus(); const accepted = await confirmAction({ title: `„${figure.title}“ löschen?`, message: (figure.storageFolder ? 'Die Figur und ihre zugehörigen Videos werden aus dem verknüpften Geräteordner gelöscht.' : 'Die Figur und ihre zugehörigen Videos werden aus dem App-Speicher gelöscht.') + ' Deine ursprünglichen Importdateien bleiben erhalten.', ok: 'Löschen' });
         if (accepted) { try { await deleteFigure(figure); changed(); await refresh(); toast('Figur gelöscht.'); } catch (error) { toast(storageMessage(error)); await refresh(); } }
       }, 'danger'));
