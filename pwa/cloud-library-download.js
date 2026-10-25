@@ -25,7 +25,7 @@ export async function downloadLibrary(revisions, services, { signal, targetFolde
     emit('index');
     const figures = await abortable(listFigures, signal);
     await abortable(() => localVideoContent(figures, readMedia, () => !signal?.aborted, undefined, ({ figure, record, size, hash }) => {
-      const key = hashKey(size, hash); sources.set(key, { figure, record });
+      const key = hashKey(size, hash); sources.set(key, { figure, recordId: record.id });
       if (!figureKeys.has(identity(figure))) figureKeys.set(identity(figure), new Set());
       figureKeys.get(identity(figure)).add(key);
     }), signal);
@@ -52,7 +52,11 @@ export async function downloadLibrary(revisions, services, { signal, targetFolde
           const source = key ? sources.get(key) : null;
           let draft;
           if (source) {
-            const loaded = await abortable(() => source.record.load(), signal);
+            const loaded = await abortable(async () => {
+              const record = (await readMedia(source.figure)).find(record => record.id === source.recordId);
+              if (!record) throw new Error('Eine lokale Videodatei fehlt.');
+              return record.load();
+            }, signal);
             if (loaded.blob.size !== video.size || await abortable(() => videoHash(loaded.blob), signal) !== hash) throw new Error('Eine lokale Videodatei wurde inzwischen geändert. Bitte erneut versuchen.');
             draft = { ...loaded };
           } else {
@@ -77,13 +81,14 @@ export async function downloadLibrary(revisions, services, { signal, targetFolde
         result.saved++;
         if (target) figures.splice(figures.indexOf(target), 1, saved); else figures.push(saved);
         // Keep lazy locators, not all downloaded video blobs, between figures.
+        for (const source of sources.values()) if (identity(source.figure) === identity(saved)) source.figure = saved;
         const savedRecords = await readMedia(saved).catch(() => []);
         figureKeys.set(identity(saved), targetKeys);
         for (const { hash, draft } of completedMedia) {
           if (!hash) continue;
           const record = savedRecords.find(r => r.id === draft.id);
           if (record) {
-            sources.set(hashKey(draft.blob.size, hash), { figure: saved, record });
+            sources.set(hashKey(draft.blob.size, hash), { figure: saved, recordId: record.id });
             await rememberLocalVideoHash(record, draft.blob.size, hash).catch(() => {});
           }
         }

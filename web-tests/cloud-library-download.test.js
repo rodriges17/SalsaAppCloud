@@ -61,3 +61,10 @@ test('full local storage stops further transfers and leaves pending figures for 
  const result=await downloadLibrary([f.rev('one',['a']),f.rev('two',['b'])],f.services);
  assert.equal(result.saved,0);assert.equal(result.failed.length,1);assert.equal(result.remaining,1);assert.deepEqual(f.network,['a']);assert.match(result.failed[0].message,/Speicher ist voll/);
 });
+
+test('completed folder copies refresh their source revision before later byte reuse',async()=>{
+ const f=await fixture();f.add({storageFolder:'folder',importFingerprint:'cloud:one:a'},['a']);
+ const read=f.services.readMedia;f.services.readMedia=async figure=>{assert.equal(figure.revision,f.figures.find(current=>current.id===figure.id).revision);return read(figure);};
+ const result=await downloadLibrary([f.rev('one',['a','b']),f.rev('two',['a','c'])],f.services);
+ assert.equal(result.saved,2);assert.equal(result.failed.length,0);assert.deepEqual(f.network,['b','c']);
+});
