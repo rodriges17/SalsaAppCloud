@@ -377,6 +377,7 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
   const fingerprint = selected => `cloud:${rev.id}:${selected.map(v => v.id).join(',')}`;
   const label = own ? 'Lokal übernehmen' : multiple ? 'Ausgewählte Videos in meine Figuren übernehmen' : 'In meine Figuren übernehmen';
   const download = () => run('Videos herunterladen …', async () => {
+    if (libraryDraft?.dirty()) throw new Error('Bitte zuerst die Bibliothek speichern, bevor du eine Figur übernimmst.');
     const selected = chosen.filter(([check]) => !check || check.checked).map(([, v]) => v);
     if (!selected.length) throw new Error('Bitte mindestens ein Video auswählen.');
     if (selected.reduce((n, v) => n + v.size, 0) > 250 * 1024 * 1024) throw new Error('Bitte weniger Videos wählen: maximal 250 MB pro Übernahme.');
@@ -459,6 +460,7 @@ function cancelThumbnails() { posterView?.dispose(); posterView = null; }
 function thumbnail(heading, revision) { posterView?.add(heading, revision); }
 function variantButton(box, revision) {
   box.append(action('Eigene Variante erstellen', async () => {
+    if (!await leaveLibraryDraft()) return;
     if (!await hooks.confirm({ title: 'Eigene Variante erstellen?', message: 'Die Variante ist unabhängig bearbeitbar. Vorhandene Videos und Bilder werden ohne zusätzliche Dateikopie referenziert.', ok: 'Variante erstellen' })) return;
     await run('Variante erstellen …', async () => { await cloudCall('variant', { revision: revision.id }); area = 'figures'; await load(null); });
   }));

@@ -590,7 +590,7 @@ test('library order: guests see ascending contiguous numbers without editing con
 });
 test('library order: draft, save and leave choices; bulk download requires saved order',async({page})=>{
  const entries=orderedEntries();entries.forEach(e=>e.published.videos=[{id:'video',size:3,type:'video/mp4'}]);
- const calls=await mock(page,true,false,false,{manage:true,entries});await signIn(page);await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Öffnen',exact:true}).tap();
+ const calls=await mock(page,true,false,false,{manage:true,entries});await signIn(page);await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Bibliotheken',exact:true}).tap();await page.getByRole('button',{name:'Öffnen',exact:true}).tap();
  await page.locator('[data-library-figure="figure-2"]').getByRole('button',{name:'Nach oben',exact:true}).tap();
  expect(await page.locator('[data-library-figure]').evaluateAll(nodes=>nodes.map(n=>n.dataset.libraryFigure))).toEqual(['figure-0','figure-2','figure-1']);
  await expect(page.locator('.cloud-order-number')).toHaveText(['1','2','3']);expect(calls.some(c=>c.action==='library_save')).toBe(false);
@@ -602,7 +602,7 @@ test('library order: draft, save and leave choices; bulk download requires saved
  expect(calls.find(c=>c.action==='library_save').payload).toMatchObject({order:['figure-0','figure-2','figure-1'],expected_version:library.edit_version});
 });
 test('library order: conflicting save retains draft and offers reload',async({page})=>{
- const calls=await mock(page,true,false,false,{manage:true,entries:orderedEntries(),saveConflict:true});await signIn(page);await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Öffnen',exact:true}).tap();
+ const calls=await mock(page,true,false,false,{manage:true,entries:orderedEntries(),saveConflict:true});await signIn(page);await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Bibliotheken',exact:true}).tap();await page.getByRole('button',{name:'Öffnen',exact:true}).tap();
  await page.locator('[data-library-figure="figure-2"]').getByRole('button',{name:'Nach oben',exact:true}).tap();await page.getByRole('button',{name:'Bibliothek speichern',exact:true}).tap();
  await expect(page.locator('#cloudError')).toContainText('inzwischen geändert');await expect(page.getByRole('button',{name:'Aktuellen Stand neu laden',exact:true})).toBeVisible();
  expect(calls.filter(c=>c.action==='library_save')).toHaveLength(1);
