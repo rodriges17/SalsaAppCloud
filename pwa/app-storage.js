@@ -1,3 +1,4 @@
+import { contentVideos } from './cloud-provenance.js';
 import { validateDraft } from './logic.js';
 import { checksum } from './package.js';
 let dbPromise;
@@ -115,7 +116,7 @@ export async function saveFigure(figure, drafts, expectedRevision = null) {
           for (const id of owned) if (!videoIds.includes(id)) {
             const old = videos.get(id); old.onsuccess = () => { if (old.result) obsolete.push(old.result.cacheKey); }; videos.delete(id);
           }
-          saved = { id: figure.id, title: figure.title.trim(), description: figure.description, status: figure.status, tags: figure.tags, importFingerprint: figure.importFingerprint ?? previous?.importFingerprint ?? null, backupOrigin: previous?.backupOrigin ?? figure.backupOrigin ?? null, createdAt: previous?.createdAt ?? figure.createdAt ?? Date.now(), revision: crypto.randomUUID(), videoIds, duration: prepared[0].duration, posterBytes: prepared[0].posterBytes };
+          saved = { videoContent: contentVideos(prepared), id: figure.id, title: figure.title.trim(), description: figure.description, status: figure.status, tags: figure.tags, importFingerprint: figure.importFingerprint ?? previous?.importFingerprint ?? null, backupOrigin: previous?.backupOrigin ?? figure.backupOrigin ?? null, createdAt: previous?.createdAt ?? figure.createdAt ?? Date.now(), revision: crypto.randomUUID(), videoIds, duration: prepared[0].duration, posterBytes: prepared[0].posterBytes };
           figures.put(saved); imports.delete(job.id);
         };
       };

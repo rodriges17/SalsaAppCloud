@@ -1,3 +1,4 @@
+import { cloudLocalIndex } from './cloud-local.js';
 import { videoHash } from './cloud-dedup.js';
 import { localVideoContent, rememberLocalVideoHash } from './cloud-local-content.js';
 
@@ -34,6 +35,7 @@ export async function downloadLibrary(revisions, services, { signal, targetFolde
       signal?.throwIfAborted(); emit('check', revision.title);
       try {
         if (revision.videos.some(video => !Number.isSafeInteger(video.size) || video.size <= 0) || revision.videos.reduce((sum, video) => sum + video.size, 0) > 250 * 1024 * 1024) throw new Error('Diese Figur überschreitet 250 MB oder enthält ungültige Dateigrößen. Bitte einzeln übernehmen.');
+        if (figures.some(f => cloudLocalIndex.link(f)?.revision === revision.id && !f.storageProblem && !f.folderAccessRequired)) { result.skipped++; emit('skip', revision.title); continue; }
         const media = [];
         for (const video of revision.videos) {
           signal?.throwIfAborted();
@@ -79,6 +81,7 @@ export async function downloadLibrary(revisions, services, { signal, targetFolde
         figure.importFingerprint = `cloud:${revision.id}:${revision.videos.map(v => v.id).join(',')}`;
         // Do not race an atomic save with cancellation: finish this figure, then stop.
         const saved = await saveFigure(figure, drafts, target?.revision ?? null, { targetFolder });
+        cloudLocalIndex.remember('@device', revision.id, saved, revision.videos.map((v, i) => ({ cloud: v.id, local: drafts[i]?.id ?? saved.videoIds[i] })), revision.figure_id);
         result.saved++;
         if (target) figures.splice(figures.indexOf(target), 1, saved); else figures.push(saved);
         // Keep lazy locators, not all downloaded video blobs, between figures.
@@ -165,6 +168,7 @@ export async function downloadFigure(revision, services, { target = null, target
   signal?.throwIfAborted();
   const figure = { ...target, id: target?.id ?? crypto.randomUUID(), title: revision.title, description: revision.description ?? '', tags: revision.tags ?? [], status: target?.status ?? 'Neu', importFingerprint: `cloud:${revision.id}:${revision.videos.map(v => v.id).join(',')}` };
   const saved = await saveFigure(figure, drafts, target?.revision ?? null, { targetFolder });
+  cloudLocalIndex.remember('@device', revision.id, saved, revision.videos.map((v, i) => ({ cloud: v.id, local: drafts[i].id })), revision.figure_id);
   const records = await readMedia(saved).catch(() => []);
   for (const {draft, hash} of verified) {
     const record = records.find(record => record.id === draft.id);

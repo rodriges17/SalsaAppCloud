@@ -1,3 +1,4 @@
+import { contentVideos } from './cloud-provenance.js';
 import { checksum } from './package.js';
 import { validateDraft, STATUSES } from './logic.js';
 const FORMAT = 'salsa-device-library', LIMIT = 8 * 1024 * 1024;
@@ -123,7 +124,7 @@ export async function writeFolderFigure(folder, figure, drafts, expectedRevision
       videos.push(await stage.video(d, { name: d.name.trim(), type: d.blob.type || 'video/mp4', width: d.width ?? 0, height: d.height ?? 0 }));
     }
     const posterBytes = drafts[0].poster ? Array.from(new Uint8Array(await drafts[0].poster.arrayBuffer())) : previous?.posterBytes ?? null;
-    const saved = { id: figure.id, title: figure.title.trim(), description: figure.description, tags: figure.tags, status: figure.status, createdAt: previous?.createdAt ?? figure.createdAt ?? Date.now(), revision: crypto.randomUUID(), importFingerprint: figure.importFingerprint ?? previous?.importFingerprint ?? null, backupOrigin: previous?.backupOrigin ?? figure.backupOrigin ?? null, duration: videos[0].duration, posterBytes, videos };
+    const saved = { videoContent: contentVideos(videos), id: figure.id, title: figure.title.trim(), description: figure.description, tags: figure.tags, status: figure.status, createdAt: previous?.createdAt ?? figure.createdAt ?? Date.now(), revision: crypto.randomUUID(), importFingerprint: figure.importFingerprint ?? previous?.importFingerprint ?? null, backupOrigin: previous?.backupOrigin ?? figure.backupOrigin ?? null, duration: videos[0].duration, posterBytes, videos };
     library.figures = library.figures.filter(f => f.id !== saved.id); library.figures.push(saved);
     library.garbage.push(...(previous?.videos ?? []).filter(v => !videos.some(n => n.file === v.file)).map(v => v.file));
     if (JSON.stringify(await readLibrary(folder.handle)) !== original) throw new Error('Der Bibliotheksordner wurde während des Kopierens geändert. Bitte erneut versuchen.');

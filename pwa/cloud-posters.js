@@ -96,7 +96,7 @@ export function createPosterView(root, user) {
           try { await image.decode(); if (active()) { const previous = displayed; displayed.replaceWith(image); displayed = image; if (previous.tagName === 'IMG') { URL.revokeObjectURL(previous.src); urls.delete(previous.src); } } else { URL.revokeObjectURL(url); urls.delete(url); } } catch { URL.revokeObjectURL(url); urls.delete(url); }
         };
         try {
-          const saved = await cachedPoster(owner, revision.id);
+          const saved = await cachedPoster(owner, `${revision.id}:${revision.created_at ?? ''}`);
           if (saved) { await show(saved.blob); if (Date.now() - saved.updatedAt < 60000 || !navigator.onLine) return; }
           if (!active()) return;
           const remote = await cloudCall('poster_get', { revision: revision.id }); if (!active()) return;
@@ -115,7 +115,7 @@ export function createPosterView(root, user) {
             }
           }
           if (!blob || !active()) return;
-          await cachedPoster(owner, revision.id, blob, kind, generation).catch(() => {});
+          await cachedPoster(owner, `${revision.id}:${revision.created_at ?? ''}`, blob, kind, generation).catch(() => {});
           if (!active()) return;
           await show(blob);
         } catch { /* Keep the neutral image placeholder, including for anonymous/offline readers. */ }

@@ -221,12 +221,11 @@ export async function runParityCase(page, { root, fixture, native = false, scena
    await picker.setFiles({name:'Geändert.mp4',mimeType:'video/mp4',buffer:Buffer.concat([bytes,Buffer.from([0,0,0,0])])});
    await page.waitForFunction(()=>!document.querySelector('#acceptVideo').disabled);await page.locator('#acceptVideo').click();await page.locator('#saveFigure').click();await page.waitForFunction(()=>!document.querySelector('#editor').open);
   }
-  await page.locator('#cloudButton').click();const again=page.getByRole('button',{name:'Lokale Kopie erneut herunterladen',exact:true});await again.waitFor();assert(await again.isEnabled(),'Cloud recovery is disabled');
-  await again.click();await page.locator('#cloudImportConflict').getByRole('button',{name:'Abbrechen',exact:true}).click();assert(await page.locator('#cloudDialog').isVisible(),'Cancelling repair closed cloud');
-  await again.click();await page.locator('#cloudImportConflict').getByRole('button',{name:'Vorhandene Figur ersetzen',exact:true}).click();await page.waitForFunction(()=>!document.querySelector('#cloudDialog').open);
-  assert(!await page.locator('#editor').isVisible(),'Cloud repair must save without an editor');
-  const saved=await page.evaluate(async root=>{const s=await import(root+'storage.js'),f=(await s.listFigures())[0],v=(await s.figureVideos(f))[0];return{id:f.id,status:f.status,size:v.blob.size,count:(await s.listFigures()).length}},root);
-  assert(saved.id==='parity-0'&&saved.status==='Sitzt'&&saved.count===1&&saved.size===bytes.length,'Repair changed identity/status or failed to restore original bytes');
+  await page.locator('#cloudButton').click();
+  const open=page.getByRole('button',{name:'Lokale Figur öffnen',exact:true});await open.waitFor();await open.click();
+  await page.locator('#editor').waitFor();
+  const saved=await page.evaluate(async root=>(await(await import(root+'storage.js')).listFigures()),root);
+  assert(saved.length===1&&saved[0].id==='parity-0'&&saved[0].status==='Sitzt','Opening a cloud-linked figure changed local identity or learning status');
  }
  if(scenario==='player-orientation-and-exit'){
   await seed();if(native)await page.evaluate(()=>{AndroidPlatform.rotate=value=>window.parityRotation=value;AndroidPlatform.fullscreen=value=>window.parityFullscreen=value;});
