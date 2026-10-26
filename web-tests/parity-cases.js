@@ -229,6 +229,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
    await page.waitForFunction(()=>!document.querySelector('#acceptVideo').disabled);await page.locator('#acceptVideo').click();await page.locator('#saveFigure').click();await page.waitForFunction(()=>!document.querySelector('#editor').open);
   }
   await page.locator('#cloudButton').click();
+  await page.locator('.cloud-own-figure summary').first().click();
   const open=page.getByRole('button',{name:'Lokale Figur öffnen',exact:true});await open.waitFor();await open.click();
   await page.locator('#editor').waitFor();
   const saved=await page.evaluate(async root=>(await(await import(root+'storage.js')).listFigures()),root);
