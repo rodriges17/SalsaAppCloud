@@ -272,5 +272,12 @@ button.storage-choice:disabled{opacity:1;cursor:default}
 .cloud-order-status:empty { display: none; }
 .cloud-unsaved-dialog { max-width: min(420px, 90vw); padding: 24px; border: 1px solid var(--border); border-radius: 18px; background: var(--card); color: var(--text); }
 .cloud-unsaved-dialog button { margin: 8px 6px 0 0; }
-.card-provenance { float: right; font-size: 1.1rem; color: var(--muted, #64748b); margin-left: .5rem; }
-.card-provenance[data-cloud-status=modified] { color: #b36b13; }
+/* One compact footer across the full figure card. */
+.figure-card{flex-wrap:wrap;row-gap:0}
+.figure-card>.card-main{flex-basis:100%;padding-bottom:10px}
+.card-storage-status{display:flex;align-items:center;gap:8px;flex-basis:100%;min-width:0;max-width:100%;border-top:1px solid color-mix(in srgb,var(--border) 55%,transparent);color:var(--muted);font-size:12px}
+.card-storage-status .card-provenance{display:grid;place-items:center;flex:0 0 36px;width:36px;min-height:44px;margin:0;padding:0;border:0;color:inherit}
+.card-provenance svg{display:block;width:22px;height:22px}
+.card-storage-folder{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card-storage-status .card-meta{flex-shrink:0;font-size:12px;white-space:nowrap;overflow-wrap:normal}
+.card-storage-warning{flex-basis:100%;font-size:12px;color:var(--danger);padding-block:4px}
