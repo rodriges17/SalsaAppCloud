@@ -29,17 +29,23 @@ export async function runParityCase(page, { root, fixture, native = false, scena
    await route.fulfill({contentType:'application/json',body:JSON.stringify(result)});
   });
   await page.locator('#cloudButton').click();await page.getByRole('button',{name:'Öffnen',exact:true}).click();
+  await page.locator('.cloud-order-number').nth(2).waitFor();
   assert((await page.locator('.cloud-order-number').allTextContents()).join(',')==='1,2,3','Numbering is not ascending');
   const last=page.locator('[data-library-figure="order-2"]');
   await last.getByRole('button',{name:'Nach oben',exact:true}).click();
   assert(!saved,'Reorder must remain a draft');
   assert((await page.locator('[data-library-figure]').evaluateAll(nodes=>nodes.map(n=>n.dataset.libraryFigure))).join(',')==='order-0,order-2,order-1','Arrow reorder failed');
-  // Pointer drag works on the same handle as touch input, without loading media.
+  // The handle also supports keyboard movement.
   const handle=page.getByRole('button',{name:'Dritte verschieben',exact:true});await handle.scrollIntoViewIfNeeded();
   await handle.focus();await page.keyboard.press('ArrowUp');
   assert((await page.locator('[data-library-figure]').evaluateAll(nodes=>nodes.map(n=>n.dataset.libraryFigure))).join(',')==='order-2,order-0,order-1','Keyboard reorder failed');
+  await handle.scrollIntoViewIfNeeded();const sourceRect=await handle.boundingBox();
+  await page.mouse.move(sourceRect.x+sourceRect.width/2,sourceRect.y+sourceRect.height/2);await page.mouse.down();
+  const destination=page.locator('[data-library-figure="order-0"] .cloud-order-controls');await destination.scrollIntoViewIfNeeded();const targetRect=await destination.boundingBox();
+  await page.mouse.move(targetRect.x+targetRect.width/2,targetRect.y+targetRect.height/2);await page.mouse.up();
+  assert((await page.locator('[data-library-figure]').evaluateAll(nodes=>nodes.map(n=>n.dataset.libraryFigure))).join(',')==='order-0,order-2,order-1','Pointer drag failed');
   await page.getByRole('button',{name:'Bibliothek speichern',exact:true}).click();await page.waitForFunction(()=>!document.getElementById('cloudBody').inert);
-  assert(saved?.order.join(',')==='order-2,order-0,order-1'&&saved.expected_version===library.edit_version,'Saved order or conflict version missing');
+  assert(saved?.order.join(',')==='order-0,order-2,order-1'&&saved.expected_version===library.edit_version,'Saved order or conflict version missing');
   await page.locator('#cloudBack').click();
  }
  if(scenario==='navigation-return-hover') await runNavigationHoverCase(page,{root,native});
