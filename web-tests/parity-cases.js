@@ -137,7 +137,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   await open();await page.locator('.cloud-thumbnail').waitFor();const firstCalls=calls;
   const owner=await page.evaluate(async root=>(await import(root+'cloud-api.js')).cloudIdentity(),root);
   if(scenario==='cloud-cache-frame-reuse'){
-   await page.evaluate(async({root,owner})=>{const c=await import(root+'cloud-cache.js');const r=await c.readCloudCache(owner,'poster:cache-revision');r.value.kind='frame';},{root,owner});
+   await page.evaluate(async({root,owner})=>{const c=await import(root+'cloud-cache.js');const r=await c.readCloudCache(owner,'poster:cache-revision:2026-10-23T00:00:00Z');r.value.kind='frame';},{root,owner});
    await page.locator('#cloudBack').click();missingPoster=true;await page.clock.setFixedTime(new Date(await page.evaluate(()=>Date.now())+61000));await open();await page.locator('.cloud-thumbnail').waitFor();
    while(posterCalls<2)await new Promise(r=>setTimeout(r,10));await page.waitForTimeout(100);assert(mediaCalls===0,'Cached fallback frame downloaded its source video again');
   }else if(scenario==='cloud-cache-fast-reopen'){
@@ -160,7 +160,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
    await page.evaluate(root=>{void import(root+'cloud.js').then(m=>m.openCloud(null,'cache-library'));},root);
    await page.waitForFunction(()=>document.querySelector('#cloudError').textContent.includes('Zugriff entzogen'));
    assert(await page.getByRole('heading',{name:'Private Details',exact:true}).count()===0,'Revoked private library details remained visible');
-   assert(await page.evaluate(async({root,owner})=>!(await(await import(root+'cloud-cache.js')).readCloudCache(owner,'library:cache-library'))&&!await(await import(root+'cloud-cache.js')).readCloudCache(owner,'poster:cache-revision'),{root,owner}),'Permission revocation retained private details/posters');
+   assert(await page.evaluate(async({root,owner})=>!(await(await import(root+'cloud-cache.js')).readCloudCache(owner,'library:cache-library'))&&!await(await import(root+'cloud-cache.js')).readCloudCache(owner,'poster:cache-revision:2026-10-23T00:00:00Z'),{root,owner}),'Permission revocation retained private details/posters');
   }else{
    await page.locator('#cloudBack').click();await page.clock.setFixedTime(new Date(await page.evaluate(()=>Date.now())+61000));stall=true;
    await page.locator('#cloudButton').click();await page.getByRole('heading',{name:'Cache A 1',exact:true}).waitFor();
@@ -178,7 +178,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
     fail=false;version=3;await page.getByRole('button',{name:'Aktualisieren',exact:true}).click();await page.getByRole('heading',{name:'Cache A 3',exact:true}).waitFor();
    }else{
     await page.getByRole('button',{name:'Abmelden',exact:true}).click();await page.locator('.cloud-guest-login > summary').waitFor();
-    assert(await page.evaluate(async({root,owner})=>!(await(await import(root+'cloud-cache.js')).readCloudCache(owner,'state'))&&!await(await import(root+'cloud-cache.js')).readCloudCache(owner,'poster:cache-revision'),{root,owner}),'Logout retained private snapshots or posters');
+    assert(await page.evaluate(async({root,owner})=>!(await(await import(root+'cloud-cache.js')).readCloudCache(owner,'state'))&&!await(await import(root+'cloud-cache.js')).readCloudCache(owner,'poster:cache-revision:2026-10-23T00:00:00Z'),{root,owner}),'Logout retained private snapshots or posters');
     const other=await page.context().newPage();await other.goto(page.url());await other.evaluate(key=>localStorage.setItem(key,JSON.stringify({access_token:'account-b',refresh_token:'refresh-b',cache_id:'account-b-session',expires_at:Date.now()+3600000})),key);
     await page.getByRole('heading',{name:'Cache B 1',exact:true}).waitFor();stall=false;release();
     await page.waitForTimeout(100);assert(await page.getByRole('heading',{name:'Cache A 1',exact:true}).count()===0,'A late old-account response repopulated the UI');
