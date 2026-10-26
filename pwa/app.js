@@ -1,6 +1,6 @@
 import { cloudLocalIndex } from './cloud-local.js';
 import { provenanceIcon, provenanceLabel } from './cloud-provenance.js';
-const APP_VERSION = '2026-10-26-status-bar-v1';
+const APP_VERSION = '2026-10-26-status-bar-v2';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';
@@ -96,7 +96,13 @@ function renderOverview() {
     const folderName = figure.storageFolder ? figure.folderName || 'SalsaTrainer' : 'App-Speicher';
     const folder = el('span', 'card-storage-folder', folderName); folder.title = folderName;
     const metadata = el('span', 'card-meta', `${timeLabel(figure.duration)} · ${figure.videoIds.length} Video${figure.videoIds.length === 1 ? '' : 's'}`);
-    statusBar.append(badge, folder, metadata);
+    statusBar.append(badge);
+    if (figure.storageFolder) {
+      const folderIcon = el('span', 'card-folder-icon'); folderIcon.setAttribute('aria-hidden', 'true');
+      folderIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M20 20H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2Z"/></svg>';
+      statusBar.append(folderIcon);
+    }
+    statusBar.append(folder, metadata);
     const options = button('⋮', event => { event.stopPropagation(); const wasOpen = options.getAttribute('aria-expanded') === 'true'; closeMenus(); if (!wasOpen) showMenu(); }, 'card-options');
     options.setAttribute('aria-label', `Optionen für ${figure.title}`); options.setAttribute('aria-expanded', 'false');
     function showMenu() {
