@@ -111,3 +111,37 @@ test('search and filters stay fixed below the header while figures scroll',async
  await page.locator('#search').fill('Drehung');await expect(page.locator('.figure-card')).toHaveCount(1);
  await page.getByRole('button',{name:'Sitzt',exact:true}).tap();await expect(page.locator('.figure-card')).toHaveCount(0);await expect(page.locator('#search')).toBeInViewport();
 });
+
+test('figure storage footer stays on one line at 320px and explains monochrome provenance icons', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  await start(page); await seed(page);
+  await page.evaluate(async () => {
+    const { listFigures } = await import('/pwa/storage.js');
+    const { cloudLocalIndex } = await import('/pwa/cloud-local.js');
+    for (const f of await listFigures()) {
+      cloudLocalIndex.remember('test', 'cloud-' + f.id, f, [{ cloud: 'video', local: f.videoIds[0] }]);
+    }
+    const f = (await listFigures())[0];
+    cloudLocalIndex.remember('test', 'cloud-' + f.id, f, [{ cloud: 'video', local: f.videoIds[0] }], null, 'older-content');
+    window.dispatchEvent(new Event('focus'));
+  });
+  const changed = page.locator('.card-provenance[data-cloud-status=modified]');
+  await expect(changed).toHaveCount(1);
+  await expect(page.locator('.card-provenance[data-cloud-status=cloud]')).toHaveCount(1);
+  await expect(page.locator('.card-copy .card-provenance')).toHaveCount(0);
+  await expect(page.locator('.card-storage-folder').first()).toHaveText('App-Speicher');
+  await changed.click(); await expect(page.locator('#toast')).toContainText('lokal angepasst');
+  await expect(page.locator('#playerScreen')).toBeHidden();
+  for (const theme of ['dark', 'light']) {
+    await page.evaluate(theme => window.stepAppearance.set(theme), theme);
+    const results = await page.locator('.card-storage-status').evaluateAll(rows => rows.map(row => {
+      const folder = row.querySelector('.card-storage-folder');
+      folder.textContent = 'Documents mit einem sehr langen lokalen Ordnernamen';
+      const r = row.getBoundingClientRect();
+      const items = [...row.children].map(n => n.getBoundingClientRect());
+      return { contained: items.every(b => b.left >= r.left && b.right <= r.right + 1), aligned: items.every(b => Math.abs((b.top+b.bottom)/2-(items[0].top+items[0].bottom)/2) < 2), mono: getComputedStyle(row.querySelector('svg')).color === getComputedStyle(row).color, ellipsis: getComputedStyle(folder).textOverflow };
+    }));
+    expect(results.every(r => r.contained && r.aligned && r.mono && r.ellipsis === 'ellipsis')).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+});
