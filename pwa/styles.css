@@ -272,3 +272,5 @@ button.storage-choice:disabled{opacity:1;cursor:default}
 .cloud-order-status:empty { display: none; }
 .cloud-unsaved-dialog { max-width: min(420px, 90vw); padding: 24px; border: 1px solid var(--border); border-radius: 18px; background: var(--card); color: var(--text); }
 .cloud-unsaved-dialog button { margin: 8px 6px 0 0; }
+.card-provenance { float: right; font-size: 1.1rem; color: var(--muted, #64748b); margin-left: .5rem; }
+.card-provenance[data-cloud-status=modified] { color: #b36b13; }

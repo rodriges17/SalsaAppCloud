@@ -1,4 +1,6 @@
-const APP_VERSION = '2026-10-26-library-order-v1';
+import { cloudLocalIndex } from './cloud-local.js';
+import { provenanceIcon, provenanceLabel } from './cloud-provenance.js';
+const APP_VERSION = '2026-10-26-owner-current-v1';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';
@@ -84,6 +86,7 @@ function renderOverview() {
     if (figure.poster) { const url = URL.createObjectURL(figure.poster); posterURLs.push(url); thumb = el('img', 'card-thumb'); thumb.src = url; thumb.alt = ''; }
     else { thumb = el('span', 'card-thumb thumb-placeholder', '▷'); thumb.setAttribute('aria-hidden', 'true'); }
     const copy = el('span', 'card-copy'); copy.append(el('span', 'card-title', figure.title), el('span', 'card-status status-' + (figure.status === 'Sitzt' ? 'learned' : figure.status === 'Am Üben' ? 'practice' : 'new'), figure.status));
+    const cloudStatus = cloudLocalIndex.status(figure), badge = el('span', 'card-provenance', provenanceIcon(cloudStatus)); badge.title = provenanceLabel(cloudStatus); badge.setAttribute('aria-label', badge.title); badge.dataset.cloudStatus = cloudStatus; copy.prepend(badge);
     if (figure.tags.length) copy.append(el('span', 'card-tags', figure.tags.join(' · ')));
     if (figure.storageFolder) copy.append(el('span', 'card-meta', figure.folderAccessRequired ? 'Ordner gespeichert – Zugriff erneut erlauben' : figure.storageProblem ? `Geräteordner: ${figure.storageProblem}` : `Geräteordner · ${figure.folderName || 'SalsaTrainer'}`));
     copy.append(el('span', 'card-meta', `${timeLabel(figure.duration)} · ${figure.videoIds.length} Video${figure.videoIds.length === 1 ? '' : 's'}`)); main.append(thumb, copy);
@@ -673,6 +676,6 @@ async function chooseCloudImport({ title, fingerprint, revisionIds }) {
     document.body.append(dialog); dialog.showModal(); actions.firstChild.focus();
   });
 }
-initCloud({ confirm: confirmAction, closed: () => { if (!$('overview').hidden) focusFiguresNavigation(); }, localChanged: async () => { changed(); await refresh(); }, localFigures: listFigures, chooseImport: chooseCloudImport, localSaved: () => toast('Figur lokal gespeichert.') });
+initCloud({ openLocal: figure => { openEditor(figure); }, confirm: confirmAction, closed: () => { if (!$('overview').hidden) focusFiguresNavigation(); }, localChanged: async () => { changed(); await refresh(); }, localFigures: listFigures, chooseImport: chooseCloudImport, localSaved: () => toast('Figur lokal gespeichert.') });
 try { await cleanupInterruptedImports(); } catch { /* Refresh reports unavailable storage. */ }
 await refresh();

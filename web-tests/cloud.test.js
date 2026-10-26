@@ -15,7 +15,11 @@ for (const name of (await readdir('supabase/migrations')).sort()) await db.exec(
 const A = '00000000-0000-4000-8000-000000000001', B = '00000000-0000-4000-8000-000000000002', C = '00000000-0000-4000-8000-000000000003';
 await db.query('insert into auth.users values ($1,$2),($3,$4),($5,$6)', [A,'admin@example.test',B,'writer@example.test',C,'reader@example.test']);
 async function role(id, name = id ? 'authenticated' : 'anon') { await db.exec('reset role'); await db.query("select set_config('request.jwt.claim.sub',$1,false),set_config('request.jwt.claim.role',$2,false)", [id ?? '',name]); await db.exec(`set role ${name}`); }
-async function api(id, action, payload = {}) { await role(id); return (await db.query('select public.cloud_api($1,$2) as result', [action,JSON.stringify(payload)])).rows[0].result; }
+async function api(id, action, payload = {}) {
+ if (['reserve','delete_figure'].includes(action) && payload.figure && !('expected_token' in payload)) {
+  const token=(await root('select content_token from cloud_figures where id=$1',[payload.figure])).rows[0]?.content_token; payload={...payload,expected_token:token};
+ }
+ await role(id); return (await db.query('select public.cloud_api($1,$2) as result', [action,JSON.stringify(payload)])).rows[0].result; }
 async function root(sql, params = []) { await role(null,'service_role'); await db.exec('reset role'); return db.query(sql,params); }
 await root('select cloud_bootstrap($1,$2)', [A,'admin@example.test']);
 await api(A,'admin_person',{id:B,enabled:true,quota:250000000}); await api(A,'admin_person',{id:C,enabled:false,quota:0});
@@ -110,8 +114,7 @@ test('cloud: referenced figures cannot be deleted; trash retains data and quota 
  assert.equal((await api(B,'state')).me.used,before);
  assert.ok((await api(B,'state')).trash.some(f=>f.id===figure));
  await assert.rejects(api(B,'media',{revision:nextRevision,media:(await root('select id from cloud_media where figure_id=$1',[figure])).rows[0].id}));
- await api(B,'restore_figure',{figure});assert.ok((await api(B,'state')).own_figures.some(f=>f.id===figure));
- await api(B,'delete_figure',{figure});
+ await assert.rejects(api(B,'restore_figure',{figure}));
  await root("update cloud_figures set deleted_at=now()-interval '31 days' where id=$1",[figure]);
  const garbage=(await root('select cloud_collect_trash() result')).rows[0].result;
  assert.ok(garbage.paths.length>0);assert.equal((await api(B,'state')).me.used,0);
@@ -147,7 +150,7 @@ test('cloud posters: generated frame can upgrade once to the original local imag
  await api(A,'admin_person',{id:B,enabled:true,quota:250000000});const done=await uploaded(B),rid=done.revision;
  const frame=Buffer.from('ffd8ff01ffd9','hex').toString('base64'),local=Buffer.from('ffd8ff02ffd9','hex').toString('base64');
  await api(B,'poster_put',{revision:rid,data:frame,kind:'frame'});assert.equal((await api(B,'poster_get',{revision:rid})).kind,'frame');
- await assert.rejects(api(A,'poster_put',{revision:rid,data:local,kind:'local'})); await api(B,'poster_put',{revision:rid,data:local,kind:'local'});assert.equal((await api(B,'poster_get',{revision:rid})).poster,local);
+ await api(A,'poster_put',{revision:rid,data:local,kind:'local'}); await api(B,'poster_put',{revision:rid,data:local,kind:'local'});assert.equal((await api(B,'poster_get',{revision:rid})).poster,local);
  assert.equal((await api(B,'poster_put',{revision:rid,data:frame,kind:'frame'})).poster,local);
 });
 test('cloud posters: optional upload poster is atomic with commit and public consent', async () => {
@@ -192,15 +195,12 @@ test('shared media: trusted hashes merge physical paths without granting access 
  await root('select cloud_release_job($1)',[job.job]);
  assert.equal((await api(B,'media',{revision:variant.revision,media:reused})).path,survivor);
 });
-test('figure editors: library management gives no edit right; owner grants and revokes explicitly',async()=>{
+test('only owner and platform admin edit; library management and removed editor grants do not authorize',async()=>{
  const done=await uploaded(B);
- await assert.rejects(api(A,'reserve',{figure:done.figure,videos}));
- await api(B,'editor',{figure:done.figure,email:'admin@example.test'});
  const job=await api(A,'reserve',{figure:done.figure,videos});
  await root('select cloud_release_job($1)',[job.job]);
- await assert.rejects(api(A,'editor',{figure:done.figure,email:'reader@example.test'}));
- await api(B,'editor',{figure:done.figure,email:'admin@example.test',remove:true});
- await assert.rejects(api(A,'reserve',{figure:done.figure,videos}));
+ await assert.rejects(api(B,'editor',{figure:done.figure,email:'reader@example.test'}));
+ await assert.rejects(api(C,'reserve',{figure:done.figure,videos}));
 });
 test('posters: identical JPEGs in variants have one physical blob',async()=>{
  const done=await uploaded(B);const jpeg=Buffer.from('ffd8ff0304ffd9','hex').toString('base64');
@@ -215,7 +215,7 @@ test('server role can verify and collect without postgres privileges; clients ca
  await role(B);await assert.rejects(db.query('select cloud_verify_content($1,$2)',[mid,'b'.repeat(64)]));await assert.rejects(db.query('select cloud_collect_trash()'));
  await role(null,'service_role');await db.query('select cloud_verify_content($1,$2)',[mid,'b'.repeat(64)]);await db.query('select cloud_collect_trash()');
 });
-test('superseded media receives a full protection period from replacement, independent of original upload date',async()=>{
+test('updating a figure preserves its ID and stores only one current content row',async()=>{
  const first=await uploaded(B);const old=(await api(B,'state')).own_figures.find(f=>f.id===first.figure).revisions[0].videos[0];
  await root("update cloud_revisions set created_at=now()-interval '100 days' where id=$1",[first.revision]);
  const job=await api(B,'reserve',{figure:first.figure,videos:[{...videos[0],reuse:old.id}]});
@@ -224,7 +224,8 @@ test('superseded media receives a full protection period from replacement, indep
  assert.equal((await root('select count(*)::int n from cloud_revisions where id=$1',[first.revision])).rows[0].n,1);
  await root("update cloud_revisions set retired_at=now()-interval '31 days' where id=$1",[first.revision]);
  const garbage=(await root('select cloud_collect_trash() result')).rows[0].result.paths;
- assert.equal((await root('select count(*)::int n from cloud_revisions where id=$1',[first.revision])).rows[0].n,0);
+ assert.equal(next.revision, first.revision);
+ assert.equal((await root('select count(*)::int n from cloud_revisions where figure_id=$1',[first.figure])).rows[0].n,1);
  assert.ok(!garbage.includes((await api(B,'media',{revision:next.revision,media:job.media[0].id})).path));
 });
 test('server rejects accidental duplicate figures while permitting an explicit independent variant',async()=>{
@@ -259,4 +260,25 @@ test('library order: append, shared order, atomic save, conflict and authorizati
  assert.deepEqual((await api(null,'library',{id:lib})).entries.map(e=>e.figure_id),[...payload.order,next.figure]);
  await api(B,'public_permission',{figure:second.figure,allowed:false});
  assert.deepEqual((await api(null,'library',{id:lib})).entries.map(e=>e.figure_id),[third.figure,first.figure,next.figure]);
+});
+test('concurrent owner and admin uploads reject the stale commit and missing client tokens', async()=>{
+ const first=await uploaded(B);
+ const token=(await api(B,'state')).own_figures.find(f=>f.id===first.figure).content_token;
+ const current=(await api(B,'state')).own_figures.find(f=>f.id===first.figure).revisions[0].videos[0];
+ await assert.rejects(api(B,'reserve',{figure:first.figure,expected_token:null,videos}));
+ const old=await api(A,'reserve',{figure:first.figure,expected_token:token,videos:[{...videos[0],reuse:current.id}]});
+ await uploaded(B,first.figure);
+ await assert.rejects(api(A,'commit',{job:old.job,title:'Stale',tags:[],videos:[{id:old.media[0].id,name:'v'}]}),/inzwischen/);
+ await root("delete from storage.objects where name in (select path from cloud_media where job_id=$1)",[old.job]);
+ await root('select cloud_release_job($1)',[old.job]);
+ assert.equal((await api(A,'state')).own_figures.find(f=>f.id===first.figure).revisions.length,1);
+});
+test('admin deletion lists and removes references; a library owner cannot delete another owner figure', async()=>{
+ const done=await uploaded(B,null,true);
+ const lib=(await api(C,'library_save',{title:'Owned by reader',visibility:'public',collaborative:false,moderated:false})).id;
+ await api(A,'attach',{library:lib,revision:done.revision});
+ await assert.rejects(api(C,'delete_figure',{figure:done.figure}));
+ assert.deepEqual((await api(A,'delete_preview',{figure:done.figure})).libraries,['Owned by reader']);
+ await api(A,'delete_figure',{figure:done.figure});
+ assert.equal((await api(null,'library',{id:lib})).entries.length,0);
 });

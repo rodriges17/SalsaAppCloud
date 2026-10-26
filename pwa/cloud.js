@@ -7,10 +7,8 @@ import { cloudCall, signedIn, uploadMedia, logout, loginWithLink, loginWithPassw
 import { CLOUD_FILE_LIMIT } from './cloud-config.js';
 import { figureVideos, figureMedia, listFigures, saveFigure, storageSettings } from './storage.js';
 import { downloadLibrary, downloadFigure, inspectCloudVideo } from './cloud-library-download.js';
-import { localVideoContent, matchingLocalVideos } from './cloud-local-content.js';
 import { readCloudCache, writeCloudCache, cloudCacheRevision } from './cloud-cache.js';
-import { createCloudLocalIndex } from './cloud-local.js';
-const localIndex = createCloudLocalIndex({ getItem: key => localStorage.getItem(key), setItem: (key, value) => localStorage.setItem(key, value) }, `salsa-cloud-local:${new URL('./', import.meta.url).pathname}:v1`);
+import { cloudLocalIndex as localIndex } from './cloud-local.js';
 import { createPosterView, posterPayload } from './cloud-posters.js';
 const node = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
 const MB = value => `${(Number(value ?? 0) / 1000000).toFixed(1)} MB`;
@@ -72,7 +70,6 @@ function focusSection(box) {
 }
 let viewEpoch = 0, statusTimer, displayedOwner = null, renderedView = null, authReloadPending = false;
 let localUpdates = [];
-let localContent = new Map();
 const mediaHashRequests = new Map();
 async function cloudMediaHash(payload) {
   const owner = cloudIdentity(), generation = cloudCacheRevision(owner);
@@ -92,7 +89,6 @@ async function cloudMediaHash(payload) {
   mediaHashRequests.set(requestKey, work);
   try { return await work; } finally { mediaHashRequests.delete(requestKey); }
 }
-const sameContent = (a, b) => a.size === b.size && [...a].every(([size, hashes]) => hashes.size === b.get(size)?.size && [...hashes].every(hash => b.get(size).has(hash)));
 function cacheStatus(message, temporary = false) {
   clearTimeout(statusTimer); statusBox.textContent = message;
   if (temporary) statusTimer = setTimeout(() => { if (!busy) statusBox.textContent = ''; }, 3500);
@@ -118,9 +114,7 @@ async function load(library = current, allowCache = false) {
     void Promise.resolve().then(() => hooks.localFigures()).then(figures => {
       if (active()) {
         localFigures = figures; localUpdates.forEach(update => update());
-        void localVideoContent(figures, figureMedia, active).then(content => {
-          if (active() && !sameContent(localContent, content)) { localContent = content; localUpdates.forEach(update => update()); }
-        });
+
       }
       return figures;
     }).catch(() => localFigures);
@@ -316,7 +310,7 @@ function libraryDownloadControls(parent, entries) {
           const blob = await response.blob(); return blob.slice(0, blob.size, video.type);
         },
         async readPoster(revision) {
-          const cached = await readCloudCache(cloudIdentity(), `poster:${revision.id}`);
+          const cached = await readCloudCache(cloudIdentity(), `poster:${revision.id}:${revision.created_at ?? ''}`);
           if (cached?.value.bytes) return new Blob([cached.value.bytes], { type: 'image/jpeg' });
           const value = await cloudCall('poster_get', { revision: revision.id });
           return value.poster ? new Blob([Uint8Array.from(atob(value.poster), character => character.charCodeAt(0))], { type: 'image/jpeg' }) : null;
@@ -333,7 +327,7 @@ function libraryDownloadControls(parent, entries) {
       if (result.cancelled || result.failed.length) resultText.textContent += ' Erneut starten lädt nur die noch fehlenden Figuren.';
       await hooks.localChanged?.();
       localFigures = await hooks.localFigures();
-      localContent = await localVideoContent(localFigures, figureMedia); localUpdates.forEach(update => update());
+      localUpdates.forEach(update => update());
     } finally { controller = null; cancel.hidden = true; cancel.textContent = 'Upload abbrechen'; progress.hidden = true; }
   }));
   start.className = 'primary';
@@ -342,7 +336,7 @@ function libraryDownloadControls(parent, entries) {
 }
 function versionLabel(revision) {
   const date = new Date(revision.created_at);
-  return Number.isFinite(date.getTime()) ? `Version vom ${date.toLocaleString('de', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Version ohne Datumsangabe';
+  return Number.isFinite(date.getTime()) ? `Stand vom ${date.toLocaleString('de', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Version ohne Datumsangabe';
 }
 function clearPreviews(root) { root.querySelectorAll('video').forEach(player => { player.pause(); player.removeAttribute('src'); player.load(); player.remove(); }); }
 async function previewVideo(box, revision, video) {
@@ -376,7 +370,10 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
   }
   const fingerprint = selected => `cloud:${rev.id}:${selected.map(v => v.id).join(',')}`;
   const label = own ? 'Lokal übernehmen' : multiple ? 'Ausgewählte Videos in meine Figuren übernehmen' : 'In meine Figuren übernehmen';
-  const download = () => run('Videos herunterladen …', async () => {
+  const download = async () => {
+    const linked = localIndex.find(rev.id, localFigures);
+    if (linked) { await close(); if (!dialog.open) return hooks.openLocal?.(linked); return; }
+    return run('Videos herunterladen …', async () => {
     if (libraryDraft?.dirty()) throw new Error('Bitte zuerst die Bibliothek speichern, bevor du eine Figur übernimmst.');
     const selected = chosen.filter(([check]) => !check || check.checked).map(([, v]) => v);
     if (!selected.length) throw new Error('Bitte mindestens ein Video auswählen.');
@@ -397,7 +394,7 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
           const blob = await response.blob(); return blob.slice(0, blob.size, video.type);
         },
         async readPoster(revision) {
-          const cached = await readCloudCache(cloudIdentity(), `poster:${revision.id}`);
+          const cached = await readCloudCache(cloudIdentity(), `poster:${revision.id}:${revision.created_at ?? ''}`);
           if (cached?.value.bytes) return new Blob([cached.value.bytes], { type: 'image/jpeg' });
           const value = await cloudCall('poster_get', { revision: revision.id });
           return value.poster ? new Blob([Uint8Array.from(atob(value.poster), character => character.charCodeAt(0))], { type: 'image/jpeg' }) : null;
@@ -408,36 +405,27 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
     } finally { controller = null; cancel.hidden = true; cancel.textContent = 'Upload abbrechen'; }
 
   });
+  };
   const take = action(label, download);
   // Keep recovery available when files were removed or modified outside the app.
   const repair = action('Lokale Kopie erneut herunterladen', download); repair.className = 'subtle'; repair.hidden = true;
   if (own) take.className = 'primary';
   box.append(take, repair);
-  let checkedContent, contentMatches = new Set();
   const update = () => {
-    if (checkedContent !== localContent) {
-      checkedContent = localContent; contentMatches = new Set();
-      const content = localContent;
-      void matchingLocalVideos(rev, content, cloudMediaHash, () => dialog.open && box.isConnected && content === localContent).then(matches => {
-        if (box.isConnected && content === localContent) { contentMatches = matches; update(); }
-      });
-    }
-    const selected = chosen.filter(([check]) => !check || check.checked).map(([, v]) => v);
-    const prefix = `cloud:${rev.id}:`;
-    const linked = localIndex.availability(state.me?.id, rev.id, localFigures);
-    const selections = [...localFigures.filter(f => f.importFingerprint?.startsWith(prefix))
-      .map(f => new Set(f.importFingerprint.slice(prefix.length).split(','))), ...linked.available];
-    const available = new Set([...selections.flatMap(ids => [...ids]), ...contentMatches]);
-    const accessRequired = linked.accessRequired.some(ids => rev.videos.some(v => ids.has(v.id) && !available.has(v.id)));
-    const exists = selected.length > 0 && selected.every(v => available.has(v.id));
-    const complete = rev.videos.every(v => available.has(v.id));
-    localStatus.hidden = !available.size && !accessRequired;
+    localIndex.reconcile(rev, localFigures);
+    const localFigure = localIndex.find(rev.id, localFigures);
+    const known = localFigures.find(f => localIndex.link(f)?.revision === rev.id || f.importFingerprint?.startsWith(`cloud:${rev.id}:`));
+    const accessRequired = !!known?.folderAccessRequired;
+    localStatus.hidden = !localFigure && !known;
     localStatus.dataset.accessRequired = String(accessRequired);
-    localStatus.textContent = !available.size && accessRequired ? 'Lokal zugeordnet · Ordnerzugriff erforderlich'
-      : (complete ? '✓ Bereits lokal vorhanden' : '✓ Teilweise lokal vorhanden') + (accessRequired ? ' · Ordnerzugriff erforderlich' : '');
-    take.textContent = exists ? '✓ Lokal vorhanden' : label; take.disabled = exists;
-    repair.hidden = !exists;
-    take.title = exists ? 'Die ausgewählten Videos dieser Version sind bereits in deinen lokalen Figuren vorhanden.' : '';
+    const modified = localFigure && localIndex.status(localFigure) === 'modified';
+    localStatus.textContent = localFigure ? modified ? '☁ ✎ Lokal verfügbar · lokal angepasst' : '☁ Lokal verfügbar'
+      : accessRequired ? 'Lokal zugeordnet · Ordnerzugriff erforderlich' : 'Lokale Dateien fehlen · erneut herunterladen';
+    take.textContent = localFigure ? 'Lokale Figur öffnen' : label;
+    take.disabled = accessRequired;
+    repair.hidden = true;
+    take.title = localFigure ? 'Die zugehörige lokale Figur öffnen.' : '';
+
   };
   chosen.forEach(([check]) => { if (check) check.onchange = update; }); localUpdates.push(update); update();
 }
@@ -466,11 +454,6 @@ function variantButton(box, revision) {
   }));
 }
 function ownFigures() {
-  for (const f of state.trash ?? []) {
-    const box = section('Papierkorb · ' + f.title);
-    box.append(node('p', 'Wiederherstellbar bis ' + new Date(Date.parse(f.deleted_at) + 30 * 86400000).toLocaleDateString('de')));
-    box.append(action('Figur wiederherstellen', () => run('Wiederherstellen …', async () => { await cloudCall('restore_figure', { figure: f.id }); await load(null); })));
-  }
   if (!state.own_figures.length) body.append(node('p', 'Noch keine eigenen Cloud-Figuren. Lade eine lokale Figur über „In Cloud veröffentlichen“ hoch.'));
   for (const f of state.own_figures) {
     const revisions = [...f.revisions].sort((a, b) => (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0));
@@ -481,37 +464,17 @@ function ownFigures() {
       if (f.public_allowed && !await hooks.confirm({ title: 'Öffentliche Freigabe widerrufen?', message: 'Alle Zuordnungen zu öffentlichen Bibliotheken werden entfernt. Private Zuordnungen bleiben bestehen.', ok: 'Freigabe widerrufen' })) return;
       await cloudCall('public_permission', { figure: f.id, allowed: !f.public_allowed }); await load(null);
     })));
-    box.append(node('p', 'Die Freigabe gilt für alle Versionen dieser Figur und alle öffentlichen Bibliotheken, denen sie zugeordnet ist. Beim Widerrufen werden öffentliche Zuordnungen entfernt. Private Bibliotheken bleiben unverändert.'));
+    box.append(node('p', 'Die Freigabe gilt für diese Figur und alle öffentlichen Bibliotheken, denen sie zugeordnet ist. Beim Widerrufen werden öffentliche Zuordnungen entfernt. Private Bibliotheken bleiben unverändert.'));
     if (latest) {
       if (state.me.upload_enabled) variantButton(box, latest);
-      if (f.owner_id === state.me.id) {
-        const editors = node('details'); editors.append(node('summary', 'Bearbeiter verwalten')); box.append(editors);
-        const email = field(editors, 'E-Mail des Bearbeiters');
-        const list = node('p'); editors.append(list);
-        const refreshEditors = async () => { const result = await cloudCall('editor', { figure: f.id }); list.textContent = result.editors.map(e => e.email).join(', ') || 'Keine zusätzlichen Bearbeiter'; };
-        editors.addEventListener('toggle', () => { if (editors.open) void run('Bearbeiter laden …', refreshEditors); });
-        for (const [label, remove] of [['Bearbeiter hinzufügen', false], ['Bearbeiter entfernen', true]]) editors.append(action(label, () => run('Berechtigung speichern …', async () => { await cloudCall('editor', { figure: f.id, email: email.value, remove }); await refreshEditors(); })));
-      }
       downloadControls(box, latest, { own: true, revisionIds: revisions.map(r => r.id) });
       const assign = action('Einer Bibliothek zuordnen', () => attachForm(latest)); assign.className = 'secondary'; if (state.me.upload_enabled) box.append(assign);
-      const history = node('details', undefined, 'cloud-history');
-      history.append(node('summary', `Versionsverlauf · ${revisions.length} ${revisions.length === 1 ? 'Version' : 'Versionen'}`));
-      for (const revision of revisions) {
-        const entry = node('article', undefined, 'version-entry');
-        entry.append(node('h4', `${versionLabel(revision)}${revision.id === latest.id ? ' · Neueste Version' : ''}`), node('p', revision.title));
-        for (const video of revision.id === latest.id ? revision.videos : []) entry.append(action(`Video: ${video.name || 'Ohne Namen'}`, () => previewVideo(entry, revision, video)));
-        if (revision.id !== latest.id) downloadControls(entry, revision, { own: true, revisionIds: revisions.map(r => r.id) });
-        if (revision.id !== latest.id && state.me.upload_enabled) entry.append(action('Diese Version einer Bibliothek zuordnen', () => attachForm(revision)));
-        history.append(entry);
-      }
-      history.addEventListener('toggle', () => {
-        if (!history.open) clearPreviews(history);
-      });
-      box.append(history);
+
     }
-    if (f.owner_id === state.me?.id) box.append(action('Cloud-Figur samt Videos löschen', async () => {
-      if (!await hooks.confirm({ title: 'Cloud-Figur löschen?', message: 'Die Figur wird für 30 Tage in den Papierkorb verschoben. Entferne zuvor alle Bibliothekszuordnungen. Gemeinsam verwendete Dateien bleiben erhalten.', ok: 'Cloud-Figur löschen' })) return;
-      await run('Cloud-Figur löschen …', async () => { await cloudCall('delete_figure', { figure: f.id }); await load(null); });
+    if (f.owner_id === state.me?.id || state.me?.is_admin) box.append(action('Cloud-Figur samt Videos löschen', async () => {
+      const affected = await cloudCall('delete_preview', { figure: f.id });
+      if (!await hooks.confirm({ title: 'Cloud-Figur löschen?', message: `Die Cloudfigur wird gelöscht und aus folgenden Bibliotheken entfernt: ${affected.libraries.join(', ') || 'keinen'}. Lokale Kopien bleiben erhalten.`, ok: 'Cloud-Figur löschen' })) return;
+      await run('Cloud-Figur löschen …', async () => { await cloudCall('delete_figure', { figure: f.id, expected_token: f.content_token }); await load(null); });
     }));
   }
 }
@@ -527,13 +490,16 @@ async function publishForm() {
   const library = select(targetStep, 'Bibliothek', [['', 'Nur in Meine Cloud-Figuren hochladen'], ...libs.map(l => [l.id, l.title])]);
   // Reservations can create a figure before any revision exists. They are not
   // valid version targets until the first upload has completed.
-  const targets = state.own_figures.filter(f => f.revisions?.length);
+  const targets = state.own_figures.filter(f => f.revisions?.length && (f.owner_id === state.me.id || state.me.is_admin));
   const names = new Map();
   for (const f of targets) { const title = f.revisions[0].title; names.set(title, (names.get(title) ?? 0) + 1); }
-  const figure = select(optionsStep, 'Neue Figur oder neue Version', [['', 'Neue Cloud-Figur'], ...targets.map(f => {
+  const figure = select(optionsStep, 'Cloudfigur speichern', [['', 'Neue Cloud-Figur'], ...targets.map(f => {
     const latest = f.revisions[0], title = latest.title;
     return [f.id, names.get(title) > 1 ? `${title} · ${new Date(latest.created_at).toLocaleString('de')}` : title];
   })]);
+  const existingLink = localIndex.link(local);
+  const linkedTarget = targets.find(f => f.id === existingLink?.cloudFigure || f.revisions.some(r => r.id === existingLink?.revision || local.importFingerprint?.startsWith(`cloud:${r.id}:`)));
+  if (linkedTarget) figure.value = linkedTarget.id;
   optionsStep.append(node('p', 'Hier stehen deine vorhandenen Cloud-Figuren. Lokales Löschen oder Entfernen aus einer Bibliothek löscht die Cloud-Figur nicht. Dauerhaft löschen kannst du sie unter „Meine Cloud-Figuren“ mit „Cloud-Figur samt Videos löschen“.'));
   const explicitVariant = checkbox(optionsStep, 'Bewusst eine eigene Figur / Variante erstellen, auch wenn das Video bereits existiert');
   const duplicateBox = node('div'); optionsStep.append(duplicateBox);
@@ -548,11 +514,12 @@ async function publishForm() {
       : isPublic
       ? allowed.checked ? 'Öffentliche Bibliothek: Diese Figur darf für alle sichtbar werden.' : 'Diese Bibliothek ist öffentlich. Zum Hochladen musst du die öffentliche Veröffentlichung dieser Figur erlauben. Alternativ wähle eine private Bibliothek.'
       : 'Private Bibliothek: Die Figur ist nur für berechtigte Personen sichtbar.';
-    if (figure.value) visibilityHint.textContent += ' Bei einer neuen Version gelten bestehende Bibliothekszuordnungen und deren Freigaberegeln weiterhin.';
+    if (figure.value) visibilityHint.textContent += ' Beim Aktualisieren wird der aktuelle Inhalt in allen verknüpften Bibliotheken ersetzt.';
     uploadError.hidden = true;
   };
   library.onchange = updateVisibility; allowed.onchange = updateVisibility;
   figure.onchange = () => { allowed.checked = state.own_figures.find(f => f.id === figure.value)?.public_allowed ?? false; updateVisibility(); };
+  allowed.checked = linkedTarget?.public_allowed ?? false;
   updateVisibility();
   const upload = action('Ausgewählte Figur hochladen', () => run('Upload vorbereiten …', async () => {
     const videos = selected.filter(([check]) => check.checked).map(([, v]) => v);
@@ -578,7 +545,7 @@ async function publishForm() {
         return;
       }
       if (figure.value && !allowed.checked && state.own_figures.find(f => f.id === figure.value)?.public_allowed && !await hooks.confirm({ title: 'Öffentliche Freigabe widerrufen?', message: 'Öffentliche Bibliothekszuordnungen werden entfernt.', ok: 'Widerrufen und speichern' })) return;
-      const reserved = await cloudCall('reserve', { figure: figure.value || null, variant: explicitVariant.checked, videos: videos.map((v, i) => ({ size: v.blob.size, type: v.blob.type, reuse: matches.find(m => m.hash === hashes[i])?.media })) }); job = reserved.job;
+      const reserved = await cloudCall('reserve', { figure: figure.value || null, expected_token: targets.find(f => f.id === figure.value)?.content_token, variant: explicitVariant.checked, videos: videos.map((v, i) => ({ size: v.blob.size, type: v.blob.type, reuse: matches.find(m => m.hash === hashes[i])?.media })) }); job = reserved.job;
       for (let i = 0; i < videos.length; i++) {
         controller.signal.throwIfAborted(); statusBox.textContent = `Video ${i + 1} von ${videos.length} hochladen …`;
         if (!reserved.media[i].reused) {
@@ -589,7 +556,8 @@ async function publishForm() {
       controller.signal.throwIfAborted();
       const poster = await posterPayload(local.poster).catch(() => null);
       const saved = await cloudCall('commit', { job, ...(poster ? { poster } : {}), public_allowed: allowed.checked, title: local.title, description: local.description, tags: local.tags, videos: reserved.media.map((m, i) => ({ id: m.id, name: videos[i].name })) }); job = null;
-      const linked = localIndex.remember(owner, saved.revision, local, reserved.media.map((media, i) => ({ cloud: media.id, local: videos[i].id })));
+      const linked = localIndex.remember(owner, saved.revision, local, reserved.media.map((media, i) => ({ cloud: media.id, local: videos[i].id })), saved.figure);
+      await hooks.localChanged?.();
       if (library.value) await cloudCall('attach', { library: library.value, revision: saved.revision });
       source = null; area = library.value ? 'libraries' : 'figures'; await load(library.value || null);
       if (!linked) report(new Error('Upload erfolgreich. Die lokale Zuordnung konnte nicht dauerhaft gespeichert werden. Bitte freien App-Speicher prüfen.'));

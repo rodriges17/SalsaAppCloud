@@ -36,3 +36,28 @@ test('a second view observes newly persisted upload links without reopening',()=
  const storage=fake(),a=createCloudLocalIndex(storage,'links'),b=createCloudLocalIndex(storage,'links');assert.equal(a.selections('o','r',[figure]).length,0);
  b.remember('o','r',figure,pairs);assert.equal(a.selections('o','r',[figure]).length,1);
 });
+
+test('origin icons distinguish local, cloud and content changes while ignoring learning progress',()=>{
+ const index=createCloudLocalIndex(fake(),'links');
+ const local={...figure,title:'Drehung',description:'Start',tags:['Salsa'],videoContent:[['a','Video',3,null],['b','Zweitvideo',4,null]]};
+ assert.equal(index.status(local),'local');
+ index.remember('owner','revision',local,pairs,'stable-cloud-figure');
+ assert.equal(index.status(local),'cloud');
+ assert.equal(index.link(local).cloudFigure,'stable-cloud-figure');
+ assert.equal(index.status({...local,status:'Sitzt',revision:'changed'}),'cloud');
+ for(const changed of [{title:'Neu'},{description:'Notiz'},{tags:['Bachata']},{videoContent:[['a','Umbenannt',3,null]]}]) assert.equal(index.status({...local,...changed}),'modified');
+ assert.equal(index.find('revision',[{...local,title:'Neu'}]).id,local.id);
+ assert.equal(index.find('revision',[]),undefined);
+ const changed={...local,title:'Neu'};index.remember('owner','revision',changed,pairs,'stable-cloud-figure');
+ assert.equal(index.status(changed),'cloud');
+});
+
+test('moving a local figure preserves cloud origin and the local-modification flag',()=>{
+ const index=createCloudLocalIndex(fake(),'links');
+ index.remember('owner','revision',figure,pairs,'cloud-figure');
+ const target={...figure,id:'moved',storageFolder:'folder',videoIds:['x','y']};
+ index.copy(figure,target);assert.equal(index.status(target),'cloud');assert.equal(index.link(target).cloudFigure,'cloud-figure');
+ const modified={...figure,title:'Local edit'},other={...target,id:'moved-edited',title:'Local edit'};
+ index.copy(modified,other);assert.equal(index.status(other),'modified');
+ assert.equal(index.find('revision',[target]).id,'moved');
+});

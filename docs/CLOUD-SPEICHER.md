@@ -21,3 +21,11 @@ Das Widerrufen öffentlicher Freigaben entfernt nach Bestätigung die öffentlic
 Migrationen in Reihenfolge anwenden, dann die Edge Function `cloud` aktualisieren. Die zweite Migration richtet mit pg_cron/pg_net einen durch ein Vault-Geheimnis geschützten Wartungsaufruf ein. Lokale Postgres-Distributionen ohne diese Erweiterungen überspringen ausschließlich die Zeitplanung. Die Wartung ergänzt fehlende serverseitig verifizierte Video-Hashes in kleinen Stapeln und bereinigt den Bestand. Die Plattformverwaltung bietet zusätzlich „Bestehende Videos auf Duplikate prüfen“.
 
 Sämtliche öffentlich erreichbaren Tabellen bleiben für direkte Clientzugriffe gesperrt. Hash- und Wartungs-RPCs sind ausschließlich für die Serverrolle freigegeben. Medien-URLs erfordern weiterhin eine zugängliche Figurenrevision.
+
+## Besitzerrechte und aktueller Cloudstand (26.10.2026)
+
+Eine Cloudfigur hat genau einen aktuellen Inhalt. Speichern ersetzt diesen Inhalt in allen referenzierenden Bibliotheken; frühere Inhalte werden nicht als Versionen angeboten oder aufbewahrt. Eine technische Änderungskennung verhindert, dass gleichzeitige Uploads einander unbemerkt überschreiben. Alte Versions-IDs bleiben ausschließlich als Herkunftszuordnung lokaler Kopien erhalten.
+
+Nur Besitzer und Plattformadministratoren dürfen eine Cloudfigur bearbeiten oder löschen. Bibliotheksbesitz, Mitgliedschaft und Beitragsrechte verleihen keine Bearbeitungsrechte an fremden Figuren. Zusätzliche Figurenbearbeiter gibt es nicht mehr. Vor dem Löschen werden die betroffenen Bibliotheken angezeigt; ihre Referenzen werden mit entfernt. Lokale Kopien bleiben erhalten.
+
+In „Meine Figuren“ kennzeichnet das Gerätesymbol eine rein lokale Figur, die Wolke eine heruntergeladene oder erfolgreich hochgeladene Figur und die Wolke mit Stift eine danach lokal angepasste Figur. Titel, Beschreibung, Tags und Videos zählen als Inhalt; der persönliche Lernstatus nicht. Nach erfolgreichem Hochladen des aktuellen Inhalts verschwindet der Stift. Die Cloudansicht bietet bei einer zugehörigen lokalen Figur „Lokale Figur öffnen“ an. Die Zuordnung ist keine Zusage, dass der lokale Inhalt dem aktuellen Cloudinhalt entspricht.

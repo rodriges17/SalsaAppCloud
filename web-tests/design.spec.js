@@ -36,7 +36,7 @@ test('Step by Step defaults to Klar, persists Terrakotta and fonts work after of
 
 test.describe('primary navigation and cloud layouts', () => {
   test.use({ serviceWorkers: 'block' });
-  test('two destinations, ordered cloud tabs, version timeline, upload steps and safe player exit', async ({ page }, info) => {
+  test('two destinations, ordered cloud tabs, current figure content, upload steps and safe player exit', async ({ page }, info) => {
     await page.addInitScript(() => localStorage.setItem('salsa-cloud-session:/pwa/:v1', JSON.stringify({ access_token: 'design-test-jwt', refresh_token: 'design-refresh', expires_at: Date.now() + 3600000 })));
     await page.route('**/pwa/cloud-config.js', route => route.fulfill({ contentType: 'application/javascript', body: `export const CLOUD_URL='${host}';export const CLOUD_KEY='test';export const CLOUD_FILE_LIMIT=50000000;` }));
     const revisions = [{ id: 'r2', title: 'Drehung', created_at: '2026-10-20T08:30:00Z', tags: [], videos: [] }, { id: 'r1', title: 'Drehung', created_at: '2026-10-19T02:15:00Z', tags: [], videos: [] }];
@@ -53,7 +53,7 @@ test.describe('primary navigation and cloud layouts', () => {
     for (const theme of ['dark', 'light']) {
       await page.evaluate(theme => window.stepAppearance.set(theme), theme);
       await page.screenshot({ path: info.outputPath(`${theme}-bibliotheken.png`) });
-      await page.getByRole('button', { name: 'Meine Cloud-Figuren', exact: true }).tap(); await page.locator('.cloud-history summary').tap();
+      await page.getByRole('button', { name: 'Meine Cloud-Figuren', exact: true }).tap(); await expect(page.locator('.cloud-history')).toHaveCount(0);
       await page.screenshot({ path: info.outputPath(`${theme}-cloud-figuren.png`) });
       await page.getByRole('button', { name: 'Bibliotheken', exact: true }).tap();
     }
