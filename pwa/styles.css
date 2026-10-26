@@ -263,3 +263,12 @@ button.storage-choice:disabled{opacity:1;cursor:default}
 .cloud-library-download > p, .cloud-library-download li { font-size: 13px; color: var(--muted); line-height: 1.6; }
 .cloud-library-download progress { width: 100%; accent-color: var(--lavender); }
 .cloud-library-download-result { color: var(--text) !important; }
+
+.cloud-library-entries { display: grid; gap: 16px; }
+.cloud-order-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cloud-order-number { display: inline-grid; place-items: center; min-width: 32px; height: 32px; border-radius: 50%; background: var(--lavender); color: var(--bg); font-weight: 700; }
+.cloud-card .cloud-order-handle { touch-action: none; cursor: grab; font-size: 26px; min-width: 46px; }
+.cloud-order-dragging { outline: 2px solid var(--lavender); }
+.cloud-order-status:empty { display: none; }
+.cloud-unsaved-dialog { max-width: min(420px, 90vw); padding: 24px; border: 1px solid var(--border); border-radius: 18px; background: var(--card); color: var(--text); }
+.cloud-unsaved-dialog button { margin: 8px 6px 0 0; }

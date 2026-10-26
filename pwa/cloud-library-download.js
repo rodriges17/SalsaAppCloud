@@ -29,7 +29,8 @@ export async function downloadLibrary(revisions, services, { signal, targetFolde
       if (!figureKeys.has(identity(figure))) figureKeys.set(identity(figure), new Set());
       figureKeys.get(identity(figure)).add(key);
     }), signal);
-    for (const revision of unique) {
+    const importTime = Math.max(Date.now(), ...figures.map(f => Number(f.createdAt) || 0)) + unique.length;
+    for (const [position, revision] of unique.entries()) {
       signal?.throwIfAborted(); emit('check', revision.title);
       try {
         if (revision.videos.some(video => !Number.isSafeInteger(video.size) || video.size <= 0) || revision.videos.reduce((sum, video) => sum + video.size, 0) > 250 * 1024 * 1024) throw new Error('Diese Figur überschreitet 250 MB oder enthält ungültige Dateigrößen. Bitte einzeln übernehmen.');
@@ -74,7 +75,7 @@ export async function downloadLibrary(revisions, services, { signal, targetFolde
           catch (error) { if (signal?.aborted) throw error; }
         }
         signal?.throwIfAborted(); emit('save', revision.title);
-        const figure = target ? { ...target } : { id: crypto.randomUUID(), title: revision.title, description: revision.description ?? '', tags: revision.tags ?? [], status: 'Neu' };
+        const figure = target ? { ...target } : { id: crypto.randomUUID(), title: revision.title, description: revision.description ?? '', tags: revision.tags ?? [], status: 'Neu', createdAt: importTime - position };
         figure.importFingerprint = `cloud:${revision.id}:${revision.videos.map(v => v.id).join(',')}`;
         // Do not race an atomic save with cancellation: finish this figure, then stop.
         const saved = await saveFigure(figure, drafts, target?.revision ?? null, { targetFolder });

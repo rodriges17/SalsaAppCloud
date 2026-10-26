@@ -8,7 +8,7 @@ const POSTER='/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHBwgHBgoICAgLCgoLDhgQDg0NDh0VFh
 test.beforeEach(async ({page}) => {
  await page.route('**/pwa/cloud-config.js', route => route.fulfill({contentType:'application/javascript',body:`export const CLOUD_URL='${host}';export const CLOUD_KEY='test-publishable';export const CLOUD_FILE_LIMIT=50000000;`}));
 });
-const library={id:'lib-1',owner_id:'owner',title:'Cloud Kurs',description:'Geteilte Figuren',visibility:'public',collaborative:false,moderated:true,manage:false,contribute:false};
+const library={edit_version:'00000000-0000-4000-8000-000000000099',id:'lib-1',owner_id:'owner',title:'Cloud Kurs',description:'Geteilte Figuren',visibility:'public',collaborative:false,moderated:true,manage:false,contribute:false};
 async function mock(page,admin=false, own=false, contribute=true, options={}){
  const clip=await readFile('web-tests/fixtures/clip.mp4');
  options.posters ??= new Map();
@@ -31,7 +31,7 @@ async function mock(page,admin=false, own=false, contribute=true, options={}){
    result={revision:'uploaded-revision'};
    if(options.reflectUpload)own=[{id:'figure-upload',public_allowed:payload.public_allowed,revisions:[{id:result.revision,title:payload.title,description:payload.description,tags:payload.tags,created_at:'2026-10-23T00:00:00Z',videos:payload.videos.map(v=>({...v,size:clip.length,type:'video/mp4'}))}]}];
   }
-  if(action==='library_save')result={id:'lib-1'};
+  if(action==='library_save'){ if(options.saveConflict)return route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:'Bibliothek wurde inzwischen geändert. Bitte neu laden.',code:'PT409'})}); result={id:'lib-1'}; if(payload.order && options.entries)options.entries=payload.order.map(id=>options.entries.find(e=>e.figure_id===id)); }
   if(action==='poster_get')result={...(options.posters.get(payload.revision)??(!own&&!options.noPoster?{poster:POSTER,kind:'local'}:{poster:null})),can_write:admin&&!!req.headers().authorization};
   if(action==='poster_put'){result=options.posters.get(payload.revision);if(!result||result.kind==='frame'&&payload.kind==='local'){result={poster:payload.data,kind:payload.kind};options.posters.set(payload.revision,result);}}
   if(action==='media_url')result={url:host+'/storage/v1/object/sign/salsa-cloud/video-1?token=fake'};
@@ -579,4 +579,32 @@ test('guest cannot publish local figures or manage public libraries', async ({pa
  await expect(page.getByRole('button',{name:'Bibliothek löschen',exact:true})).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Aus Bibliothek entfernen',exact:true})).toHaveCount(0);
  expect(calls.some(c=>['reserve','commit','upload','library_save'].includes(c.action))).toBe(false);
+});
+
+
+const orderedEntries = () => ['Erste', 'Zweite', 'Dritte'].map((title,index)=>({figure_id:`figure-${index}`,owner_id:'owner',published:{id:`rev-${index}`,title,description:'',tags:[],videos:[]},pending:null}));
+test('library order: guests see ascending contiguous numbers without editing controls',async({page})=>{
+ await mock(page,false,false,false,{entries:orderedEntries()});await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Öffnen',exact:true}).tap();
+ await expect(page.locator('.cloud-order-number')).toHaveText(['1','2','3']);
+ await expect(page.getByRole('button',{name:'Nach oben',exact:true})).toHaveCount(0);
+});
+test('library order: draft, save and leave choices; bulk download requires saved order',async({page})=>{
+ const entries=orderedEntries();entries.forEach(e=>e.published.videos=[{id:'video',size:3,type:'video/mp4'}]);
+ const calls=await mock(page,true,false,false,{manage:true,entries});await signIn(page);await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Öffnen',exact:true}).tap();
+ await page.locator('[data-library-figure="figure-2"]').getByRole('button',{name:'Nach oben',exact:true}).tap();
+ expect(await page.locator('[data-library-figure]').evaluateAll(nodes=>nodes.map(n=>n.dataset.libraryFigure))).toEqual(['figure-0','figure-2','figure-1']);
+ await expect(page.locator('.cloud-order-number')).toHaveText(['1','2','3']);expect(calls.some(c=>c.action==='library_save')).toBe(false);
+ await page.getByRole('button',{name:'Alle Figuren lokal verfügbar machen',exact:true}).tap();await expect(page.locator('#cloudError')).toContainText('zuerst die Bibliothek speichern');
+ await page.locator('#cloudBack').tap();await expect(page.locator('.cloud-unsaved-dialog')).toBeVisible();
+ await page.getByRole('button',{name:'Weiter bearbeiten',exact:true}).tap();await expect(page.locator('#cloudDialog')).toBeVisible();
+ await page.locator('#cloudBack').tap();await page.locator('.cloud-unsaved-dialog').getByRole('button',{name:'Speichern',exact:true}).tap();
+ await expect(page.locator('#cloudDialog')).not.toBeVisible();
+ expect(calls.find(c=>c.action==='library_save').payload).toMatchObject({order:['figure-0','figure-2','figure-1'],expected_version:library.edit_version});
+});
+test('library order: conflicting save retains draft and offers reload',async({page})=>{
+ const calls=await mock(page,true,false,false,{manage:true,entries:orderedEntries(),saveConflict:true});await signIn(page);await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Öffnen',exact:true}).tap();
+ await page.locator('[data-library-figure="figure-2"]').getByRole('button',{name:'Nach oben',exact:true}).tap();await page.getByRole('button',{name:'Bibliothek speichern',exact:true}).tap();
+ await expect(page.locator('#cloudError')).toContainText('inzwischen geändert');await expect(page.getByRole('button',{name:'Aktuellen Stand neu laden',exact:true})).toBeVisible();
+ expect(calls.filter(c=>c.action==='library_save')).toHaveLength(1);
+ await page.locator('#cloudBack').tap();await page.getByRole('button',{name:'Verwerfen',exact:true}).tap();await expect(page.locator('#cloudDialog')).not.toBeVisible();
 });

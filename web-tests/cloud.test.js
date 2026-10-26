@@ -237,3 +237,26 @@ test('server rejects accidental duplicate figures while permitting an explicit i
  const done=await api(B,'commit',{job:explicit.job,title:'Eigene Variante',tags:[],videos:[{id:explicit.media[0].id,name:'Video'}]});
  assert.notEqual(done.figure,first.figure);
 });
+
+test('library order: append, shared order, atomic save, conflict and authorization',async()=>{
+ const lib=(await api(B,'library_save',{title:'Ordered',visibility:'public',collaborative:false,moderated:false})).id;
+ const first=await uploaded(B,undefined,true),second=await uploaded(B,undefined,true),third=await uploaded(B,undefined,true);
+ for(const figure of [first,second,third]) await api(B,'attach',{library:lib,revision:figure.revision});
+ let detail=await api(B,'library',{id:lib});
+ assert.deepEqual(detail.entries.map(e=>e.figure_id),[first.figure,second.figure,third.figure]);
+ const payload={id:lib,title:'Saved order',description:'',visibility:'public',collaborative:false,moderated:false,expected_version:detail.library.edit_version,order:[third.figure,first.figure,second.figure]};
+ await assert.rejects(api(C,'library_save',payload),/Berechtigung/);
+ await assert.rejects(api(null,'library_save',payload),/Berechtigung/);
+ await api(B,'library_save',payload);
+ assert.deepEqual((await api(null,'library',{id:lib})).entries.map(e=>e.figure_id),payload.order);
+ await assert.rejects(api(A,'library_save',{...payload,title:'Stale'}),/inzwischen geändert/);
+ detail=await api(B,'library',{id:lib});assert.equal(detail.library.title,'Saved order');
+ await assert.rejects(api(B,'library_save',{...payload,expected_version:detail.library.edit_version,order:[first.figure,first.figure,third.figure]}),/geändert/);
+ const next=await uploaded(B,undefined,true);await api(B,'attach',{library:lib,revision:next.revision});
+ await assert.rejects(api(B,'library_save',{...payload,expected_version:detail.library.edit_version}),/inzwischen geändert/);
+ assert.deepEqual((await api(null,'library',{id:lib})).entries.map(e=>e.figure_id),[...payload.order,next.figure]);
+ await api(B,'attach',{library:lib,revision:first.revision});
+ assert.deepEqual((await api(null,'library',{id:lib})).entries.map(e=>e.figure_id),[...payload.order,next.figure]);
+ await api(B,'public_permission',{figure:second.figure,allowed:false});
+ assert.deepEqual((await api(null,'library',{id:lib})).entries.map(e=>e.figure_id),[third.figure,first.figure,next.figure]);
+});

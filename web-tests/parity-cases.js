@@ -1,7 +1,7 @@
 import { runNavigationHoverCase } from './navigation-hover-case.js';
 import { runStorageSettingsCase } from './storage-settings-case.js';
 // The same behavior contract runs against the PWA and the bundled Android UI.
-export const PARITY_CASES = ['navigation-return-hover', 'storage-settings-status', 'library-share-links', 'zip-save-feedback', 'menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change', 'cloud-cache-frame-reuse', 'cloud-guest-public-first', 'cloud-library-download', 'cloud-guest-no-publish', 'cloud-single-direct-download'];
+export const PARITY_CASES = ['navigation-return-hover', 'storage-settings-status', 'library-share-links', 'zip-save-feedback', 'menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change', 'cloud-cache-frame-reuse', 'cloud-guest-public-first', 'cloud-library-download', 'cloud-guest-no-publish', 'cloud-single-direct-download', 'cloud-library-order'];
 export async function runParityCase(page, { root, fixture, native = false, scenario, consoleErrors = [], browserName = 'chromium' }) {
  const assert = (value, message) => { if (!value) throw new Error(message); };
  const frame = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -16,6 +16,32 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   },{root,fixture,count,fingerprint});
   await page.waitForFunction(count=>document.querySelectorAll('.figure-card').length===count,count);
  };
+ if(scenario==='cloud-library-order'){
+  const scope=new URL(root,page.url()).pathname;
+  await page.evaluate(scope=>localStorage.setItem(`salsa-cloud-session:${scope}:v1`,JSON.stringify({access_token:'test-order-token',refresh_token:'unused',expires_at:Date.now()+3600000})),scope);
+  const library={id:'order-library',owner_id:'order-owner',title:'Reihenfolge üben',description:'',visibility:'public',collaborative:false,moderated:false,edit_version:'00000000-0000-4000-8000-000000000001'};
+  let entries=['Erste','Zweite','Dritte'].map((title,index)=>({figure_id:'order-'+index,owner_id:'order-owner',published:{id:'revision-'+index,title,description:'',tags:[],videos:[]}})),saved;
+  await page.route('**/functions/v1/cloud',async route=>{
+   const {action,payload}=route.request().postDataJSON();let result={ok:true};
+   if(action==='state')result={me:{id:'order-owner',email:'owner@example.test',upload_enabled:false,used:0,quota:0},libraries:[{...library,manage:true}],own_figures:[]};
+   if(action==='library')result={library,manage:true,contribute:false,members:[],entries};
+   if(action==='library_save'){saved=payload;entries=payload.order.map(id=>entries.find(e=>e.figure_id===id));result={id:library.id};}
+   await route.fulfill({contentType:'application/json',body:JSON.stringify(result)});
+  });
+  await page.locator('#cloudButton').click();await page.getByRole('button',{name:'Öffnen',exact:true}).click();
+  assert((await page.locator('.cloud-order-number').allTextContents()).join(',')==='1,2,3','Numbering is not ascending');
+  const last=page.locator('[data-library-figure="order-2"]');
+  await last.getByRole('button',{name:'Nach oben',exact:true}).click();
+  assert(!saved,'Reorder must remain a draft');
+  assert((await page.locator('[data-library-figure]').evaluateAll(nodes=>nodes.map(n=>n.dataset.libraryFigure))).join(',')==='order-0,order-2,order-1','Arrow reorder failed');
+  // Pointer drag works on the same handle as touch input, without loading media.
+  const handle=page.getByRole('button',{name:'Dritte verschieben',exact:true});await handle.scrollIntoViewIfNeeded();
+  await handle.focus();await page.keyboard.press('ArrowUp');
+  assert((await page.locator('[data-library-figure]').evaluateAll(nodes=>nodes.map(n=>n.dataset.libraryFigure))).join(',')==='order-2,order-0,order-1','Keyboard reorder failed');
+  await page.getByRole('button',{name:'Bibliothek speichern',exact:true}).click();await page.waitForFunction(()=>!document.getElementById('cloudBody').inert);
+  assert(saved?.order.join(',')==='order-2,order-0,order-1'&&saved.expected_version===library.edit_version,'Saved order or conflict version missing');
+  await page.locator('#cloudBack').click();
+ }
  if(scenario==='navigation-return-hover') await runNavigationHoverCase(page,{root,native});
  if(scenario==='storage-settings-status') await runStorageSettingsCase(page, { root, native, browserName });
  if(scenario==='library-share-links'){

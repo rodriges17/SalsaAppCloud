@@ -1,4 +1,4 @@
-const APP_VERSION = '2026-10-25-direct-import-v1';
+const APP_VERSION = '2026-10-26-library-order-v1';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';

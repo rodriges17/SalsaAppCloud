@@ -89,3 +89,13 @@ test('single import never saves corrupted downloads or cancelled metadata reads'
  const pending=downloadFigure(f.rev('one',['a']),{...f.services,readCloudMedia:async()=>{controller.abort();return {content_hash:f.hashes.a};}},{signal:controller.signal});
  await assert.rejects(pending);assert.equal(f.saves.length,0);assert.deepEqual(f.network,[]);
 });
+
+test('bulk import chronology preserves library order above older copies, leaves existing dates intact',async()=>{
+ const f=await fixture(),old=f.add({createdAt:Date.now()+5000},['b']);
+ const result=await downloadLibrary([f.rev('first',['a']),f.rev('existing',['b']),f.rev('last',['c'])],f.services);
+ assert.equal(result.saved,2);assert.equal(result.skipped,1);
+ const sorted=[...f.figures].sort((a,b)=>b.createdAt-a.createdAt);
+ assert.deepEqual(sorted.map(f=>f.title),['Cloud first','Cloud last','Local']);
+ assert.equal(f.figures.find(x=>x.id===old.id).createdAt,old.createdAt);
+ assert.equal(f.figures.find(x=>x.id===old.id).status,'Sitzt');
+});
