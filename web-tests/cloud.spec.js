@@ -669,7 +669,7 @@ test('available cloud figures share a top-right label, keep expansion without ar
  await page.evaluate(async()=>{const s=await import('/pwa/storage.js'),blob=await(await fetch('/web-tests/fixtures/clip.mp4')).blob();await s.saveFigure({id:'available-pair',title:'Meine lokale Figur',description:'Lokal',tags:['Salsa'],status:'Sitzt',importFingerprint:'cloud:rev-1:video-1,video-2'},['one','two'].map(id=>({id,name:id,blob,confirmed:true,duration:6,width:320,height:180})));});
  await page.locator('#cloudButton').tap();const own=page.locator('.cloud-own-figure').first();
  await expect(own.locator('.cloud-own-availability')).toHaveText('Lokal verfügbar');await expect(own.locator('.cloud-library-chevron')).toHaveCount(0);
- await expandOwnFigure(page);await expect(own.getByRole('checkbox')).toHaveCount(0);await expect(own.getByRole('heading',{name:'Videos zum Herunterladen auswählen',exact:true})).toBeHidden();
+ await expandOwnFigure(page);await expect(own.getByRole('checkbox')).toHaveCount(0);await expect(own.locator('.cloud-local-status')).toBeHidden();await expect(own.getByRole('heading',{name:'Videos zum Herunterladen auswählen',exact:true})).toBeHidden();
  await expect(own.getByRole('button',{name:'Video: Führung',exact:true})).toBeVisible();await expect(own.getByRole('button',{name:'Video: Folgen',exact:true})).toBeVisible();await expect(own.getByRole('button',{name:'Lokale Figur öffnen',exact:true})).toBeVisible();
  await page.screenshot({path:info.outputPath('available-own-cloud-no-download-checkboxes.png')});
  await page.getByRole('button',{name:'Bibliotheken',exact:true}).tap();await page.getByRole('button',{name:'Öffnen',exact:true}).tap();

@@ -545,7 +545,7 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
     const localFigure = localIndex.find(rev.id, localFigures);
     const known = localFigures.find(f => localIndex.link(f)?.revision === rev.id || f.importFingerprint?.startsWith(`cloud:${rev.id}:`));
     const accessRequired = !!known?.folderAccessRequired;
-    localStatus.hidden = !localFigure && !known;
+    localStatus.hidden = !!localFigure || !known;
     localStatus.dataset.accessRequired = String(accessRequired);
     const modified = localFigure && localIndex.status(localFigure) === 'modified';
     cloudStatusLabel(localStatus, localFigure ? 'Lokal verfügbar'
