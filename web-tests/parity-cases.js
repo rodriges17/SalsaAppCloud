@@ -228,6 +228,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   const availability=page.locator('.cloud-own-availability');
   await page.waitForFunction(()=>document.querySelector('.cloud-own-availability')?.textContent==='Teilweise lokal verfügbar');
   await page.locator('.cloud-own-figure summary').click();
+  await page.getByRole('checkbox').first().waitFor();
   assert(await page.getByRole('checkbox').count()===2,'Partial copies hide missing-video selection');
   await page.evaluate(async({root,fixture})=>{
    const storage=await import(root+'storage.js'),{cloudLocalIndex:index}=await import(root+'cloud-local.js');
