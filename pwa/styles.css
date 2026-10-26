@@ -388,3 +388,6 @@ button.storage-choice:disabled{opacity:1;cursor:default}
 .cloud-own-name h3,.cloud-library-summary h3{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cloud-own-summary>.cloud-library-picture{margin-top:0}.cloud-own-name small{font-size:10px}
 @media(max-width:420px){.figure-card{grid-template-columns:72px minmax(0,1fr) 20px;gap:7px;padding:9px}.card-thumbnail-button,.card-thumbnail-button .card-thumb{width:72px;height:72px}.card-details{min-height:72px;gap:2px}.card-details .card-copy{gap:2px}.card-details .card-title{font-size:13px}.card-details .card-status{font-size:9px;padding:2px 6px}.card-learning-line{gap:5px}.card-details .card-tags{font-size:9px}.card-details .card-storage-status{font-size:9px}.figure-card>.card-options{width:20px}.cloud-own-availability,.cloud-library-availability{font-size:10px;gap:4px}.cloud-own-availability .cloud-status-icon,.cloud-library-availability .cloud-status-icon{width:16px;flex-basis:16px}.cloud-own-availability svg,.cloud-library-availability svg{width:16px;height:16px}}
+
+/* Preserve the existing short-window layout while centering the title. */
+@media(max-height:540px){.page-intro{padding-block:4px}}
