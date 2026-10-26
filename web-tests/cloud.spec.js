@@ -647,7 +647,7 @@ for(const authenticated of [false,true])test(`library back stays in cloud catalo
 test('guest header login opens a dialog, cancels without leaving the library, and signs in in place',async({page},info)=>{
  await mock(page,true);await page.route(`${host}/auth/v1/token?grant_type=password`,r=>r.fulfill({contentType:'application/json',body:JSON.stringify({access_token:'test-user-jwt',refresh_token:'test-refresh',expires_in:3600})}));
  await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Öffnen',exact:true}).tap();
- await expect(page.locator('#cloudBody input')).toHaveCount(0);const trigger=page.getByRole('button',{name:'Anmeldedialog öffnen',exact:true});await trigger.tap();
+ await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();await expect(page.locator('#cloudBody input[type=password],#cloudBody input[type=email]')).toHaveCount(0);const trigger=page.getByRole('button',{name:'Anmeldedialog öffnen',exact:true});await trigger.tap();
  await expect(page.getByRole('dialog',{name:'Anmelden',exact:true})).toBeVisible();await page.keyboard.press('Escape');await expect(trigger).toBeFocused();await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();
  await trigger.tap();await page.getByRole('tab',{name:'Admin-Anmeldung',exact:true}).tap();
  await page.getByLabel('Admin-E-Mail-Adresse',{exact:true}).fill('admin@example.test');await page.getByLabel('Admin-Passwort',{exact:true}).fill('demo-admin-password');
