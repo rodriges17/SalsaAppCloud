@@ -89,7 +89,7 @@ function renderOverview() {
     if (figure.tags.length) copy.append(el('span', 'card-tags', figure.tags.join(' · ')));
     main.append(copy);
     const thumbnailButton = button('', () => openPlayer(figure), 'card-thumbnail-button');
-    thumbnailButton.setAttribute('aria-label', `Vorschaubild: ${figure.title} lernen`); thumbnailButton.append(thumb);
+    thumbnailButton.setAttribute('aria-label', `Vorschaubild von ${figure.title} abspielen`); thumbnailButton.append(thumb);
     thumbnailButton.addEventListener('contextmenu', event => { event.preventDefault(); closeMenus(); showMenu(); });
     const statusBar = el('div', 'card-storage-status');
     const cloudStatus = cloudLocalIndex.status(figure);
