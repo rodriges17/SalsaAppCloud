@@ -363,13 +363,16 @@ test('local content changes show cloud with a pencil while learning status does 
  await page.locator('#cloudButton').tap();await expandOwnFigure(page);await expect(page.locator('.cloud-local-status').first()).toHaveText('Lokal verfügbar');await expect(page.locator('.cloud-local-status').first()).toHaveAttribute('data-modified','true');
 });
 
-for(const folder of [false,true])test(`uploaded ${folder?'folder':'app'} original is marked local across reload without importing it back`,async({page,browserName})=>{
+for(const folder of [false,true])test(`uploaded ${folder?'folder':'app'} original is marked local when reopened without importing it back`,async({page,browserName})=>{
  test.skip(folder&&browserName!=='chromium','Native folders exercised in Chromium.');
  await signIn(page);const calls=await mock(page,true,false,true,{reflectUpload:true,noLibraries:true,posters:new Map([['uploaded-revision',{poster:POSTER,kind:'local'}]])});await localUpload(page,folder);
  await page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true}).tap();
  await expandOwnFigure(page);await expect(page.getByRole('button',{name:'Lokale Figur öffnen',exact:true})).toBeEnabled();
  await expandOwnFigure(page);await expect(page.locator('.cloud-local-status').first()).toHaveText('Lokal verfügbar');
- await page.reload();await page.locator('#cloudButton').tap();
+ // With service workers blocked, WebKit's media cache is page-scoped.
+ // Real reload persistence is exercised below with the installed PWA.
+ if(browserName==='webkit')await page.locator('#cloudBack').tap();else await page.reload();
+ await page.locator('#cloudButton').tap();
  await expandOwnFigure(page);await expect(page.getByRole('button',{name:'Lokale Figur öffnen',exact:true})).toBeEnabled();
  expect(await localCloudFigures(page)).toHaveLength(1);expect(calls.filter(c=>c.action==='media_url')).toHaveLength(0);
  if(folder){
@@ -518,6 +521,25 @@ for (const authenticated of [false, true]) test(`content matching detects indepe
 
 test.describe('installed PWA hash persistence',()=>{
  test.use({serviceWorkers:'allow'});
+ test('uploaded origin and complete readable availability survive an installed PWA reload',async({page})=>{
+  await start(page);await expect(page.locator('html')).toHaveAttribute('data-offline-status','ready',{timeout:30000});
+  await page.evaluate(async()=>{await navigator.serviceWorker.ready;if(!navigator.serviceWorker.controller)await new Promise(resolve=>navigator.serviceWorker.addEventListener('controllerchange',resolve,{once:true}));});
+  const before=await seedCloudLocal(page,{title:'Mein hochgeladenes Original'});
+  const original=await page.evaluate(async()=>{
+   const storage=await import('/pwa/storage.js'),{cloudLocalIndex:index}=await import('/pwa/cloud-local.js');
+   const figure=(await storage.listFigures())[0],records=await storage.figureVideos(figure);
+   index.remember('owner','saved-revision',figure,[{cloud:'saved-video',local:figure.videoIds[0]}],'saved-figure');
+   return Array.from(new Uint8Array(await records[0].blob.arrayBuffer()));
+  });
+  await page.reload();await expect(page.locator('#cloudButton')).toBeVisible();
+  const result=await page.evaluate(async()=>{
+   const storage=await import('/pwa/storage.js'),{cloudLocalIndex:index}=await import('/pwa/cloud-local.js'),figures=await storage.listFigures();
+   const resolved=index.resolve({id:'saved-revision',figure_id:'saved-figure',videos:[{id:'saved-video'}]},figures);
+   const media=resolved.current?await storage.figureVideos(resolved.current):[];
+   return {kind:resolved.kind,modified:resolved.modified,id:resolved.current?.id,origin:index.status(figures[0]),bytes:media.length?Array.from(new Uint8Array(await media[0].blob.arrayBuffer())):[]};
+  });
+  expect(result).toEqual({kind:'available',modified:false,id:before.id,origin:'cloud',bytes:original});
+ });
  test('local hash cache avoids rereading video bytes across scans and page reloads',async({page})=>{
  await start(page);
  await expect(page.locator('html')).toHaveAttribute('data-offline-status','ready',{timeout:30000});
