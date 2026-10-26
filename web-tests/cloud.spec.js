@@ -376,7 +376,7 @@ for(const folder of [false,true])test(`uploaded ${folder?'folder':'app'} origina
   await page.locator('#cloudBack').tap();
   await page.evaluate(()=>{FileSystemDirectoryHandle.prototype.queryPermission=async()=> 'prompt';FileSystemDirectoryHandle.prototype.requestPermission=async()=> 'denied';});
   await page.locator('#cloudButton').tap();
-  await expandOwnFigure(page);await expect(page.locator('.cloud-local-status').first()).toHaveText('Lokal zugeordnet · Ordnerzugriff erforderlich');
+  await expandOwnFigure(page);await expect(page.locator('.cloud-local-status').first()).toHaveText('Ordnerzugriff nötig');
   await expect(page.getByRole('button',{name:'Lokal übernehmen',exact:true})).toBeDisabled();
  }
 

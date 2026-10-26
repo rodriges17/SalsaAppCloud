@@ -46,8 +46,8 @@ test('origin icons distinguish local, cloud and content changes while ignoring l
  assert.equal(index.link(local).cloudFigure,'stable-cloud-figure');
  assert.equal(index.status({...local,status:'Sitzt',revision:'changed'}),'cloud');
  for(const changed of [{title:'Neu'},{description:'Notiz'},{tags:['Bachata']},{videoContent:[['a','Umbenannt',3,null]]}]) assert.equal(index.status({...local,...changed}),'modified');
- assert.equal(index.find('revision',[{...local,title:'Neu'}]).id,local.id);
- assert.equal(index.find('revision',[]),undefined);
+ assert.equal(index.resolve({id:'revision',videos:[{id:'cloud-a'},{id:'cloud-b'}]},[{...local,title:'Neu'}]).current.id,local.id);
+ assert.equal(index.resolve({id:'revision',videos:[]},[]).current,null);
  const changed={...local,title:'Neu'};index.remember('owner','revision',changed,pairs,'stable-cloud-figure');
  assert.equal(index.status(changed),'cloud');
 });
@@ -59,5 +59,63 @@ test('moving a local figure preserves cloud origin and the local-modification fl
  index.copy(figure,target);assert.equal(index.status(target),'cloud');assert.equal(index.link(target).cloudFigure,'cloud-figure');
  const modified={...figure,title:'Local edit'},other={...target,id:'moved-edited',title:'Local edit'};
  index.copy(modified,other);assert.equal(index.status(other),'modified');
- assert.equal(index.find('revision',[target]).id,'moved');
+ assert.equal(index.resolve({id:'revision',videos:[{id:'cloud-a'},{id:'cloud-b'}]},[target]).current.id,'moved');
+});
+
+const cloudRevision = { id:'rev',figure_id:'cloud-figure',videos:[{id:'cloud-a'},{id:'cloud-b'}] };
+test('resolved availability requires all cloud videos in one readable copy',()=>{
+ const index=createCloudLocalIndex(fake(),'links');
+ const a={...figure,videoIds:['a']},b={...figure,id:'second',videoIds:['b']};
+ index.remember('o','rev',a,[pairs[0]],'cloud-figure');index.remember('o','rev',b,[pairs[1]],'cloud-figure');
+ assert.equal(index.resolve(cloudRevision,[a,b]).kind,'partial');
+ assert.equal(index.resolve(cloudRevision,[a,b]).available,false);
+ const full={...figure,id:'complete'};index.remember('o','rev',full,pairs,'cloud-figure');
+ assert.equal(index.resolve(cloudRevision,[a,full,b]).current,full);
+});
+test('resolver distinguishes access, missing files and no known local copy',()=>{
+ const index=createCloudLocalIndex(fake(),'links');index.remember('o','rev',figure,pairs);
+ assert.equal(index.resolve(cloudRevision,[]).kind,'cloud');
+ assert.equal(index.resolve(cloudRevision,[{...figure,storageProblem:'missing'}]).kind,'missing');
+ assert.equal(index.resolve(cloudRevision,[{...figure,storageProblem:'permission',folderAccessRequired:true}]).kind,'access-required');
+ assert.equal(index.resolve(cloudRevision,[figure]).kind,'available');
+ assert.equal(index.resolve(cloudRevision,[{...figure,videoIds:[]}]).available,false);
+});
+test('an accessible complete copy wins over blocked or incomplete duplicates',()=>{
+ const index=createCloudLocalIndex(fake(),'links'),complete={...figure,id:'readable'},blocked={...figure,folderAccessRequired:true};
+ index.remember('o','rev',figure,pairs);index.remember('o','rev',complete,pairs);
+ const resolved=index.resolve(cloudRevision,[blocked,complete]);assert.equal(resolved.current,complete);assert.equal(resolved.kind,'available');
+});
+test('old versions remain openable without counting as the current cloud version',()=>{
+ const index=createCloudLocalIndex(fake(),'links');index.remember('o','old',figure,pairs,'cloud-figure');
+ const result=index.resolve(cloudRevision,[figure]);assert.equal(result.kind,'outdated');assert.equal(result.figure,figure);assert.equal(result.current,null);assert.equal(result.available,false);
+ assert.equal(index.link(figure).revision,'old','status inspection must not rewrite an old version');
+ assert.equal(index.resolve({...cloudRevision,figure_id:'unrelated'},[figure]).kind,'cloud');
+ assert.equal(index.resolve({...cloudRevision,figure_id:undefined},[figure],{revisionIds:['old']}).kind,'outdated');
+});
+test('legacy aliases are reconciled but local modifications and readable copies survive',()=>{
+ const index=createCloudLocalIndex(fake(),'links');index.remember('o','legacy',figure,pairs,'cloud-figure');
+ const edited={...figure,title:'Locally edited'};
+ const result=index.resolve({...cloudRevision,legacy_ids:['legacy']},[edited]);
+ assert.equal(result.kind,'available');assert.equal(result.modified,true);assert.match(result.detail,/lokal angepasst/);
+ assert.equal(index.link(edited).revision,'rev');
+});
+test('origin and availability stay independent for metadata, learning and intentional video edits',()=>{
+ const index=createCloudLocalIndex(fake(),'links');index.remember('o','rev',figure,pairs);
+ assert.equal(index.resolve(cloudRevision,[{...figure,status:'Sitzt'}]).modified,false);
+ const edited={...figure,title:'New name',videoIds:['replacement']};
+ const state=index.resolve(cloudRevision,[edited]);assert.equal(state.kind,'available');assert.equal(state.modified,true);
+ assert.equal(index.resolve(cloudRevision,[{...edited,storageProblem:'missing'}]).kind,'missing');
+});
+test('fingerprint-only imports and current inventory changes use the same decision',()=>{
+ const index=createCloudLocalIndex(fake(),'links'),copy={...figure,importFingerprint:'cloud:rev:cloud-a,cloud-b'};
+ assert.equal(index.resolve(cloudRevision,[copy]).kind,'available');
+ assert.equal(index.resolve(cloudRevision,[]).kind,'cloud');
+ assert.equal(index.resolve(cloudRevision,[{...copy,folderAccessRequired:true}]).kind,'access-required');
+ assert.equal(index.resolve(cloudRevision,[copy]).kind,'available');
+});
+test('renamed uploaded originals participate in explicit replacement choices',()=>{
+ const index=createCloudLocalIndex(fake(),'links');index.remember('o','old',figure,pairs,'cloud-figure');
+ assert.deepEqual(index.importCandidates({title:'different',revisionIds:['rev'],figureId:'cloud-figure'},[figure]),[figure]);
+ assert.deepEqual(index.importCandidates({title:'different',revisionIds:['old']},[figure]),[figure]);
+ assert.deepEqual(index.importCandidates({title:'different',revisionIds:['rev'],figureId:'other'},[figure]),[]);
 });

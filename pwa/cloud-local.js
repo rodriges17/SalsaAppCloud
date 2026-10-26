@@ -55,9 +55,52 @@ export function createCloudLocalIndex(storage, key) {
         }
       }
     },
-    find(revision, figures) {
-      const links = read().filter(v => v.revision === revision);
-      return figures.find(f => !f.storageProblem && !f.folderAccessRequired && (links.some(v => v.figure === f.id && v.folder === (f.storageFolder || null)) || f.importFingerprint?.startsWith(`cloud:${revision}:`)));
+    // Resolve one readable copy, never the union of several partial copies.
+    // Provenance describes intentional edits; storageProblem describes unreadable files.
+    resolve(revision, figures, { figureId = revision?.figure_id, revisionIds = [] } = {}) {
+      if (!revision) return { kind: 'cloud', label: 'Nur in der Cloud', available: false, modified: false, figure: null, current: null };
+      this.reconcile(revision, figures);
+      const currentIds = new Set([revision.id, ...(revision.legacy_ids ?? [])]);
+      const history = new Set([...currentIds, ...revisionIds]);
+      const required = revision.videos ?? [];
+      const candidates = [];
+      for (const figure of figures) {
+        const origin = this.link(figure);
+        const imported = figure.importFingerprint?.split(':');
+        const fallback = imported?.[0] === 'cloud' ? { revision: imported[1], pairs: (imported[2] ?? '').split(',').filter(Boolean).map((cloud, i) => ({ cloud, local: figure.videoIds[i] })) } : null;
+        const link = origin ?? fallback;
+        if (!link || !(history.has(link.revision) || figureId && link.cloudFigure === figureId)) continue;
+        const modified = this.status(figure) === 'modified';
+        const ids = new Set(figure.videoIds);
+        const covered = new Set(link.pairs.filter(pair => ids.has(pair.local) || modified).map(pair => pair.cloud));
+        const isCurrent = currentIds.has(link.revision);
+        const readable = !figure.storageProblem && !figure.folderAccessRequired && ids.size > 0;
+        const complete = isCurrent && required.length > 0 && required.every(video => covered.has(video.id));
+        candidates.push({ figure, modified, isCurrent, readable, complete, covered });
+      }
+      const complete = candidates.find(c => c.readable && c.complete);
+      const older = candidates.find(c => c.readable && !c.isCurrent);
+      const partial = candidates.find(c => c.readable && c.isCurrent && c.covered.size);
+      const blocked = candidates.find(c => c.figure.folderAccessRequired);
+      const chosen = complete ?? older ?? partial ?? blocked ?? candidates[0];
+      const kind = complete ? 'available' : older ? 'outdated' : partial ? 'partial' : blocked ? 'access-required' : chosen ? 'missing' : 'cloud';
+      const labels = { available: 'Lokal verfügbar', outdated: 'Neuere Cloud-Version verfügbar', partial: 'Teilweise lokal verfügbar', 'access-required': 'Ordnerzugriff nötig', missing: 'Lokale Dateien fehlen', cloud: 'Nur in der Cloud' };
+      const label = labels[kind];
+      return { kind, label, available: !!complete, modified: !!chosen?.modified,
+        figure: chosen?.readable ? chosen.figure : null, current: complete?.figure ?? null,
+        detail: label + (chosen?.modified ? ' · lokal angepasst' : ''),
+        copies: candidates.map(c => c.figure) };
+    },
+    // Conflict choices use the same origin knowledge, including uploaded originals
+    // without an importFingerprint and copies whose title was changed locally.
+    importCandidates({ title, fingerprint, revisionIds = [], figureId }, figures) {
+      const normalize = value => (value ?? '').trim().normalize('NFC').toLocaleLowerCase('de');
+      return figures.filter(figure => {
+        const link = this.link(figure);
+        return !!fingerprint && figure.importFingerprint === fingerprint || normalize(figure.title) === normalize(title)
+          || revisionIds.some(id => link?.revision === id || figure.importFingerprint?.startsWith(`cloud:${id}:`))
+          || !!figureId && link?.cloudFigure === figureId;
+      });
     },
     availability(owner, revision, figures) {
       const available = [], accessRequired = [];
