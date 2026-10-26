@@ -336,3 +336,35 @@ button.storage-choice:disabled{opacity:1;cursor:default}
 .cloud-own-panel p,.cloud-own-panel h4{flex-basis:100%;font-size:12px;line-height:1.6;margin:0}.cloud-own-panel button{font-size:12px;min-height:44px}
 .cloud-own-panel>button:last-child:not(.primary){max-width:100%}
 @media(max-width:540px){.cloud-own-summary{gap:9px;padding:12px 10px}.cloud-own-name h3{font-size:13px}.cloud-own-name small{font-size:10px}.cloud-own-availability{font-size:10px;max-width:90px}.cloud-own-content{padding:0 10px 14px}}
+
+/* Confirmed compact status: all metadata stays beside the thumbnail. */
+.figure-card{display:grid;grid-template-columns:82px minmax(0,1fr) 28px;gap:12px;padding:12px;align-items:center}
+.card-thumbnail-button{display:block;padding:0;border:0;background:transparent;min-width:0;width:82px;height:104px;border-radius:9px}
+.card-thumbnail-button .card-thumb{display:block;width:82px;height:104px;margin:0;object-fit:cover}
+.card-details{min-width:0;min-height:104px;display:grid;gap:5px;align-content:space-between}
+.card-details .card-main{display:block;padding:0;border:0;min-height:0;width:100%;background:transparent;text-align:left}
+.card-details .card-copy{display:grid;gap:5px;min-width:0;padding:0}
+.card-details .card-title{font-size:16px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-details .card-status{font-size:11px;justify-self:start;padding:3px 8px}
+.card-details .card-tags{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-details .card-storage-status{flex-basis:auto;border:0;gap:4px;font-size:10px;min-width:0;width:100%;align-items:center;line-height:1}
+.card-details .card-storage-status .card-provenance{flex:0 0 24px;width:24px;min-height:28px;height:28px;padding:0}
+.card-details .card-provenance svg{display:block;width:18px;height:18px}
+.card-details .card-folder-icon{flex:0 0 12px;width:12px;height:18px;display:grid;place-items:center}
+.card-details .card-folder-icon svg{width:12px;height:12px;display:block}
+.card-details .card-meta{font-size:10px;flex-shrink:0}
+.figure-card>.card-options{position:static;align-self:start;min-width:0;width:28px;padding:2px;border:0}
+.figure-card>.card-storage-warning,.figure-card>.folder-access-action,.figure-card>.card-storage-notice{grid-column:1/-1}
+.cloud-status-icon{display:inline-flex;align-items:center;justify-content:center;flex:0 0 18px;width:18px;height:20px}
+.cloud-status-icon svg{display:block;width:18px;height:18px}
+.cloud-own-availability,.cloud-library-availability,.cloud-local-status{display:flex;align-items:center;gap:5px}
+.cloud-own-availability{max-width:125px}.cloud-own-availability>span:last-child{min-width:0}
+.cloud-login-trigger{display:grid;place-items:center;flex:0 0 44px;width:44px;height:44px;padding:10px;border:0;color:var(--lavender);margin-left:auto}
+.cloud-login-trigger svg{display:block;width:24px;height:24px}#cloudDialog>.screen-header h2{flex:1;min-width:0}
+.cloud-login-dialog{width:calc(100% - 28px);max-width:480px;max-height:85dvh;overflow:auto;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:18px;padding:22px}
+.cloud-login-dialog::backdrop{background:#17121f99}.cloud-login-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.cloud-login-heading h3{font-size:22px}.cloud-login-heading button{border:0;font-size:24px;padding:0 8px}
+.cloud-login-dialog p{font-size:13px;line-height:1.6;margin:12px 0}.cloud-login-dialog form{display:grid;gap:12px}.cloud-login-dialog label{display:grid;gap:7px;font-size:13px}
+.cloud-login-dialog input{width:100%;min-width:0}.cloud-login-dialog .cloud-login-tabs{display:flex;gap:8px;margin:16px 0}.cloud-login-dialog .cloud-login-tabs button{font-size:13px}
+.cloud-login-dialog .cloud-login-tabs [aria-selected=true]{background:var(--selection);color:var(--lavender)}
+@media(max-width:420px){.figure-card{grid-template-columns:70px minmax(0,1fr) 22px;gap:8px}.card-thumbnail-button,.card-thumbnail-button .card-thumb{width:70px}.figure-card>.card-options{width:22px}.card-details .card-title{font-size:14px}}

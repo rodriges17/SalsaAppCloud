@@ -158,11 +158,11 @@ export async function runParityCase(page, { root, fixture, native = false, scena
    assert((await page.locator('#cloudStatus').textContent()).includes('Offline'),'Offline snapshot lacks a freshness notice');await page.context().setOffline(false);
    await page.locator('#cloudBack').click();await page.route('**/auth/v1/token?grant_type=refresh_token',r=>r.fulfill({status:400,contentType:'application/json',body:JSON.stringify({code:'refresh_token_not_found',msg:'Session revoked'})}));
    await page.evaluate(key=>{const s=JSON.parse(localStorage.getItem(key));localStorage.setItem(key,JSON.stringify({...s,expires_at:0}))},key);await page.clock.setFixedTime(new Date(await page.evaluate(()=>Date.now())+61000));
-   await page.locator('#cloudButton').click();await page.locator('.cloud-guest-login > summary').waitFor();
+   await page.locator('#cloudButton').click();await page.locator('#cloudLoginOpen').waitFor();
    assert(await page.getByRole('heading',{name:'Cache A 1',exact:true}).count()===0,'Revoked session left private contents visible');
    assert(await page.evaluate(async({root,owner})=>!(await(await import(root+'cloud-cache.js')).readCloudCache(owner,'state')),{root,owner}),'Revoked session retained private snapshots');
   }else if(scenario==='cloud-cache-permission-change'){
-   await page.getByRole('button',{name:'Bibliotheken',exact:true}).click();await page.getByRole('button',{name:'Öffnen',exact:true}).click();await page.getByRole('heading',{name:'Private Details',exact:true}).waitFor();await page.locator('#cloudBack').click();
+   await page.getByRole('button',{name:'Bibliotheken',exact:true}).click();await page.getByRole('button',{name:'Öffnen',exact:true}).click();await page.getByRole('heading',{name:'Private Details',exact:true}).waitFor();await page.locator('#cloudDialog [data-nav=figures]').click();
    await page.clock.setFixedTime(new Date(await page.evaluate(()=>Date.now())+61000));revoked=true;
    await page.evaluate(root=>{void import(root+'cloud.js').then(m=>m.openCloud(null,'cache-library'));},root);
    await page.waitForFunction(()=>document.querySelector('#cloudError').textContent.includes('Zugriff entzogen'));
@@ -184,7 +184,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
     await page.waitForFunction(()=>document.querySelector('#cloudStatus').textContent.includes('Aktualisierung nicht möglich'));
     fail=false;version=3;await page.getByRole('button',{name:'Aktualisieren',exact:true}).click();await page.getByRole('heading',{name:'Cache A 3',exact:true}).waitFor();
    }else{
-    await page.getByRole('button',{name:'Abmelden',exact:true}).click();await page.locator('.cloud-guest-login > summary').waitFor();
+    await page.getByRole('button',{name:'Abmelden',exact:true}).click();await page.locator('#cloudLoginOpen').waitFor();
     assert(await page.evaluate(async({root,owner})=>!(await(await import(root+'cloud-cache.js')).readCloudCache(owner,'state'))&&!await(await import(root+'cloud-cache.js')).readCloudCache(owner,'poster:cache-revision:2026-10-23T00:00:00Z'),{root,owner}),'Logout retained private snapshots or posters');
     const other=await page.context().newPage();await other.goto(page.url());await other.evaluate(key=>localStorage.setItem(key,JSON.stringify({access_token:'account-b',refresh_token:'refresh-b',cache_id:'account-b-session',expires_at:Date.now()+3600000})),key);
     await page.getByRole('heading',{name:'Cache B 1',exact:true}).waitFor();stall=false;release();
@@ -301,7 +301,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   assert(!await page.locator('#editor').isVisible(),'Bulk downloads must not open one editor per figure');
   const saved=await page.evaluate(async root=>{const s=await import(root+'storage.js');const figures=await s.listFigures();return {count:figures.length,status:figures[0].status,duration:(await s.figureVideos(figures[0]))[0].duration};},root);
   assert(saved.count===1&&saved.status==='Neu'&&saved.duration>0,'Bulk download did not save usable local video metadata');
-  await page.locator('#cloudBack').click();await openLibrary();await page.getByRole('button',{name:'Alle Figuren lokal verfügbar machen',exact:true}).click();
+  await page.locator('#cloudDialog [data-nav=figures]').click();await openLibrary();await page.getByRole('button',{name:'Alle Figuren lokal verfügbar machen',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('.cloud-library-download-result')?.textContent.startsWith('Fertig: 0 gespeichert · 2 bereits vorhanden'));
   assert(downloads===1,'Repeated bulk download fetched already available video content');
   return;
@@ -315,19 +315,23 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   });
   await page.locator('#cloudButton').click();await page.getByRole('heading',{name:'Öffentliche Bibliotheken',exact:true}).waitFor();
   assert(await page.locator('.cloud-tabs').count()===0,'Guests must not see a cloud area switch');
-  const login=page.locator('.cloud-guest-login');
-  assert(await login.getAttribute('open')===null,'Guest sign-in should start collapsed');
-  assert(!await page.getByLabel('Anmeldelink einfügen',{exact:true}).isVisible(),'Guest sign-in fields should be hidden');
+  const login=page.locator('#cloudLoginDialog'),trigger=page.locator('#cloudLoginOpen');
+  assert(await trigger.isVisible(),'Guest header sign-in icon must be visible');
+  assert(!await login.isVisible(),'Guest sign-in dialog should start closed');
+  assert(await page.getByLabel('Anmeldelink einfügen',{exact:true}).count()===0,'Guest list must contain no sign-in fields');
   assert(await page.getByRole('heading',{name:'Nicht öffentlich',exact:true}).count()===0,'Guest list must contain only public libraries');
-  assert(await page.evaluate(()=>!!(document.querySelector('.cloud-public-libraries').compareDocumentPosition(document.querySelector('.cloud-guest-login'))&Node.DOCUMENT_POSITION_FOLLOWING)),'Public libraries must precede sign-in');
-  await login.locator(':scope > summary').click();await page.getByLabel('Anmeldelink einfügen',{exact:true}).waitFor();
+  await trigger.click();await page.getByLabel('Anmeldelink einfügen',{exact:true}).waitFor();
   await page.getByRole('tab',{name:'Admin-Anmeldung',exact:true}).click();await page.getByLabel('Admin-E-Mail-Adresse',{exact:true}).waitFor();
   assert(!await page.getByLabel('Anmeldelink einfügen',{exact:true}).isVisible(),'Only selected login method should be visible');
-  await login.locator(':scope > summary').click();
+  if(native)await page.evaluate(()=>AndroidAppUI.back());else await page.keyboard.press('Escape');
+  assert(!await login.isVisible()&&await page.locator('#cloudDialog').isVisible(),'Back from login must only close login');
   await page.getByRole('button',{name:'Öffnen',exact:true}).click();await page.getByRole('heading',{name:library.title,exact:true}).waitFor();
-  assert(await page.locator('.cloud-guest-login').getAttribute('open')===null,'Library detail sign-in should remain collapsed');
+  assert(await trigger.isVisible()&&!await login.isVisible(),'Library details must offer the header login icon');
   assert(await page.locator('.cloud-tabs').count()===0,'Guest library details must not show an account switch');
-  await page.getByRole('button',{name:'‹ Alle öffentlichen Bibliotheken',exact:true}).click();
+  if(native)await page.evaluate(()=>AndroidAppUI.back());else await page.keyboard.press('Escape');
+  await page.getByRole('heading',{name:'Öffentliche Bibliotheken',exact:true}).waitFor();
+  assert(await page.locator('#cloudDialog').isVisible(),'Native Back must return to libraries rather than local figures');
+  await page.getByRole('button',{name:'Öffnen',exact:true}).click();await page.getByRole('button',{name:'Zurück zu allen Bibliotheken',exact:true}).click();
   await page.getByRole('heading',{name:'Öffentliche Bibliotheken',exact:true}).waitFor();
   return;
  }

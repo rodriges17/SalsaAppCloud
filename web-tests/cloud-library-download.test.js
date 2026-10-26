@@ -1,6 +1,7 @@
+import { cloudLocalIndex } from '../pwa/cloud-local.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { downloadLibrary, downloadFigure } from '../pwa/cloud-library-download.js';
+import { downloadLibrary, downloadFigure, enrichCloudMetadata } from '../pwa/cloud-library-download.js';
 import { videoHash } from '../pwa/cloud-dedup.js';
 async function fixture() {
  const figures=[],records=new Map(),network=[],saves=[];
@@ -19,7 +20,7 @@ async function fixture() {
  return {figures,records,network,saves,files,hashes,rev,add,services};
 }
 test('bulk download skips renamed existing content and a second run downloads nothing',async()=>{
- const f=await fixture(),local=f.add({title:'My renamed figure'},['a']);
+ const f=await fixture(),local=f.add({title:'My renamed figure',tags:['My tag']},['a']);
  const result=await downloadLibrary([f.rev('one',['a']),f.rev('two',['b'])],f.services,{targetFolder:'chosen-folder'});
  assert.deepEqual(f.network,['b']);assert.equal(result.saved,1);assert.equal(result.skipped,1);assert.equal(result.failed.length,0);
  assert.equal(f.figures.find(x=>x.id===local.id).description,'My notes');assert.equal(f.saves[0].options.targetFolder,'chosen-folder');
@@ -98,4 +99,34 @@ test('bulk import chronology preserves library order above older copies, leaves 
  assert.deepEqual(sorted.map(f=>f.title),['Cloud first','Cloud last','Local']);
  assert.equal(f.figures.find(x=>x.id===old.id).createdAt,old.createdAt);
  assert.equal(f.figures.find(x=>x.id===old.id).status,'Sitzt');
+});
+
+
+test('already-local bulk media receives missing description and tags without a download or identity change',async()=>{
+ const f=await fixture(),local=f.add({description:'',tags:[]},['a']);
+ const result=await downloadLibrary([f.rev('one',['a'])],f.services);
+ assert.equal(result.skipped,1);assert.deepEqual(f.network,[]);assert.equal(f.saves.length,1);
+ const saved=f.figures.find(x=>x.id===local.id);assert.equal(saved.description,'Cloud description');assert.deepEqual(saved.tags,['Salsa']);assert.equal(saved.status,'Sitzt');assert.equal(saved.title,'Local');assert.deepEqual(saved.videoIds,local.videoIds);
+ assert.ok(f.saves[0].drafts.every(d=>d.existing));assert.equal(f.saves[0].expected,local.revision);
+});
+test('metadata enrichment preserves local text and tags and avoids an unnecessary save',async()=>{
+ const f=await fixture(),local=f.add({description:'My note',tags:['My tag']},['a']);
+ const saved=await enrichCloudMetadata(local,f.rev('one',['a']),f.services);
+ assert.equal(saved,local);assert.equal(f.saves.length,0);assert.deepEqual(f.network,[]);
+});
+
+
+test('linked bulk copies enrich metadata before skipping media and retain cloud provenance',async()=>{
+ const f=await fixture(),local=f.add({description:'',tags:[],importFingerprint:'cloud:linked:a'},['a']);
+ cloudLocalIndex.remember('@device','linked',local,[{cloud:'a',local:local.videoIds[0]}]);
+ let metadataReads=0;f.services.readCloudMedia=async()=>{metadataReads++;throw new Error('No media lookup needed');};
+ const result=await downloadLibrary([f.rev('linked',['a'])],f.services);
+ const saved=f.figures.find(x=>x.id===local.id);assert.equal(result.failed.length,0);assert.equal(result.skipped,1);assert.equal(metadataReads,0);assert.deepEqual(f.network,[]);
+ assert.equal(saved.description,'Cloud description');assert.deepEqual(saved.tags,['Salsa']);assert.equal(cloudLocalIndex.status(saved),'cloud');
+});
+test('filling missing tags keeps a locally modified figure marked modified',async()=>{
+ const f=await fixture(),local=f.add({description:'My note',tags:[]},['a']);
+ cloudLocalIndex.remember('@device','modified',local,[{cloud:'a',local:local.videoIds[0]}],null,'@original-content');
+ const saved=await enrichCloudMetadata(local,f.rev('modified',['a']),f.services);
+ assert.equal(saved.description,'My note');assert.deepEqual(saved.tags,['Salsa']);assert.equal(saved.status,'Sitzt');assert.equal(cloudLocalIndex.status(saved),'modified');
 });

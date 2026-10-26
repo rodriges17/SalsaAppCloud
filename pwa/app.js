@@ -1,6 +1,6 @@
 import { cloudLocalIndex } from './cloud-local.js';
 import { provenanceIcon, provenanceLabel } from './cloud-provenance.js';
-const APP_VERSION = '2026-10-26-own-cloud-cards-v1';
+const APP_VERSION = '2026-10-26-navigation-metadata-v1';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';
@@ -87,7 +87,10 @@ function renderOverview() {
     else { thumb = el('span', 'card-thumb thumb-placeholder', '▷'); thumb.setAttribute('aria-hidden', 'true'); }
     const copy = el('span', 'card-copy'); copy.append(el('span', 'card-title', figure.title), el('span', 'card-status status-' + (figure.status === 'Sitzt' ? 'learned' : figure.status === 'Am Üben' ? 'practice' : 'new'), figure.status));
     if (figure.tags.length) copy.append(el('span', 'card-tags', figure.tags.join(' · ')));
-    main.append(thumb, copy);
+    main.append(copy);
+    const thumbnailButton = button('', () => openPlayer(figure), 'card-thumbnail-button');
+    thumbnailButton.setAttribute('aria-label', `Vorschaubild: ${figure.title} lernen`); thumbnailButton.append(thumb);
+    thumbnailButton.addEventListener('contextmenu', event => { event.preventDefault(); closeMenus(); showMenu(); });
     const statusBar = el('div', 'card-storage-status');
     const cloudStatus = cloudLocalIndex.status(figure);
     const badge = button('', () => toast(provenanceLabel(cloudStatus)), 'card-provenance');
@@ -117,7 +120,7 @@ function renderOverview() {
       placeFigureMenu(menu, options);
     }
     main.addEventListener('contextmenu', event => { event.preventDefault(); closeMenus(); showMenu(); });
-    card.append(main, options, statusBar);
+    const details = el('div', 'card-details'); details.append(main, statusBar); card.append(thumbnailButton, details, options);
     if (figure.folderAccessRequired || figure.storageProblem) {
       card.append(el('span', 'card-storage-warning', figure.folderAccessRequired ? 'Ordner gespeichert – Zugriff erneut erlauben' : `Geräteordner: ${figure.storageProblem}`));
     }

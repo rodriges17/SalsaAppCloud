@@ -46,3 +46,10 @@ Die einzeilige Statusleiste unter jeder lokalen Figurenkarte enthält das Herkun
 ### Meine Cloud-Figuren: kompakte Karten
 
 Die Übersicht zeigt Vorschaubild, Name und lokalen Status. Ein Klick klappt eine Figur auf und schließt die zuvor geöffnete. Im Tab **Videos & lokal** findest du die Videovorschau und die lokale Übernahme. **Verwalten** enthält Bibliothekszuordnung, eigene Variante, öffentliche Freigabe und Löschen. Beim Schließen oder Tabwechsel stoppt eine laufende Vorschau. Rechte und Bestätigungen bleiben unverändert.
+
+
+### Zurück, Anmeldung und Metadaten
+
+Aus einer Bibliothek führen der obere Zurück-Pfeil, der Link „Zurück zu allen Bibliotheken“ und Android-Zurück zur Bibliotheksübersicht. Aus der Bearbeitung geht es zunächst zur Bibliotheksansicht; offene Änderungen werden vorher abgefragt. Gäste öffnen die Anmeldung über das Icon rechts neben „Cloud-Speicher“. Nach erfolgreicher Anmeldung bleibt die aktuelle Bibliothek oder Übersicht geöffnet.
+
+Downloads übernehmen Beschreibung und Tags. Bereits vorhandene lokale Figuren erhalten nur fehlende Angaben; eigene Angaben und Lernstatus bleiben erhalten. Nur ausdrücklich bestätigtes Ersetzen übernimmt die Cloud-Angaben vollständig.

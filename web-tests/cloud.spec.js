@@ -87,10 +87,10 @@ test('manual sign-in link is redeemed inside the current app without navigating 
  await page.route(`${host}/auth/v1/verify`,r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({access_token:'test-new-user-jwt',refresh_token:'test-new-refresh',expires_in:3600})}));
  await start(page);await page.locator('#cloudButton').tap();
  await expect(page.locator('#cloudBody')).not.toContainText('iPhone-App');
- await expect(page.locator('#cloudBody')).toContainText('Die Anmeldung in einer anderen App oder einem anderen Browser wird nicht automatisch übernommen.');
+ await expect(page.locator('#cloudBody input')).toHaveCount(0);
  await expect(page.locator('.cloud-tabs')).toHaveCount(0);
  await expect(page.locator('#cloudBody')).toContainText('Öffentliche Bibliotheken sind ohne Anmeldung lesbar.');
- await page.locator('.cloud-guest-login > summary').tap();
+ await page.locator('#cloudLoginOpen').tap();
  await page.getByLabel('Anmeldelink einfügen',{exact:true}).fill('https://rodriges17.github.io/SalsaAppCloud/?cloud=1&type=magiclink&token_hash=test-once');
  await page.getByRole('button',{name:'Anmelden',exact:true}).tap();
  await expect(page.locator('#cloudBody')).toContainText('admin@example.test');
@@ -332,7 +332,7 @@ test('a downloaded cloud figure opens its local copy without importing again',as
  await expandOwnFigure(page);await page.getByRole('button',{name:'Lokal übernehmen',exact:true}).tap();await finishCloudImport(page);
  await expect(page.locator('[data-cloud-status=cloud]')).toHaveCount(1);
  await page.locator('#cloudButton').tap();
- await expandOwnFigure(page);await expect(page.locator('.cloud-local-status').first()).toHaveText('☁ Lokal verfügbar');
+ await expandOwnFigure(page);await expect(page.locator('.cloud-local-status').first()).toHaveText('Lokal verfügbar');
  await page.getByRole('button',{name:'Lokale Figur öffnen',exact:true}).tap();
  await expect(page.locator('#editor')).toBeVisible();expect(await localCloudFigures(page)).toHaveLength(1);
 });
@@ -368,7 +368,7 @@ for(const folder of [false,true])test(`uploaded ${folder?'folder':'app'} origina
  await signIn(page);const calls=await mock(page,true,false,true,{reflectUpload:true,noLibraries:true,posters:new Map([['uploaded-revision',{poster:POSTER,kind:'local'}]])});await localUpload(page,folder);
  await page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true}).tap();
  await expandOwnFigure(page);await expect(page.getByRole('button',{name:'Lokale Figur öffnen',exact:true})).toBeEnabled();
- await expandOwnFigure(page);await expect(page.locator('.cloud-local-status').first()).toHaveText('☁ Lokal verfügbar');
+ await expandOwnFigure(page);await expect(page.locator('.cloud-local-status').first()).toHaveText('Lokal verfügbar');
  await page.reload();await page.locator('#cloudButton').tap();
  await expandOwnFigure(page);await expect(page.getByRole('button',{name:'Lokale Figur öffnen',exact:true})).toBeEnabled();
  expect(await localCloudFigures(page)).toHaveLength(1);expect(calls.filter(c=>c.action==='media_url')).toHaveLength(0);
@@ -472,11 +472,11 @@ test('platform admin signs in again with email and password without redeeming a 
  await page.route(`${host}/auth/v1/token?grant_type=password`,r=>{credentials.push(r.request().postDataJSON());return r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({access_token:'test-user-jwt',refresh_token:'test-refresh',expires_in:3600})});});
  await page.route(`${host}/auth/v1/logout*`,r=>r.fulfill({status:200,contentType:'application/json',body:'{}'}));
  await start(page);await page.locator('#cloudButton').tap();
- await page.locator('.cloud-guest-login > summary').tap();await page.getByRole('tab',{name:'Admin-Anmeldung',exact:true}).tap();
+ await page.locator('#cloudLoginOpen').tap();await page.getByRole('tab',{name:'Admin-Anmeldung',exact:true}).tap();
  await page.getByLabel('Admin-E-Mail-Adresse',{exact:true}).fill('admin@example.test');await page.getByLabel('Admin-Passwort',{exact:true}).fill('demo-admin-password');await page.getByRole('button',{name:'Als Admin anmelden',exact:true}).tap();
  await expect(page.getByRole('button',{name:'Plattformverwaltung',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Abmelden',exact:true}).tap();await expect(page.getByRole('button',{name:'Plattformverwaltung',exact:true})).toHaveCount(0);
- await page.locator('.cloud-guest-login > summary').tap();await page.getByRole('tab',{name:'Admin-Anmeldung',exact:true}).tap();await page.getByLabel('Admin-E-Mail-Adresse',{exact:true}).fill('admin@example.test');await page.getByLabel('Admin-Passwort',{exact:true}).fill('demo-admin-password');await page.getByRole('button',{name:'Als Admin anmelden',exact:true}).tap();
+ await page.locator('#cloudLoginOpen').tap();await page.getByRole('tab',{name:'Admin-Anmeldung',exact:true}).tap();await page.getByLabel('Admin-E-Mail-Adresse',{exact:true}).fill('admin@example.test');await page.getByLabel('Admin-Passwort',{exact:true}).fill('demo-admin-password');await page.getByRole('button',{name:'Als Admin anmelden',exact:true}).tap();
  await expect(page.getByRole('button',{name:'Plattformverwaltung',exact:true})).toBeVisible();expect(credentials).toHaveLength(2);expect(credentials[0].email).toBe('admin@example.test');
  expect(calls.filter(c=>c.action==='state'&&c.authorization==='Bearer test-user-jwt').length).toBeGreaterThanOrEqual(2);
 });
@@ -492,8 +492,8 @@ test('admin sets an own password with matching confirmation; secrets are cleared
 });
 test('failed password login keeps public access and clears the rejected password for retry',async({page})=>{
  await mock(page,false);await page.route(`${host}/auth/v1/token?grant_type=password`,r=>r.fulfill({status:400,contentType:'application/json',body:'{"code":"invalid_credentials","msg":"Invalid login credentials"}'}));
- await start(page);await page.locator('#cloudButton').tap();await page.locator('.cloud-guest-login > summary').tap();await page.getByRole('tab',{name:'Admin-Anmeldung',exact:true}).tap();await page.getByLabel('Admin-E-Mail-Adresse',{exact:true}).fill('admin@example.test');await page.getByLabel('Admin-Passwort',{exact:true}).fill('wrong-password');await page.getByRole('button',{name:'Als Admin anmelden',exact:true}).tap();
- await expect(page.locator('#cloudBody')).toContainText('Bitte E-Mail-Adresse und Passwort prüfen.');await expect(page.getByLabel('Admin-Passwort',{exact:true})).toHaveValue('');await expect(page.getByRole('button',{name:'Als Admin anmelden',exact:true})).toBeEnabled();await expect(page.getByRole('button',{name:'Abmelden',exact:true})).toHaveCount(0);
+ await start(page);await page.locator('#cloudButton').tap();await page.locator('#cloudLoginOpen').tap();await page.getByRole('tab',{name:'Admin-Anmeldung',exact:true}).tap();await page.getByLabel('Admin-E-Mail-Adresse',{exact:true}).fill('admin@example.test');await page.getByLabel('Admin-Passwort',{exact:true}).fill('wrong-password');await page.getByRole('button',{name:'Als Admin anmelden',exact:true}).tap();
+ await expect(page.locator('#cloudLoginDialog')).toContainText('Bitte E-Mail-Adresse und Passwort prüfen.');await expect(page.getByLabel('Admin-Passwort',{exact:true})).toHaveValue('');await expect(page.getByRole('button',{name:'Als Admin anmelden',exact:true})).toBeEnabled();await expect(page.getByRole('button',{name:'Abmelden',exact:true})).toHaveCount(0);
 });
 
 for (const authenticated of [false, true]) test(`content matching detects independent renamed local video (${authenticated?'signed in':'guest'})`, async ({page}) => {
@@ -574,7 +574,7 @@ test('library order: draft, save and leave choices; bulk download requires saved
  await page.locator('#cloudBack').tap();await expect(page.locator('.cloud-unsaved-dialog')).toBeVisible();
  await page.getByRole('button',{name:'Weiter bearbeiten',exact:true}).tap();await expect(page.locator('#cloudDialog')).toBeVisible();
  await page.locator('#cloudBack').tap();await page.locator('.cloud-unsaved-dialog').getByRole('button',{name:'Speichern',exact:true}).tap();
- await expect(page.locator('#cloudDialog')).not.toBeVisible();
+ await expect(page.locator('#cloudDialog')).toBeVisible();await expect(page.getByRole('button',{name:'Bibliothek bearbeiten',exact:true})).toBeVisible();
  expect(calls.find(c=>c.action==='library_commit').payload).toMatchObject({order:['figure-0','figure-2','figure-1'],expected_version:library.edit_version});
 });
 test('library order: conflicting save retains draft and offers reload',async({page})=>{
@@ -582,7 +582,7 @@ test('library order: conflicting save retains draft and offers reload',async({pa
  await page.locator('[data-library-figure="figure-2"]').getByRole('button',{name:'Nach oben',exact:true}).tap();await page.getByRole('button',{name:'Bibliothek speichern',exact:true}).tap();
  await expect(page.locator('#cloudError')).toContainText('inzwischen geändert');await expect(page.getByRole('button',{name:'Aktuellen Stand neu laden',exact:true})).toBeVisible();
  expect(calls.filter(c=>c.action==='library_commit')).toHaveLength(1);
- await page.locator('#cloudBack').tap();await page.getByRole('button',{name:'Verwerfen',exact:true}).tap();await expect(page.locator('#cloudDialog')).not.toBeVisible();
+ await page.locator('#cloudBack').tap();await page.getByRole('button',{name:'Verwerfen',exact:true}).tap();await expect(page.locator('#cloudDialog')).toBeVisible();await expect(page.getByRole('button',{name:'Bibliothek bearbeiten',exact:true})).toBeVisible();
 });
 
 test('library editor: compact accordion, staged membership and settings share one save',async({page})=>{
@@ -632,4 +632,25 @@ test('own cloud cards reveal tabbed options on click and keep only one expanded'
  for(const theme of ['light','dark']){await page.evaluate(t=>window.stepAppearance.set(t),theme);await page.screenshot({path:info.outputPath(theme+'-own-cloud-cards-c.png')});}
  await cards.last().locator('summary').tap();await expect(page.locator('.cloud-own-figure[open]')).toHaveCount(0);
  expect(calls.filter(c=>['public_permission','attach','delete_figure','variant'].includes(c.action))).toHaveLength(0);
+});
+
+
+for(const authenticated of [false,true])test(`library back stays in cloud catalog (${authenticated?'account':'guest'})`,async({page})=>{
+ if(authenticated)await signIn(page);await mock(page,authenticated,false);await start(page);await page.locator('#cloudButton').tap();
+ if(authenticated)await page.getByRole('button',{name:'Bibliotheken',exact:true}).tap();
+ await page.getByRole('button',{name:'Öffnen',exact:true}).tap();
+ await expect(page.getByRole('button',{name:'Zurück zu allen Bibliotheken',exact:true})).toBeVisible();
+ await page.locator('#cloudBack').tap();await expect(page.locator('#cloudDialog')).toBeVisible();await expect(page.getByRole('button',{name:'Öffnen',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Öffnen',exact:true}).tap();await page.keyboard.press('Escape');await expect(page.locator('#cloudDialog')).toBeVisible();await expect(page.getByRole('button',{name:'Öffnen',exact:true})).toBeVisible();
+ await page.keyboard.press('Escape');await expect(page.locator('#cloudDialog')).toBeHidden();
+});
+test('guest header login opens a dialog, cancels without leaving the library, and signs in in place',async({page},info)=>{
+ await mock(page,true);await page.route(`${host}/auth/v1/token?grant_type=password`,r=>r.fulfill({contentType:'application/json',body:JSON.stringify({access_token:'test-user-jwt',refresh_token:'test-refresh',expires_in:3600})}));
+ await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Öffnen',exact:true}).tap();
+ await expect(page.locator('#cloudBody input')).toHaveCount(0);const trigger=page.getByRole('button',{name:'Anmeldedialog öffnen',exact:true});await trigger.tap();
+ await expect(page.getByRole('dialog',{name:'Anmelden',exact:true})).toBeVisible();await page.keyboard.press('Escape');await expect(trigger).toBeFocused();await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();
+ await trigger.tap();await page.getByRole('tab',{name:'Admin-Anmeldung',exact:true}).tap();
+ await page.getByLabel('Admin-E-Mail-Adresse',{exact:true}).fill('admin@example.test');await page.getByLabel('Admin-Passwort',{exact:true}).fill('demo-admin-password');
+ await page.screenshot({path:info.outputPath('guest-header-login-dialog.png')});await page.getByRole('button',{name:'Als Admin anmelden',exact:true}).tap();
+ await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();await expect(page.locator('#cloudLoginDialog')).toBeHidden();await expect(trigger).toBeHidden();await expect(page.getByRole('button',{name:'Abmelden',exact:true})).toBeVisible();
 });

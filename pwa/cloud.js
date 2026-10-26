@@ -1,3 +1,4 @@
+import { cloudIcon } from './cloud-provenance.js';
 import { createLibraryDraft } from './cloud-library-draft.js';
 import { mountLibraryOrder } from './cloud-library-order.js';
 import { videoHash } from './cloud-dedup.js';
@@ -7,7 +8,7 @@ import { cloudReadState, contentState } from './cloud-read-state.js';
 import { cloudCall, signedIn, uploadMedia, logout, loginWithLink, loginWithPassword, setAdminPassword, cloudIdentity } from './cloud-api.js';
 import { CLOUD_FILE_LIMIT } from './cloud-config.js';
 import { figureVideos, figureMedia, listFigures, saveFigure, storageSettings } from './storage.js';
-import { downloadLibrary, downloadFigure, inspectCloudVideo } from './cloud-library-download.js';
+import { downloadLibrary, downloadFigure, inspectCloudVideo, enrichCloudMetadata } from './cloud-library-download.js';
 import { readCloudCache, writeCloudCache, cloudCacheRevision } from './cloud-cache.js';
 import { cloudLocalIndex as localIndex } from './cloud-local.js';
 import { createPosterView, posterPayload } from './cloud-posters.js';
@@ -31,6 +32,7 @@ async function leaveLibraryDraft() {
   libraryDraft = null; libraryEditing = null; libraryUpload = null; source = null; return true;
 }
 
+let loginDialog, loginTrigger;
 let dialog, body, errorBox, statusBox, hooks, state, current, busy = false, controller, source = null, area = 'figures';
 function report(error, target = errorBox) { target.textContent = error?.message ?? 'Cloud-Aufruf fehlgeschlagen.'; target.hidden = false; target.scrollIntoView({ block: 'nearest' }); }
 function field(form, label, value = '', type = 'text') {
@@ -46,9 +48,9 @@ function checkbox(form, label, checked = false) { const wrap = node('label', und
 function section(title, parent = body) { const s = node('section', undefined, 'cloud-card'); s.append(node('h3', title)); parent.append(s); return s; }
 async function run(message, work, errorTarget = errorBox) {
   if (busy) return; busy = true; errorBox.hidden = true; errorTarget.hidden = true; statusBox.textContent = message;
-  body.inert = true; document.getElementById('cloudBack').disabled = true; dialog.querySelectorAll('[data-nav]').forEach(button => { button.disabled = true; });
+  body.inert = true; if (loginDialog) loginDialog.inert = true; document.getElementById('cloudBack').disabled = true; dialog.querySelectorAll('[data-nav]').forEach(button => { button.disabled = true; });
   try { return await work(); } catch (error) { if (error.accessChanged) await recoverAccess(); report(error, errorTarget.isConnected ? errorTarget : errorBox); }
-  finally { busy = false; body.inert = false; document.getElementById('cloudBack').disabled = false; dialog.querySelectorAll('[data-nav]').forEach(button => { button.disabled = false; }); statusBox.textContent = ''; if (authReloadPending && dialog.open) { authReloadPending = false; source = null; area = 'initial'; void load(null, true); } }
+  finally { busy = false; body.inert = false; if (loginDialog) loginDialog.inert = false; document.getElementById('cloudBack').disabled = false; dialog.querySelectorAll('[data-nav]').forEach(button => { button.disabled = false; }); statusBox.textContent = ''; if (authReloadPending && dialog.open) { authReloadPending = false; source = null; area = 'initial'; void load(null, true); } }
 }
 async function recoverAccess() {
   const inputs = [...body.querySelectorAll('label')].map(label => { const input = label.querySelector('input,textarea,select'); return input && input.type !== 'password' ? { label: label.firstChild?.textContent, value: input.value, checked: input.checked } : null; }).filter(Boolean);
@@ -63,6 +65,22 @@ async function recoverAccess() {
 const hasOwnArea = value => !!value?.me && (value.me.upload_enabled || value.own_figures?.length > 0);
 const initialArea = value => hasOwnArea(value) ? 'figures' : 'libraries';
 async function close() { if (busy || !await leaveLibraryDraft()) return; libraryDraft = null; libraryEditing = null; libraryUpload = null; viewEpoch++; renderedView = null; clearTimeout(statusTimer); cancelThumbnails(); dialog.close(); body.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); }); source = null; hooks.closed?.(); }
+async function cloudBack() {
+  if (busy) return;
+  if (loginDialog?.open) { dismissLogin(); return; }
+  if (libraryUpload) { await resumeLibraryUpload(); return; }
+  if (libraryEditing) {
+    const id = current;
+    if (!await leaveLibraryDraft()) return;
+    libraryEditing = null; libraryDraft = null; await load(id); return;
+  }
+  if (current) { await navigate('libraries'); return; }
+  await close();
+}
+function cloudStatusLabel(target, text, modified = false) {
+  const icon = node('span', undefined, 'cloud-status-icon'); icon.innerHTML = cloudIcon(modified);
+  target.replaceChildren(icon, node('span', text));
+}
 async function navigate(next, library = null) {
   if (!await leaveLibraryDraft()) return;
   libraryEditing = null; libraryDraft = null; libraryUpload = null; source = null; area = next; if (['admin', 'create'].includes(next)) await run('Laden …', () => load(library)); else await load(library, true);
@@ -167,6 +185,7 @@ async function renderCloud(library, detail) {
   if (!state.me && !['figures', 'libraries'].includes(area)) area = 'libraries';
   cancelThumbnails(); clearPreviews(body); body.replaceChildren();
   posterView = createPosterView(body, state.me);
+  loginTrigger.hidden = !!state.me; if (state.me) dismissLogin();
   const toolbar = node('div', undefined, 'cloud-tabs');
   toolbar.setAttribute('aria-label', 'Cloud-Bereiche');
   for (const [key, label] of [...(hasOwnArea(state) ? [['figures', 'Meine Figuren']] : []), ['libraries', 'Bibliotheken']]) {
@@ -181,11 +200,9 @@ async function renderCloud(library, detail) {
   if (state.me) body.append(node('p', `${state.me.email} · ${MB(state.me.used)} / ${MB(state.me.quota)} belegt${state.me.upload_enabled ? '' : ' · Lesen erlaubt, Uploads gesperrt'}`, 'cloud-account'));
   else {
     if (current) {
-      const back = action('‹ Alle öffentlichen Bibliotheken', () => load(null, true)); back.className = 'cloud-public-back'; body.append(back);
       await libraryView(current, detail);
     }
     else publicLibraries();
-    guestLogin();
     return;
   }
   if (source) { await publishForm(); return; }
@@ -254,6 +271,7 @@ async function libraryView(id, detail) {
   const lib = detail.library, manage = !!state.me && !!detail.manage;
   if (libraryEditing?.id === id && manage) { renderLibraryEditor(id, detail); return; }
   libraryEditing = null;
+  const back = action('Zurück zu allen Bibliotheken', () => navigate('libraries')); back.className = 'cloud-public-back'; body.append(back);
   const intro = section(lib.title); intro.classList.add('cloud-library-hero');
   const title = intro.querySelector('h3'); title.className = 'cloud-library-title';
   intro.prepend(node('p', lib.visibility === 'public' ? 'Öffentliche Bibliothek' : 'Private Bibliothek', 'cloud-library-eyebrow'));
@@ -279,7 +297,7 @@ async function libraryView(id, detail) {
       if (rev) localIndex.reconcile(rev, localFigures);
       const local = rev && localIndex.find(rev.id, localFigures);
       const known = rev && localFigures.find(f => localIndex.link(f)?.revision === rev.id);
-      availability.textContent = local ? '☁ Lokal' : known?.folderAccessRequired ? 'Zugriff nötig' : '↓ Cloud';
+      cloudStatusLabel(availability, local ? 'Lokal' : known?.folderAccessRequired ? 'Zugriff nötig' : 'Cloud', !!local && localIndex.status(local) === 'modified');
       availability.dataset.local = String(!!local); availability.title = local ? 'Figur lokal verfügbar' : known?.folderAccessRequired ? 'Ordnerzugriff erforderlich' : 'Noch nicht lokal gespeichert';
     }; localUpdates.push(update); update(); summary.append(availability, node('span', '⌄', 'cloud-library-chevron'));
     box.append(summary); const content = node('div', undefined, 'cloud-library-content'); box.append(content); let mounted = false;
@@ -479,7 +497,11 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
   const label = own ? 'Lokal übernehmen' : multiple ? 'Ausgewählte Videos in meine Figuren übernehmen' : 'In meine Figuren übernehmen';
   const download = async () => {
     const linked = localIndex.find(rev.id, localFigures);
-    if (linked) { await close(); if (!dialog.open) return hooks.openLocal?.(linked); return; }
+    if (linked) {
+      const saved = await run('Angaben ergänzen …', () => enrichCloudMetadata(linked, rev, { readMedia: figureMedia, saveFigure }));
+      if (!saved) return;
+      await hooks.localChanged?.(); await close(); if (!dialog.open) return hooks.openLocal?.(saved); return;
+    }
     return run('Videos herunterladen …', async () => {
     if (libraryDraft?.dirty()) throw new Error('Bitte zuerst die Bibliothek speichern, bevor du eine Figur übernimmst.');
     const selected = chosen.filter(([check]) => !check || check.checked).map(([, v]) => v);
@@ -526,8 +548,8 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
     localStatus.hidden = !localFigure && !known;
     localStatus.dataset.accessRequired = String(accessRequired);
     const modified = localFigure && localIndex.status(localFigure) === 'modified';
-    localStatus.textContent = localFigure ? modified ? '☁ ✎ Lokal verfügbar · lokal angepasst' : '☁ Lokal verfügbar'
-      : accessRequired ? 'Lokal zugeordnet · Ordnerzugriff erforderlich' : 'Lokale Dateien fehlen · erneut herunterladen';
+    cloudStatusLabel(localStatus, localFigure ? modified ? 'Lokal verfügbar · lokal angepasst' : 'Lokal verfügbar'
+      : accessRequired ? 'Lokal zugeordnet · Ordnerzugriff erforderlich' : 'Lokale Dateien fehlen · erneut herunterladen', modified);
     take.textContent = localFigure ? 'Lokale Figur öffnen' : label;
     take.disabled = accessRequired;
     repair.hidden = true;
@@ -578,7 +600,7 @@ function ownFigures() {
       if (latest) localIndex.reconcile(latest, localFigures);
       const local = latest && localIndex.find(latest.id, localFigures);
       const known = latest && localFigures.find(item => revisions.some(rev => localIndex.link(item)?.revision === rev.id || item.importFingerprint?.startsWith(`cloud:${rev.id}:`)));
-      availability.textContent = local ? localIndex.status(local) === 'modified' ? '☁ ✎ Lokal angepasst' : '☁ Lokal verfügbar' : known?.folderAccessRequired ? 'Ordnerzugriff nötig' : known ? 'Lokale Dateien fehlen' : 'Nur in der Cloud';
+      cloudStatusLabel(availability, local ? localIndex.status(local) === 'modified' ? 'Lokal angepasst' : 'Lokal verfügbar' : known?.folderAccessRequired ? 'Ordnerzugriff nötig' : known ? 'Lokale Dateien fehlen' : 'Nur in der Cloud', !!local && localIndex.status(local) === 'modified');
       availability.dataset.local = String(!!local);
     }; localUpdates.push(update); update();
     const chevron = node('span', '⌄', 'cloud-library-chevron'); chevron.setAttribute('aria-hidden', 'true'); summary.append(picture, name, availability, chevron); card.append(summary);
@@ -749,12 +771,20 @@ function publicLibraries() {
   }
   if (!catalog.childElementCount) catalog.append(node('p', 'Noch keine öffentlichen Bibliotheken.'));
 }
-function guestLogin() {
-  const details = node('details', undefined, 'cloud-guest-login');
-  const summary = node('summary');
-  summary.append(node('span', 'Anmelden', 'cloud-guest-login-title'), node('span', 'Für private Bibliotheken und Verwaltung', 'cloud-guest-login-hint'));
-  details.append(summary);
-  const content = node('div', undefined, 'cloud-guest-login-content'); details.append(content);
+function dismissLogin() {
+  if (!loginDialog?.open) return;
+  loginDialog.close(); loginDialog.replaceChildren();
+  if (!loginTrigger.hidden) loginTrigger.focus();
+}
+function showGuestLogin() {
+  if (busy || state?.me || loginDialog.open) return;
+  const destination = { library: current, area: 'libraries' };
+  const finish = async authenticate => {
+    await authenticate(); dismissLogin(); area = destination.area; await load(destination.library);
+  };
+  const heading = node('div', undefined, 'cloud-login-heading'), title = node('h3', 'Anmelden'); title.id = 'cloudLoginTitle';
+  const dismiss = action('×', dismissLogin); dismiss.setAttribute('aria-label', 'Anmeldedialog schließen'); heading.append(title, dismiss);
+  const content = node('div', undefined, 'cloud-guest-login-content'); loginDialog.replaceChildren(heading, content);
   content.append(node('p', 'Du bist derzeit nicht angemeldet. Nutze deinen persönlichen Anmeldelink oder melde dich als Admin mit E-Mail und Passwort an.'));
   const tabs = node('div', undefined, 'cloud-login-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', 'Anmeldemethode');
   const linkPanel = node('div', undefined, 'cloud-login-panel'), adminPanel = node('div', undefined, 'cloud-login-panel');
@@ -777,13 +807,14 @@ function guestLogin() {
   const link = field(form, 'Anmeldelink einfügen', '', 'password'); link.autocomplete = 'off';
   linkPanel.append(node('p', 'Füge deinen persönlichen Anmeldelink hier ein. Die Anmeldung in einer anderen App oder einem anderen Browser wird nicht automatisch übernommen.'));
   const error = node('p', '', 'error'); error.setAttribute('role', 'alert'); error.hidden = true;
-  form.append(action('Anmelden', () => run('Anmelden …', async () => { await loginWithLink(link.value.trim()); area = 'initial'; await load(null); }, error)), error);
-  form.onsubmit = event => event.preventDefault();
-  adminLoginForm(adminPanel);
+  const submit = () => run('Anmelden …', () => finish(() => loginWithLink(link.value.trim())), error);
+  form.append(action('Anmelden', submit), error);
+  form.onsubmit = event => { event.preventDefault(); void submit(); };
+  adminLoginForm(adminPanel, finish);
   if (signedIn()) content.append(action('Abmelden', async () => { if (!await leaveLibraryDraft()) return; await logout(); await run('Laden …', () => load(null)); }));
-  body.append(details);
+  loginDialog.showModal();
 }
-function adminLoginForm(parent) {
+function adminLoginForm(parent, finish) {
   const form = node('form'); parent.append(form);
   const email = field(form, 'Admin-E-Mail-Adresse', '', 'email'); email.autocomplete = 'username'; email.required = true;
   const password = field(form, 'Admin-Passwort', '', 'password'); password.autocomplete = 'current-password'; password.required = true;
@@ -791,7 +822,7 @@ function adminLoginForm(parent) {
   const submit = async () => {
     if (!form.reportValidity()) return;
     await run('Admin anmelden …', async () => {
-      try { await loginWithPassword(email.value, password.value); area = 'initial'; await load(null); }
+      try { await finish(() => loginWithPassword(email.value, password.value)); }
       finally { password.value = ''; }
     }, error);
   };
@@ -846,11 +877,17 @@ export function initCloud(callbacks) {
       else { source = null; area = 'initial'; void load(null, true); }
     }
   });
-  document.getElementById('cloudBack').onclick = close;
+  loginDialog = node('dialog', undefined, 'cloud-login-dialog'); loginDialog.id = 'cloudLoginDialog'; loginDialog.setAttribute('aria-labelledby', 'cloudLoginTitle');
+  loginDialog.addEventListener('cancel', event => { event.preventDefault(); if (!busy) dismissLogin(); }); document.body.append(loginDialog);
+  loginTrigger = action('', showGuestLogin); loginTrigger.id = 'cloudLoginOpen'; loginTrigger.className = 'cloud-login-trigger'; loginTrigger.hidden = true;
+  loginTrigger.setAttribute('aria-label', 'Anmeldedialog öffnen'); loginTrigger.title = 'Anmelden'; loginTrigger.setAttribute('aria-haspopup', 'dialog'); loginTrigger.setAttribute('aria-controls', loginDialog.id);
+  loginTrigger.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5M3 12h12m-4-4 4 4-4 4"/></svg>';
+  dialog.querySelector('.screen-header').append(loginTrigger);
+  document.getElementById('cloudBack').onclick = cloudBack;
   dialog.querySelector('[data-nav=figures]').onclick = close;
   dialog.querySelector('[data-nav=cloud]').onclick = () => { if (!busy) navigate('initial'); };
   document.getElementById('cloudCancelUpload').onclick = () => controller?.abort();
-  dialog.addEventListener('cancel', e => { e.preventDefault(); close(); });
+  dialog.addEventListener('cancel', e => { e.preventDefault(); void cloudBack(); });
   document.getElementById('cloudButton').onclick = () => openCloud();
   const query = new URLSearchParams(location.search); if (query.has('library') || query.has('cloud')) setTimeout(() => openCloud(null, query.get('library')), 0);
 }
