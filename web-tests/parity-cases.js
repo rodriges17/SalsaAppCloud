@@ -331,7 +331,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   if(native)await page.evaluate(()=>AndroidAppUI.back());else await page.keyboard.press('Escape');
   await page.getByRole('heading',{name:'Öffentliche Bibliotheken',exact:true}).waitFor();
   assert(await page.locator('#cloudDialog').isVisible(),'Native Back must return to libraries rather than local figures');
-  await page.getByRole('button',{name:'Öffnen',exact:true}).click();await page.getByRole('button',{name:'Zurück zu allen Bibliotheken',exact:true}).click();
+  await page.getByRole('button',{name:'Öffnen',exact:true}).click();await page.getByRole('button',{name:'< Zurück zu allen Bibliotheken',exact:true}).click();
   await page.getByRole('heading',{name:'Öffentliche Bibliotheken',exact:true}).waitFor();
   return;
  }

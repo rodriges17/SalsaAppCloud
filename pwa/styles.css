@@ -368,3 +368,23 @@ button.storage-choice:disabled{opacity:1;cursor:default}
 .cloud-login-dialog input{width:100%;min-width:0}.cloud-login-dialog .cloud-login-tabs{display:flex;gap:8px;margin:16px 0}.cloud-login-dialog .cloud-login-tabs button{font-size:13px}
 .cloud-login-dialog .cloud-login-tabs [aria-selected=true]{background:var(--selection);color:var(--lavender)}
 @media(max-width:420px){.figure-card{grid-template-columns:70px minmax(0,1fr) 22px;gap:8px}.card-thumbnail-button,.card-thumbnail-button .card-thumb{width:70px}.figure-card>.card-options{width:22px}.card-details .card-title{font-size:14px}}
+
+/* Approved compact cards: square thumbnail, folder left and provenance right. */
+.page-intro{padding-block:14px;align-items:center}.page-intro>div{display:flex;align-items:center}.page-intro h2{margin:0;line-height:1.2}
+.figure-card{grid-template-columns:80px minmax(0,1fr) 22px;gap:9px;padding:10px}
+.card-thumbnail-button,.card-thumbnail-button .card-thumb{width:80px;height:80px;aspect-ratio:1}
+.card-details{min-height:80px;gap:3px}.card-details .card-copy{gap:3px}
+.card-details .card-title{font-size:14px;line-height:1.25}.card-details .card-tags{font-size:10px;line-height:1.2}
+.card-learning-line{display:flex;align-items:center;gap:7px;min-width:0}
+.card-details .card-status{font-size:10px;padding:2px 7px;line-height:1.4;flex-shrink:0}
+.card-details .card-learning-line .card-meta{font-size:9px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-details .card-storage-status{font-size:10px;gap:5px;min-height:20px}
+.card-details .card-storage-status .card-provenance{flex:0 0 21px;width:21px;min-height:20px;height:20px;margin-left:auto}
+.card-details .card-provenance svg{width:19px;height:19px}.card-details .card-folder-icon{flex-basis:14px;width:14px;height:20px}.card-details .card-folder-icon svg{width:14px;height:14px}
+.figure-card>.card-options{width:22px}
+.cloud-own-summary,.cloud-library-summary{align-items:flex-start}
+.cloud-own-summary::marker,.cloud-library-summary::marker{content:''}
+.cloud-own-availability,.cloud-library-availability{align-self:flex-start;justify-content:flex-end;margin-left:auto;flex-shrink:0;white-space:nowrap;max-width:none;line-height:20px;font-size:11px}
+.cloud-own-name h3,.cloud-library-summary h3{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cloud-own-summary>.cloud-library-picture{margin-top:0}.cloud-own-name small{font-size:10px}
+@media(max-width:420px){.figure-card{grid-template-columns:72px minmax(0,1fr) 20px;gap:7px;padding:9px}.card-thumbnail-button,.card-thumbnail-button .card-thumb{width:72px;height:72px}.card-details{min-height:72px;gap:2px}.card-details .card-copy{gap:2px}.card-details .card-title{font-size:13px}.card-details .card-status{font-size:9px;padding:2px 6px}.card-learning-line{gap:5px}.card-details .card-tags{font-size:9px}.card-details .card-storage-status{font-size:9px}.figure-card>.card-options{width:20px}.cloud-own-availability,.cloud-library-availability{font-size:10px;gap:4px}.cloud-own-availability .cloud-status-icon,.cloud-library-availability .cloud-status-icon{width:16px;flex-basis:16px}.cloud-own-availability svg,.cloud-library-availability svg{width:16px;height:16px}}

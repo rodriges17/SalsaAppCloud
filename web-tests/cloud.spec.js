@@ -360,7 +360,7 @@ test('local content changes show cloud with a pencil while learning status does 
  await page.locator('#figureTitle').fill('Meine Anpassung');await page.locator('#saveFigure').tap();await expect(page.locator('#editor')).not.toBeVisible();
  await expect(page.locator('[data-cloud-status=modified]')).toHaveCount(1);
  expect(await page.evaluate(async()=>{const s=await import('/pwa/storage.js');return (await s.figureVideos((await s.listFigures())[0]))[0].blob.size;})).toBeGreaterThan(0);
- await page.locator('#cloudButton').tap();await expandOwnFigure(page);await expect(page.locator('.cloud-local-status').first()).toContainText('lokal angepasst');
+ await page.locator('#cloudButton').tap();await expandOwnFigure(page);await expect(page.locator('.cloud-local-status').first()).toHaveText('Lokal verfügbar');await expect(page.locator('.cloud-local-status').first()).toHaveAttribute('data-modified','true');
 });
 
 for(const folder of [false,true])test(`uploaded ${folder?'folder':'app'} original is marked local across reload without importing it back`,async({page,browserName})=>{
@@ -639,7 +639,7 @@ for(const authenticated of [false,true])test(`library back stays in cloud catalo
  if(authenticated)await signIn(page);await mock(page,authenticated,false);await start(page);await page.locator('#cloudButton').tap();
  if(authenticated)await page.getByRole('button',{name:'Bibliotheken',exact:true}).tap();
  await page.getByRole('button',{name:'Öffnen',exact:true}).tap();
- await expect(page.getByRole('button',{name:'Zurück zu allen Bibliotheken',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'< Zurück zu allen Bibliotheken',exact:true})).toBeVisible();
  await page.locator('#cloudBack').tap();await expect(page.locator('#cloudDialog')).toBeVisible();await expect(page.getByRole('button',{name:'Öffnen',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Öffnen',exact:true}).tap();await page.keyboard.press('Escape');await expect(page.locator('#cloudDialog')).toBeVisible();await expect(page.getByRole('button',{name:'Öffnen',exact:true})).toBeVisible();
  await page.keyboard.press('Escape');await expect(page.locator('#cloudDialog')).toBeHidden();
@@ -661,4 +661,21 @@ test('a private library link still offers guest login when reading its details i
  await page.route(`${host}/functions/v1/cloud`,async route=>{const input=route.request().postDataJSON();if(input.action!=='library')return route.fallback();return route.fulfill({status:403,contentType:'application/json',body:JSON.stringify({error:'Bitte für diese private Bibliothek anmelden.'})});});
  await page.goto('/pwa/?library=lib-1');await expect(page.locator('#cloudError')).toContainText('anmelden');
  await page.getByRole('button',{name:'Anmeldedialog öffnen',exact:true}).tap();await expect(page.getByRole('dialog',{name:'Anmelden',exact:true})).toBeVisible();
+});
+
+
+test('available cloud figures share a top-right label, keep expansion without arrows and hide download selection',async({page},info)=>{
+ await signIn(page);await mock(page,true,true,true,{videos:[{id:'video-1',name:'Führung'},{id:'video-2',name:'Folgen'}]});await start(page);
+ await page.evaluate(async()=>{const s=await import('/pwa/storage.js'),blob=await(await fetch('/web-tests/fixtures/clip.mp4')).blob();await s.saveFigure({id:'available-pair',title:'Meine lokale Figur',description:'Lokal',tags:['Salsa'],status:'Sitzt',importFingerprint:'cloud:rev-1:video-1,video-2'},['one','two'].map(id=>({id,name:id,blob,confirmed:true,duration:6,width:320,height:180})));});
+ await page.locator('#cloudButton').tap();const own=page.locator('.cloud-own-figure').first();
+ await expect(own.locator('.cloud-own-availability')).toHaveText('Lokal verfügbar');await expect(own.locator('.cloud-library-chevron')).toHaveCount(0);
+ await expandOwnFigure(page);await expect(own.getByRole('checkbox')).toHaveCount(0);await expect(own.getByRole('heading',{name:'Videos zum Herunterladen auswählen',exact:true})).toBeHidden();
+ await expect(own.getByRole('button',{name:'Video: Führung',exact:true})).toBeVisible();await expect(own.getByRole('button',{name:'Video: Folgen',exact:true})).toBeVisible();await expect(own.getByRole('button',{name:'Lokale Figur öffnen',exact:true})).toBeVisible();
+ await page.screenshot({path:info.outputPath('available-own-cloud-no-download-checkboxes.png')});
+ await page.getByRole('button',{name:'Bibliotheken',exact:true}).tap();await page.getByRole('button',{name:'Öffnen',exact:true}).tap();
+ await expect(page.getByRole('button',{name:'< Zurück zu allen Bibliotheken',exact:true})).toBeVisible();const summary=page.locator('.cloud-library-summary').first();
+ await expect(summary.locator('.cloud-library-availability')).toHaveText('Lokal verfügbar');await expect(summary.locator('.cloud-library-chevron')).toHaveCount(0);
+ expect(await summary.evaluate(row=>{const a=row.querySelector('.cloud-library-availability').getBoundingClientRect(),title=row.querySelector('h3').getBoundingClientRect(),r=row.getBoundingClientRect();return Math.abs(a.top-title.top)<2&&Math.abs(a.right-r.right)<2;})).toBe(true);
+ await expandLibraryFigure(page);const entry=page.locator('.cloud-library-figure').first();await expect(entry.getByRole('checkbox')).toHaveCount(0);await expect(entry.getByRole('button',{name:'Lokale Figur öffnen',exact:true})).toBeVisible();
+ await page.screenshot({path:info.outputPath('available-library-row-top-right.png')});
 });

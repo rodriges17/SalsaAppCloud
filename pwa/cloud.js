@@ -271,7 +271,7 @@ async function libraryView(id, detail) {
   const lib = detail.library, manage = !!state.me && !!detail.manage;
   if (libraryEditing?.id === id && manage) { renderLibraryEditor(id, detail); return; }
   libraryEditing = null;
-  const back = action('Zurück zu allen Bibliotheken', () => navigate('libraries')); back.className = 'cloud-public-back'; body.append(back);
+  const back = action('< Zurück zu allen Bibliotheken', () => navigate('libraries')); back.className = 'cloud-public-back'; body.append(back);
   const intro = section(lib.title); intro.classList.add('cloud-library-hero');
   const title = intro.querySelector('h3'); title.className = 'cloud-library-title';
   intro.prepend(node('p', lib.visibility === 'public' ? 'Öffentliche Bibliothek' : 'Private Bibliothek', 'cloud-library-eyebrow'));
@@ -297,9 +297,9 @@ async function libraryView(id, detail) {
       if (rev) localIndex.reconcile(rev, localFigures);
       const local = rev && localIndex.find(rev.id, localFigures);
       const known = rev && localFigures.find(f => localIndex.link(f)?.revision === rev.id);
-      cloudStatusLabel(availability, local ? 'Lokal' : known?.folderAccessRequired ? 'Zugriff nötig' : 'Cloud', !!local && localIndex.status(local) === 'modified');
-      availability.dataset.local = String(!!local); availability.title = local ? 'Figur lokal verfügbar' : known?.folderAccessRequired ? 'Ordnerzugriff erforderlich' : 'Noch nicht lokal gespeichert';
-    }; localUpdates.push(update); update(); summary.append(availability, node('span', '⌄', 'cloud-library-chevron'));
+      cloudStatusLabel(availability, local ? 'Lokal verfügbar' : known?.folderAccessRequired ? 'Zugriff nötig' : 'Cloud', !!local && localIndex.status(local) === 'modified');
+      availability.dataset.local = String(!!local); availability.title = local ? localIndex.status(local) === 'modified' ? 'Lokal verfügbar · lokal angepasst' : 'Lokal verfügbar' : known?.folderAccessRequired ? 'Ordnerzugriff erforderlich' : 'Noch nicht lokal gespeichert';
+    }; localUpdates.push(update); update(); summary.append(availability);
     box.append(summary); const content = node('div', undefined, 'cloud-library-content'); box.append(content); let mounted = false;
     box.ontoggle = () => {
       if (!box.open) { clearPreviews(content); return; }
@@ -482,14 +482,14 @@ function revisionCard(parent, rev, label, parentTitle = parent.querySelector('h3
 }
 function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}) {
   if (!rev.videos.length) return;
-  const chosen = [], multiple = rev.videos.length > 1;
+  const chosen = [], localLabels = [], multiple = rev.videos.length > 1;
   const localStatus = node('p', '', 'cloud-local-status'); localStatus.hidden = true; localStatus.setAttribute('role', 'status');
   box.firstElementChild?.after(localStatus);
-  if (multiple) box.append(node('h4', 'Videos zum Herunterladen auswählen'));
+  const choiceHeading = multiple ? node('h4', 'Videos zum Herunterladen auswählen') : null; if (choiceHeading) box.append(choiceHeading);
   for (const v of rev.videos) {
     const label = `${v.name || 'Video'} · ${MB(v.size)}`;
     const check = multiple ? checkbox(box, label, true) : null;
-    if (!multiple) box.append(node('p', label));
+    const localLabel = node('p', label); box.append(localLabel); localLabel.hidden = multiple; localLabels.push(localLabel);
     chosen.push([check, v]);
     box.append(action(`Video: ${v.name || 'Ohne Namen'}`, () => previewVideo(box, rev, v)));
   }
@@ -548,8 +548,14 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
     localStatus.hidden = !localFigure && !known;
     localStatus.dataset.accessRequired = String(accessRequired);
     const modified = localFigure && localIndex.status(localFigure) === 'modified';
-    cloudStatusLabel(localStatus, localFigure ? modified ? 'Lokal verfügbar · lokal angepasst' : 'Lokal verfügbar'
+    cloudStatusLabel(localStatus, localFigure ? 'Lokal verfügbar'
       : accessRequired ? 'Lokal zugeordnet · Ordnerzugriff erforderlich' : 'Lokale Dateien fehlen · erneut herunterladen', modified);
+    localStatus.dataset.modified = String(!!modified); localStatus.title = modified ? 'Lokal verfügbar · lokal angepasst' : localStatus.textContent;
+    if (choiceHeading) choiceHeading.hidden = !!localFigure;
+    chosen.forEach(([check], index) => {
+      if (check) check.parentElement.hidden = !!localFigure;
+      localLabels[index].hidden = multiple && !localFigure;
+    });
     take.textContent = localFigure ? 'Lokale Figur öffnen' : label;
     take.disabled = accessRequired;
     repair.hidden = true;
@@ -594,16 +600,16 @@ function ownFigures() {
     const summary = node('summary', undefined, 'cloud-own-summary');
     const picture = node('span', undefined, 'cloud-library-picture'); if (latest?.videos?.length) thumbnail(picture, latest);
     const name = node('div', undefined, 'cloud-own-name'); name.append(node('h3', latest?.title ?? 'Noch nicht fertig hochgeladene Figur'));
-    name.append(node('small', `${latest?.videos?.length ?? 0} Videos · ${f.public_allowed ? 'Öffentliche Freigabe erlaubt' : 'Privat verwendbar'}`));
+    name.append(node('small', `${latest?.videos?.length ?? 0} Video${latest?.videos?.length === 1 ? '' : 's'} · ${f.public_allowed ? 'Öffentliche Freigabe erlaubt' : 'Privat verwendbar'}`));
     const availability = node('span', undefined, 'cloud-own-availability');
     const update = () => {
       if (latest) localIndex.reconcile(latest, localFigures);
       const local = latest && localIndex.find(latest.id, localFigures);
       const known = latest && localFigures.find(item => revisions.some(rev => localIndex.link(item)?.revision === rev.id || item.importFingerprint?.startsWith(`cloud:${rev.id}:`)));
-      cloudStatusLabel(availability, local ? localIndex.status(local) === 'modified' ? 'Lokal angepasst' : 'Lokal verfügbar' : known?.folderAccessRequired ? 'Ordnerzugriff nötig' : known ? 'Lokale Dateien fehlen' : 'Nur in der Cloud', !!local && localIndex.status(local) === 'modified');
-      availability.dataset.local = String(!!local);
+      cloudStatusLabel(availability, local ? 'Lokal verfügbar' : known?.folderAccessRequired ? 'Ordnerzugriff nötig' : known ? 'Lokale Dateien fehlen' : 'Nur in der Cloud', !!local && localIndex.status(local) === 'modified');
+      availability.dataset.local = String(!!local); availability.title = local && localIndex.status(local) === 'modified' ? 'Lokal verfügbar · lokal angepasst' : availability.textContent;
     }; localUpdates.push(update); update();
-    const chevron = node('span', '⌄', 'cloud-library-chevron'); chevron.setAttribute('aria-hidden', 'true'); summary.append(picture, name, availability, chevron); card.append(summary);
+    summary.append(picture, name, availability); card.append(summary);
     const content = node('div', undefined, 'cloud-own-content'); card.append(content); let mounted = false, selectedTab = 'videos';
     const mount = () => {
       if (mounted) return; mounted = true;

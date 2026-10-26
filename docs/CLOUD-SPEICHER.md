@@ -53,3 +53,10 @@ Die Übersicht zeigt Vorschaubild, Name und lokalen Status. Ein Klick klappt ein
 Aus einer Bibliothek führen der obere Zurück-Pfeil, der Link „Zurück zu allen Bibliotheken“ und Android-Zurück zur Bibliotheksübersicht. Aus der Bearbeitung geht es zunächst zur Bibliotheksansicht; offene Änderungen werden vorher abgefragt. Gäste öffnen die Anmeldung über das Icon rechts neben „Cloud-Speicher“. Nach erfolgreicher Anmeldung bleibt die aktuelle Bibliothek oder Übersicht geöffnet.
 
 Downloads übernehmen Beschreibung und Tags. Bereits vorhandene lokale Figuren erhalten nur fehlende Angaben; eigene Angaben und Lernstatus bleiben erhalten. Nur ausdrücklich bestätigtes Ersetzen übernimmt die Cloud-Angaben vollständig.
+
+
+### Kompakte Karten und lokale Verfügbarkeit
+
+Lokale Figuren zeigen ein quadratisches Vorschaubild. Daneben stehen Lernstatus, Dauer und Videoanzahl; unten links Ordnericon und Speicherort (auch App-Speicher), unten rechts das Herkunftsicon. Lange Texte werden gekürzt.
+
+Cloud-Figuren klappen per Klick oder Tastatur auf, ohne zusätzlichen Pfeil. Icon und „Lokal verfügbar“ stehen oben rechts. Bei lokal verfügbaren Figuren entfallen Download-Auswahl und Checkboxen; die Videovorschau und „Lokale Figur öffnen“ bleiben erreichbar. Fehlende oder nicht zugängliche lokale Dateien werden weiterhin gesondert gekennzeichnet.
