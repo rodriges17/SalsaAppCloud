@@ -282,3 +282,31 @@ test('admin deletion lists and removes references; a library owner cannot delete
  await api(A,'delete_figure',{figure:done.figure});
  assert.equal((await api(null,'library',{id:lib})).entries.length,0);
 });
+
+test('library editor commits metadata, additions, removals and order atomically with conflict protection',async()=>{
+ const id=(await api(B,'library_save',{title:'Editor',visibility:'private',collaborative:false,moderated:false})).id;
+ const a=await uploaded(B,undefined,true),b=await uploaded(B,undefined,true),c=await uploaded(B,undefined,true);
+ await api(B,'attach',{library:id,revision:a.revision});await api(B,'attach',{library:id,revision:b.revision});
+ const before=await api(B,'library',{id});
+ const payload={id,title:'Gespeichert',description:'Notizen',visibility:'public',collaborative:false,moderated:false,expected_version:before.library.edit_version,order:[c.figure,b.figure],additions:[{figure:c.figure,revision:c.revision}]};
+ await assert.rejects(api(null,'library_commit',payload),/anmelden/);await assert.rejects(api(C,'library_commit',payload),/Berechtigung/);
+ await assert.rejects(api(B,'library_commit',{...payload,title:''}));
+ const unchanged=await api(B,'library',{id});assert.equal(unchanged.library.edit_version,before.library.edit_version);assert.deepEqual(unchanged.entries.map(e=>e.figure_id),[a.figure,b.figure]);
+ await api(B,'library_commit',payload);
+ const saved=await api(null,'library',{id});assert.equal(saved.library.title,'Gespeichert');assert.deepEqual(saved.entries.map(e=>e.figure_id),[c.figure,b.figure]);
+ assert.ok((await api(B,'state')).own_figures.some(f=>f.id===a.figure),'Removing a membership must retain cloud figure');
+ await assert.rejects(api(A,'library_commit',payload),/inzwischen geändert/);
+ const d=await uploaded(B,undefined,true),fresh=await api(B,'library',{id});
+ await assert.rejects(api(B,'library_commit',{...payload,expected_version:fresh.library.edit_version,order:[d.figure,A],additions:[{figure:d.figure,revision:d.revision}]}),/nicht mehr verfügbar/);
+ assert.equal((await api(B,'library',{id})).library.edit_version,fresh.library.edit_version);
+ assert.deepEqual((await api(B,'library',{id})).entries.map(e=>e.figure_id),[c.figure,b.figure]);
+});
+test('library editor cannot add unpublished-to-public or unreadable figures and supports empty libraries',async()=>{
+ const id=(await api(B,'library_save',{title:'Private editor',visibility:'private',collaborative:false,moderated:false})).id;
+ const hidden=await uploaded(B,undefined,false);let detail=await api(B,'library',{id});
+ const payload={id,title:'Private editor',description:'',visibility:'public',collaborative:false,moderated:false,expected_version:detail.library.edit_version,order:[hidden.figure],additions:[{figure:hidden.figure,revision:hidden.revision}]};
+ await assert.rejects(api(B,'library_commit',payload),/Veröffentlichung erlauben/);
+ await api(B,'library_commit',{...payload,visibility:'private'});
+ detail=await api(B,'library',{id});await api(B,'library_commit',{...payload,visibility:'private',expected_version:detail.library.edit_version,order:[],additions:[]});
+ assert.equal((await api(B,'library',{id})).entries.length,0);
+});

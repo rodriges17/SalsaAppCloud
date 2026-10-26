@@ -28,6 +28,16 @@ Eine Cloudfigur hat genau einen aktuellen Inhalt. Speichern ersetzt diesen Inhal
 
 Nur Besitzer und Plattformadministratoren dürfen eine Cloudfigur bearbeiten oder löschen. Bibliotheksbesitz, Mitgliedschaft und Beitragsrechte verleihen keine Bearbeitungsrechte an fremden Figuren. Zusätzliche Figurenbearbeiter gibt es nicht mehr. Vor dem Löschen werden die betroffenen Bibliotheken angezeigt; ihre Referenzen werden mit entfernt. Lokale Kopien bleiben erhalten.
 
+In „Meine Figuren“ kennzeichnet das Gerätesymbol eine rein lokale Figur, die Wolke eine heruntergeladene oder erfolgreich hochgeladene Figur und die Wolke mit Stift eine danach lokal angepasste Figur. Titel, Beschreibung, Tags und Videos zählen als Inhalt; der persönliche Lernstatus nicht. Nach erfolgreichem Hochladen des aktuellen Inhalts verschwindet der Stift. Die Cloudansicht bietet bei einer zugehörigen lokalen Figur „Lokale Figur öffnen“ an. Die Zuordnung ist keine Zusage, dass der lokale Inhalt dem aktuellen Cloudinhalt entspricht.
+
+
+## Bibliothek lesen und bearbeiten
+
+Die Bibliothek öffnet als kompakte, nummerierte Figurenliste. Eine Zeile zeigt Vorschaubild, Titel und lokalen Status. Durch Antippen klappt die Figur mit Beschreibung, Tags, Vorschau und lokaler Übernahme auf; die zuvor geöffnete Figur klappt zu. Unter der Liste stehen Bibliothekslink und „Link kopieren“. Der Sammeldownload bleibt oberhalb der Liste.
+
+Besitzer und Plattform-Administratoren öffnen „Bibliothek bearbeiten“. Unter „Figuren“ lassen sich Zuordnungen hinzufügen, entfernen und per Griff oder Pfeilen sortieren. „Einstellungen“ enthält Name, Beschreibung, Sichtbarkeit und Zugriff. „Bibliothek speichern“ übernimmt Metadaten, Figurenzuordnungen und Reihenfolge gemeinsam. Bei einem Konflikt bleibt der Entwurf erhalten; der aktuelle Stand kann neu geladen werden. Beim Verlassen stehen Speichern, Verwerfen und Weiter bearbeiten zur Wahl.
+
+„Figuren hinzufügen“ bietet eine Mehrfachauswahl aus Meine Cloud-Figuren. Bereits enthaltene Figuren sind markiert. „Neue Figur hochladen“ verwendet eine lokale Figur und den normalen Upload-Ablauf. Der Upload speichert zunächst nur in Meine Cloud-Figuren. Die Bibliothekszuordnung bleibt bis zum Speichern ein Entwurf; beim Abbrechen der Bibliotheksbearbeitung bleibt die hochgeladene Cloud-Figur erhalten.
 In „Meine Figuren“ kennzeichnet das Gerätesymbol eine rein lokale Figur, die Wolke eine heruntergeladene oder erfolgreich hochgeladene Figur und das Gerät mit kleinem Stift im Display eine danach lokal angepasste Figur. Titel, Beschreibung, Tags und Videos zählen als Inhalt; der persönliche Lernstatus nicht. Nach erfolgreichem Hochladen des aktuellen Inhalts verschwindet der Stift. Die Cloudansicht bietet bei einer zugehörigen lokalen Figur „Lokale Figur öffnen“ an. Die Zuordnung ist keine Zusage, dass der lokale Inhalt dem aktuellen Cloudinhalt entspricht.
 
 Die einzeilige Statusleiste unter jeder lokalen Figurenkarte enthält das Herkunftsicon, ein Ordnersymbol bei Geräteordnern, den Namen des Speicherordners (oder „App-Speicher“), Dauer und Videoanzahl. Lange Ordnernamen werden gekürzt; der vollständige Name bleibt als Tooltip verfügbar. Antippen des Herkunftsicons erklärt den Status.

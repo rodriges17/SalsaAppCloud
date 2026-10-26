@@ -25,10 +25,11 @@ export async function runParityCase(page, { root, fixture, native = false, scena
    const {action,payload}=route.request().postDataJSON();let result={ok:true};
    if(action==='state')result={me:{id:'order-owner',email:'owner@example.test',upload_enabled:false,used:0,quota:0},libraries:[{...library,manage:true}],own_figures:[]};
    if(action==='library')result={library,manage:true,contribute:false,members:[],entries};
-   if(action==='library_save'){saved=payload;entries=payload.order.map(id=>entries.find(e=>e.figure_id===id));result={id:library.id};}
+   if(action==='library_commit'){saved=payload;entries=payload.order.map(id=>entries.find(e=>e.figure_id===id));result={id:library.id};}
    await route.fulfill({contentType:'application/json',body:JSON.stringify(result)});
   });
   await page.locator('#cloudButton').click();await page.getByRole('button',{name:'Öffnen',exact:true}).click();
+  await page.getByRole('button',{name:'Bibliothek bearbeiten',exact:true}).click();
   await page.locator('.cloud-order-number').nth(2).waitFor();
   assert((await page.locator('.cloud-order-number').allTextContents()).join(',')==='1,2,3','Numbering is not ascending');
   const last=page.locator('[data-library-figure="order-2"]');
@@ -283,7 +284,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   });
   async function openLibrary(){await page.locator('#cloudButton').click();await page.getByRole('button',{name:'Öffnen',exact:true}).click();}
   if(scenario==='cloud-single-direct-download'){
-   await openLibrary();await page.getByRole('button',{name:'In meine Figuren übernehmen',exact:true}).first().click();
+   await openLibrary();await page.locator('.cloud-library-summary').first().click();await page.getByRole('button',{name:'In meine Figuren übernehmen',exact:true}).first().click();
    await page.waitForFunction(()=>!document.querySelector('#cloudDialog').open);
    assert(!await page.locator('#editor').isVisible(),'Single cloud download opened the editor');
    const saved=await page.evaluate(async root=>{const s=await import(root+'storage.js'),f=(await s.listFigures())[0];return {title:f.title,status:f.status,description:f.description,tags:f.tags,duration:(await s.figureVideos(f))[0].duration};},root);

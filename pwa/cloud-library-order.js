@@ -12,8 +12,8 @@ export function createLibraryOrder(entries) {
   };
 }
 
-export function mountLibraryOrder(container, entries, { manage, node, action, changed }) {
-  const order = createLibraryOrder(entries), cards = new Map(), controls = new Map();
+export function mountLibraryOrder(container, entries, { manage, node, action, changed, order: providedOrder }) {
+  const order = providedOrder ?? createLibraryOrder(entries), cards = new Map(), controls = new Map();
   const announce = node('p', '', 'cloud-order-status'); announce.setAttribute('role', 'status');
   function update() {
     const focused = container.contains(document.activeElement) ? document.activeElement : null;
@@ -23,7 +23,7 @@ export function mountLibraryOrder(container, entries, { manage, node, action, ch
       control.number.textContent = String(index + 1);
       card.setAttribute('aria-label', `Position ${index + 1}: ${control.title}`);
       if (manage) { control.up.disabled = index === 0; control.down.disabled = index === entries.length - 1; }
-      container.append(card);
+      const at = container.children[index]; if (at !== card) container.insertBefore(card, at ?? null);
     });
     focused?.focus({ preventScroll: true });
     changed?.(order);
@@ -56,6 +56,8 @@ export function mountLibraryOrder(container, entries, { manage, node, action, ch
 
       control.up = action('Nach oben', () => move(id, order.ids.indexOf(id) - 1));
       control.down = action('Nach unten', () => move(id, order.ids.indexOf(id) + 1));
+      control.up.setAttribute('aria-label', 'Nach oben'); control.up.textContent = '↑'; control.up.title = 'Nach oben';
+      control.down.setAttribute('aria-label', 'Nach unten'); control.down.textContent = '↓'; control.down.title = 'Nach unten';
       bar.append(handle, control.up, control.down);
     }
     controls.set(id, control); card.prepend(bar); update();

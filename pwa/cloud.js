@@ -1,3 +1,4 @@
+import { createLibraryDraft } from './cloud-library-draft.js';
 import { mountLibraryOrder } from './cloud-library-order.js';
 import { videoHash } from './cloud-dedup.js';
 import { createMemberView } from './cloud-members.js';
@@ -13,9 +14,10 @@ import { createPosterView, posterPayload } from './cloud-posters.js';
 const node = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
 const MB = value => `${(Number(value ?? 0) / 1000000).toFixed(1)} MB`;
 const action = (label, work) => { const b = node('button', label, 'secondary'); b.type = 'button'; b.onclick = () => Promise.resolve().then(work).catch(report); return b; };
-let peopleView, libraryDraft = null;
+let peopleView, libraryDraft = null, libraryEditing = null, libraryUpload = null, lastLibraryDetail = null;
 async function leaveLibraryDraft() {
-  if (!libraryDraft?.dirty()) return true;
+  const activeDraft = libraryDraft ?? libraryUpload?.hook;
+  if (!activeDraft?.dirty()) return true;
   const choice = await new Promise(resolve => {
     const prompt = node('dialog', undefined, 'cloud-unsaved-dialog');
     prompt.append(node('h3', 'Bibliothek noch nicht gespeichert'), node('p', 'Möchtest du deine Änderungen speichern oder verwerfen?'));
@@ -25,8 +27,8 @@ async function leaveLibraryDraft() {
     document.body.append(prompt); prompt.showModal();
   });
   if (choice === 'stay') return false;
-  if (choice === 'save') { await libraryDraft.save(); return !libraryDraft?.dirty(); }
-  libraryDraft = null; return true;
+  if (choice === 'save') { await activeDraft.save(); return !(libraryDraft ?? libraryUpload?.hook)?.dirty(); }
+  libraryDraft = null; libraryEditing = null; libraryUpload = null; source = null; return true;
 }
 
 let dialog, body, errorBox, statusBox, hooks, state, current, busy = false, controller, source = null, area = 'figures';
@@ -60,10 +62,10 @@ async function recoverAccess() {
 }
 const hasOwnArea = value => !!value?.me && (value.me.upload_enabled || value.own_figures?.length > 0);
 const initialArea = value => hasOwnArea(value) ? 'figures' : 'libraries';
-async function close() { if (busy || !await leaveLibraryDraft()) return; libraryDraft = null; viewEpoch++; renderedView = null; clearTimeout(statusTimer); cancelThumbnails(); dialog.close(); body.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); }); source = null; hooks.closed?.(); }
+async function close() { if (busy || !await leaveLibraryDraft()) return; libraryDraft = null; libraryEditing = null; libraryUpload = null; viewEpoch++; renderedView = null; clearTimeout(statusTimer); cancelThumbnails(); dialog.close(); body.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); }); source = null; hooks.closed?.(); }
 async function navigate(next, library = null) {
   if (!await leaveLibraryDraft()) return;
-  source = null; area = next; if (['admin', 'create'].includes(next)) await run('Laden …', () => load(library)); else await load(library, true);
+  libraryEditing = null; libraryDraft = null; libraryUpload = null; source = null; area = next; if (['admin', 'create'].includes(next)) await run('Laden …', () => load(library)); else await load(library, true);
 }
 function focusSection(box) {
   box.tabIndex = -1; box.focus(); box.scrollIntoView({ block: 'start' });
@@ -103,6 +105,7 @@ async function load(library = current, allowCache = false) {
     if (library === current && allowCache !== 'refresh') return;
     if (!await leaveLibraryDraft()) return;
   }
+  if (libraryEditing && library === current && !allowCache) return;
   let epoch = ++viewEpoch;
   let owner, cached, detail, available;
   try {
@@ -137,7 +140,7 @@ async function load(library = current, allowCache = false) {
     } });
     if (!active()) return;
     // Do not interrupt a form, an active download, expanded history or a video preview.
-    const editing = !snapshot.accessChanged && (libraryDraft?.dirty() || cached && (busy || allowCache !== 'refresh' && body.querySelector('details[open], video, form input:focus, form textarea:focus, input[type=checkbox]:not(:checked)')));
+    const editing = !snapshot.accessChanged && (libraryEditing || libraryDraft?.dirty() || cached && (busy || allowCache !== 'refresh' && body.querySelector('details[open], video, form input:focus, form textarea:focus, input[type=checkbox]:not(:checked)')));
     const changed = allowCache === 'refresh' || !cached || JSON.stringify(contentState(state)) !== JSON.stringify(contentState(snapshot.value)) || library && JSON.stringify(detail?.value) !== JSON.stringify(freshDetail?.value);
     if (!editing && changed) {
       const scroll = cached ? body.scrollTop : 0;
@@ -236,55 +239,159 @@ function libraryForm(lib = null, order = null) {
   if (!lib) form.append(action('Abbrechen', () => navigate('libraries')));
   form.onsubmit = event => event.preventDefault();
 }
-async function libraryView(id, detail) {
-  const lib = detail.library;
-  const manage = !!state.me && !!detail.manage;
-  const contribute = !!state.me && !!detail.contribute;
-  const intro = section(lib.title); intro.append(node('p', lib.description));
-  intro.append(node('p', state.me && lib.owner_id === state.me.id ? 'Besitzer · Bibliothek verwalten' : manage ? 'Plattform-Administrator · Bibliothek verwalten' : contribute ? 'Mitwirkender' : 'Lesen', 'cloud-role-badge'));
-  if (state.me && !state.me.upload_enabled && detail.members?.some(m => m.id === state.me.id && m.role === 'contributor')) intro.append(node('p', 'Mitwirken benötigt eine Upload-Freigabe.', 'cloud-person-notice'));
-  // Share the public entry point, never this WebView's internal or preview URL.
+function libraryShare(id, lib) {
+  const box = section('Bibliothek teilen'); box.classList.add('cloud-library-share');
+  box.append(node('p', lib.visibility === 'public' ? 'Dieser Link ist ohne Anmeldung lesbar.' : 'Zum Öffnen sind Anmeldung und Bibliotheksberechtigung erforderlich.'));
   const share = new URL('https://rodriges17.github.io/SalsaAppCloud/'); share.searchParams.set('library', id);
-  const link = field(intro, 'Bibliothekslink', share.href); link.readOnly = true;
-  intro.append(action('Link kopieren', async () => {
+  const row = node('div', undefined, 'cloud-library-link'); const link = field(row, 'Bibliothekslink', share.href); link.readOnly = true;
+  row.append(action('Link kopieren', async () => {
     try { await navigator.clipboard.writeText(link.value); }
     catch { link.focus(); link.select(); report(new Error('Bitte den markierten Link kopieren.')); }
-  }));
-  if (lib.visibility === 'private') intro.append(node('p', 'Zum Öffnen sind Anmeldung und Bibliotheksberechtigung erforderlich.'));
-  if (lib.visibility === 'public') intro.append(node('p', 'Figuren ohne Zustimmung zur öffentlichen Veröffentlichung bleiben für Lesende verborgen.'));
-  libraryDownloadControls(intro, detail.entries);
-  const orderHint = node('p', manage ? 'Figuren am Griff ziehen oder mit den Pfeilen verschieben. Änderungen mit „Bibliothek speichern“ übernehmen.' : 'Figuren in Bibliotheksreihenfolge.');
-  intro.append(orderHint);
-  const entriesBox = node('div', undefined, 'cloud-library-entries'); body.append(entriesBox);
-  const ordering = mountLibraryOrder(entriesBox, detail.entries, { manage, node, action, changed: order => {
-    if (manage) orderHint.textContent = order.dirty ? 'Reihenfolge geändert · noch nicht gespeichert. Bitte „Bibliothek speichern“ wählen.' : 'Figuren am Griff ziehen oder mit den Pfeilen verschieben. Änderungen mit „Bibliothek speichern“ übernehmen.';
-  } });
-  intro.append(ordering.announce);
-  for (const entry of detail.entries) {
-    const box = section(entry.published?.title ?? entry.pending?.title ?? 'Figur ohne veröffentlichte Version', entriesBox);
-    ordering.add(entry, box);
-    if (entry.published) revisionCard(box, entry.published, 'Veröffentlicht');
-    if (entry.pending) {
-      revisionCard(box, entry.pending, 'Zur Freigabe');
-      if (manage) box.append(action('Freigeben', () => review(true)), action('Ablehnen', () => review(false)));
-    }
-    async function review(accept) { if (!await leaveLibraryDraft()) return; await run('Prüfung speichern …', async () => { await cloudCall('review', { library: id, figure: entry.figure_id, accept }); await load(id); }); }
-    if (manage || state.me && entry.owner_id === state.me.id) box.append(action('Aus Bibliothek entfernen', async () => { if (!await leaveLibraryDraft()) return; return run('Entfernen …', async () => { await cloudCall('detach', { library: id, figure: entry.figure_id }); await load(id); }); }));
-    if (state.me?.upload_enabled && entry.published) variantButton(box, entry.published);
-    if (contribute && entry.published) box.append(action('In weitere Bibliothek aufnehmen', () => attachForm(entry.published)));
-  }
+  })); box.append(row);
+}
+async function libraryView(id, detail) {
+  lastLibraryDetail = detail;
+  const lib = detail.library, manage = !!state.me && !!detail.manage;
+  if (libraryEditing?.id === id && manage) { renderLibraryEditor(id, detail); return; }
+  libraryEditing = null;
+  const intro = section(lib.title); intro.classList.add('cloud-library-hero');
+  const title = intro.querySelector('h3'); title.className = 'cloud-library-title';
+  intro.prepend(node('p', lib.visibility === 'public' ? 'Öffentliche Bibliothek' : 'Private Bibliothek', 'cloud-library-eyebrow'));
   if (manage) {
-    libraryForm(lib, ordering.order);
-    createMemberView({ box: section('Mitglieder & Zugriff'), lib, members: detail.members, me: state.me, people: state.people ?? [], node, action, field, select, call: cloudCall, run: async (...args) => { if (await leaveLibraryDraft()) return run(...args); }, confirm: options => hooks.confirm(options), refresh: () => load(id) });
-    const danger = section('Gefahrenbereich'); danger.classList.add('danger-zone');
-    danger.append(node('p', 'Beim Löschen werden diese Bibliothek und ihre Mitgliedschaften entfernt. Cloud-Figuren, Videos und lokale Kopien bleiben erhalten.'));
-    const remove = action('Bibliothek löschen', async () => {
-      if (!await leaveLibraryDraft()) return;
-      if (await hooks.confirm({ title: `Bibliothek „${lib.title}“ löschen?`, message: `„${lib.title}“ und ihre Mitgliedschaften werden entfernt. Cloud-Figuren, Videos und lokale Kopien bleiben erhalten.`, ok: 'Bibliothek löschen', destructive: true })) {
-        await run('Löschen …', async () => { await cloudCall('library_delete', { id }); area = 'libraries'; await load(null); });
-      }
-    }); remove.className = 'danger-button'; danger.append(remove);
+    const edit = action('Bibliothek bearbeiten', () => {
+      libraryEditing = { id, detail, model: createLibraryDraft(lib, detail.entries), tab: 'figures' };
+      return renderCloud(id, detail);
+    }); edit.className = 'cloud-library-edit'; title.after(edit);
   }
+  if (lib.description) intro.append(node('p', lib.description, 'cloud-library-description'));
+  intro.append(node('p', `${detail.entries.length} Figuren${manage ? lib.owner_id === state.me.id ? ' · Besitzer' : ' · Plattform-Administrator' : ''}`, 'cloud-library-meta'));
+  libraryDownloadControls(intro, detail.entries);
+  const entriesBox = node('div', undefined, 'cloud-library-entries cloud-library-compact'); body.append(entriesBox);
+  entriesBox.setAttribute('aria-label', 'Figuren in Bibliotheksreihenfolge');
+  for (const [index, entry] of detail.entries.entries()) {
+    const rev = entry.published ?? entry.pending, box = node('details', undefined, 'cloud-library-figure'); box.dataset.libraryFigure = entry.figure_id;
+    const summary = node('summary', undefined, 'cloud-library-summary');
+    summary.append(node('span', String(index + 1), 'cloud-order-number'));
+    const picture = node('span', undefined, 'cloud-library-picture'); if (rev?.videos?.length) thumbnail(picture, rev); summary.append(picture);
+    summary.append(node('h3', rev?.title ?? 'Noch nicht veröffentlicht'));
+    const availability = node('span', undefined, 'cloud-library-availability');
+    const update = () => {
+      if (rev) localIndex.reconcile(rev, localFigures);
+      const local = rev && localIndex.find(rev.id, localFigures);
+      const known = rev && localFigures.find(f => localIndex.link(f)?.revision === rev.id);
+      availability.textContent = local ? '☁ Lokal' : known?.folderAccessRequired ? 'Zugriff nötig' : '↓ Cloud';
+      availability.dataset.local = String(!!local); availability.title = local ? 'Figur lokal verfügbar' : known?.folderAccessRequired ? 'Ordnerzugriff erforderlich' : 'Noch nicht lokal gespeichert';
+    }; localUpdates.push(update); update(); summary.append(availability, node('span', '⌄', 'cloud-library-chevron'));
+    box.append(summary); const content = node('div', undefined, 'cloud-library-content'); box.append(content); let mounted = false;
+    box.ontoggle = () => {
+      if (!box.open) { clearPreviews(content); return; }
+      for (const other of entriesBox.querySelectorAll('details[open]')) if (other !== box) other.open = false;
+      if (!mounted) {
+        mounted = true;
+        if (entry.published) revisionCard(content, entry.published, 'Aktuelle Figur', rev.title, true);
+        if (entry.pending && entry.pending.id !== entry.published?.id) revisionCard(content, entry.pending, 'Zur Freigabe', rev.title, true);
+        if (!entry.published && entry.pending) content.append(node('p', 'Diese Figur ist noch nicht für Besucher freigegeben.'));
+      }
+    };
+    entriesBox.append(box);
+  }
+  if (!detail.entries.length) entriesBox.append(node('p', 'Noch keine sichtbaren Figuren in dieser Bibliothek.'));
+  libraryShare(id, lib);
+}
+function renderLibraryEditor(id, detail) {
+  const editor = libraryEditing, model = editor.model, lib = detail.library;
+  const head = section('Bibliothek bearbeiten'); head.classList.add('cloud-library-editor-heading');
+  head.append(node('p', 'Änderungen werden erst mit „Bibliothek speichern“ übernommen.'));
+  const tabs = node('div', undefined, 'cloud-library-editor-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', 'Bibliothek bearbeiten');
+  const figures = node('div'), settings = node('div');
+  const figureTab = action(`Figuren (${model.ids.length})`, () => chooseTab('figures')), settingsTab = action('Einstellungen', () => chooseTab('settings'));
+  figureTab.setAttribute('role', 'tab'); settingsTab.setAttribute('role', 'tab');
+  function chooseTab(tab) { editor.tab = tab; figures.hidden = tab !== 'figures'; settings.hidden = tab !== 'settings'; figureTab.setAttribute('aria-selected', String(tab === 'figures')); settingsTab.setAttribute('aria-selected', String(tab === 'settings')); }
+  tabs.append(figureTab, settingsTab); body.append(tabs, figures, settings);
+  const toolbar = node('div', undefined, 'cloud-library-editor-toolbar'); toolbar.append(node('h3', 'Figuren verwalten'));
+  if (state.me.upload_enabled) toolbar.append(action('Figuren hinzufügen', () => libraryAddPicker(editor))); figures.append(toolbar);
+  figures.append(node('p', 'Neue Figuren erscheinen am Ende. Am Griff ziehen oder mit den Pfeilen verschieben.', 'cloud-library-order-help'));
+  const list = node('div', undefined, 'cloud-library-entries cloud-library-editor-list'); figures.append(list);
+  const dirtyText = node('p', undefined, 'cloud-library-dirty'); dirtyText.setAttribute('role', 'status');
+  const drawRows = () => {
+    list.replaceChildren();
+    const entries = model.ids.map(fid => model.known.get(fid));
+    const ordering = mountLibraryOrder(list, entries, { manage: true, node, action, order: model, changed: () => { dirtyText.textContent = model.dirty ? 'Ungespeicherte Änderungen' : 'Noch keine Änderungen'; } });
+    for (const entry of entries) {
+      const rev = entry.published ?? entry.pending, card = node('article', undefined, 'cloud-library-editor-row');
+      card.append(node('h3', rev?.title ?? 'Figur')); ordering.add(entry, card);
+      const remove = action('×', () => { model.remove(entry.figure_id); drawRows(); figureTab.textContent = `Figuren (${model.ids.length})`; }); remove.setAttribute('aria-label', 'Aus Bibliothek entfernen'); remove.title = 'Aus Bibliothek entfernen'; card.append(remove);
+      if (entry.pending) card.append(action('Freigeben', () => run('Freigeben …', async () => {
+        if (model.dirty) throw new Error('Bitte zuerst die Bibliothek speichern, bevor du Beiträge freigibst.');
+        await cloudCall('review', { library: id, figure: entry.figure_id, accept: true }); libraryEditing = null; libraryDraft = null; await load(id);
+      })));
+    }
+    if (!entries.length) list.append(node('p', 'Noch keine Figuren. Füge Cloud-Figuren hinzu.'));
+    list.append(ordering.announce);
+  };
+  const form = node('form'); form.className = 'cloud-card cloud-library-settings'; form.onsubmit = e => e.preventDefault(); settings.append(form);
+  const name = field(form, 'Name', model.data.title); name.required = true; name.maxLength = 160;
+  const description = field(form, 'Beschreibung', model.data.description, 'textarea');
+  const visibility = select(form, 'Sichtbarkeit', [['private', 'Privat'], ['public', 'Öffentlich']], model.data.visibility);
+  const collaborative = checkbox(form, 'Eingeladene Mitwirkende dürfen beitragen', model.data.collaborative), moderated = checkbox(form, 'Beiträge zuerst freigeben', model.data.moderated);
+  const sync = () => { Object.assign(model.data, { title: name.value, description: description.value, visibility: visibility.value, collaborative: collaborative.checked, moderated: moderated.checked }); dirtyText.textContent = model.dirty ? 'Ungespeicherte Änderungen' : 'Noch keine Änderungen'; };
+  form.addEventListener('input', sync); form.addEventListener('change', sync);
+  const memberBox = section('Mitglieder & Zugriff', settings);
+  createMemberView({ box: memberBox, lib, members: detail.members, me: state.me, people: state.people ?? [], node, action, field, select, call: cloudCall, run: async (...args) => { if (await leaveLibraryDraft()) return run(...args); }, confirm: options => hooks.confirm(options), refresh: async () => { const fresh = await cloudCall('library', { id }); editor.detail = fresh; editor.model = createLibraryDraft(fresh.library, fresh.entries); editor.tab = 'settings'; libraryEditing = editor; await renderCloud(id, fresh); } });
+  const danger = section('Gefahrenbereich', settings); danger.classList.add('danger-zone');
+  danger.append(node('p', 'Die Bibliothek und ihre Mitgliedschaften werden entfernt. Cloud-Figuren, Videos und lokale Kopien bleiben erhalten.'));
+  danger.append(action('Bibliothek löschen', async () => {
+    if (!await leaveLibraryDraft()) return;
+    if (await hooks.confirm({ title: `Bibliothek „${lib.title}“ löschen?`, message: 'Cloud-Figuren, Videos und lokale Kopien bleiben erhalten.', ok: 'Bibliothek löschen', destructive: true })) {
+      libraryEditing = null; libraryDraft = null; await run('Löschen …', async () => { await cloudCall('library_delete', { id }); area = 'libraries'; await load(null); });
+    }
+  }));
+  const conflict = node('div', undefined, 'cloud-library-conflict'); conflict.hidden = true; conflict.setAttribute('role', 'alert');
+  conflict.append(node('p', 'Die Bibliothek wurde inzwischen geändert. Dein Entwurf wurde nicht gespeichert.'), action('Aktuellen Stand neu laden', async () => {
+    if (await hooks.confirm({ title: 'Aktuellen Stand laden?', message: 'Deine ungespeicherten Bibliotheksänderungen werden verworfen. Hochgeladene Cloud-Figuren bleiben erhalten.', ok: 'Neu laden' })) { libraryEditing = null; libraryDraft = null; await load(id, 'refresh'); }
+  })); body.append(conflict);
+  const save = () => run('Bibliothek speichern …', async () => {
+    sync();
+    if (!model.data.title.trim()) { chooseTab('settings'); name.reportValidity(); return; }
+    try { await cloudCall('library_commit', model.payload()); libraryEditing = null; libraryDraft = null; source = null; libraryUpload = null; await load(id); }
+    catch (error) { if (/inzwischen geändert|neu laden/i.test(error.message) || error.status === 409) conflict.hidden = false; throw error; }
+  });
+  libraryDraft = { dirty: () => model.dirty, save };
+  const footer = node('div', undefined, 'cloud-library-editor-footer'); footer.append(dirtyText, action('Abbrechen', async () => { if (await leaveLibraryDraft()) { libraryEditing = null; libraryDraft = null; await renderCloud(id, lastLibraryDetail); } }), action('Bibliothek speichern', save)); footer.lastChild.className = 'primary'; body.append(footer);
+  editor.redraw = () => { drawRows(); figureTab.textContent = `Figuren (${model.ids.length})`; };
+  drawRows(); chooseTab(editor.tab);
+}
+function libraryAddPicker(editor) {
+  const picker = node('dialog', undefined, 'cloud-library-picker'); picker.append(node('h3', 'Figuren hinzufügen'), node('p', 'Aus Meine Cloud-Figuren auswählen. Neue Zuordnungen werden erst beim Speichern übernommen.'));
+  const candidates = state.own_figures.filter(f => f.revisions?.length && !f.deleted_at), choices = [];
+  for (const f of candidates) {
+    const check = checkbox(picker, f.revisions[0].title, editor.model.ids.includes(f.id)); check.disabled = editor.model.ids.includes(f.id); choices.push([check, f]);
+    if (check.disabled) check.parentElement.append(node('small', 'Bereits enthalten'));
+    else if (editor.model.data.visibility === 'public' && !f.public_allowed) { check.disabled = true; check.parentElement.append(node('small', 'Öffentliche Freigabe fehlt')); }
+  }
+  if (!candidates.length) picker.append(node('p', 'Noch keine eigenen Cloud-Figuren. Lade zuerst eine lokale Figur hoch.'));
+  picker.append(action('Neue Figur hochladen', () => { picker.close(); picker.remove(); libraryUploadPicker(editor); }));
+  picker.append(action('Abbrechen', () => { picker.close(); picker.remove(); }), action('Auswahl hinzufügen', () => {
+    for (const [check, f] of choices) if (check.checked && !check.disabled) editor.model.add(f);
+    picker.close(); picker.remove(); editor.redraw();
+  })); picker.addEventListener('close', () => picker.remove(), { once: true }); document.body.append(picker); picker.showModal();
+}
+async function libraryUploadPicker(editor) {
+  const picker = node('dialog', undefined, 'cloud-library-picker'); picker.append(node('h3', 'Lokale Figur hochladen'), node('p', 'Die Figur wird in Meine Cloud-Figuren gespeichert. Ihre Bibliothekszuordnung bleibt bis zum Speichern ein Entwurf.'));
+  const local = await hooks.localFigures();
+  for (const f of local.filter(f => !f.storageProblem && !f.folderAccessRequired)) picker.append(action(f.title, async () => {
+    picker.close(); picker.remove(); libraryUpload = { editor, hook: libraryDraft };
+    libraryEditing = null; libraryDraft = null; source = f; area = 'figures'; await renderCloud(null);
+  }));
+  if (!local.length) picker.append(node('p', 'Erstelle oder importiere zuerst eine Figur unter Meine Figuren.'));
+  picker.append(action('Abbrechen', () => { picker.close(); picker.remove(); })); picker.addEventListener('close', () => picker.remove(), { once: true }); document.body.append(picker); picker.showModal();
+}
+async function resumeLibraryUpload(result = null) {
+  const suspended = libraryUpload; if (!suspended) return;
+  const fresh = await cloudCall('state'); state = fresh;
+  if (result) { const f = state.own_figures.find(f => f.id === result.figure); if (f) suspended.editor.model.add(f); }
+  libraryUpload = null; source = null; area = 'libraries'; libraryEditing = suspended.editor;
+  await renderCloud(libraryEditing.id, libraryEditing.detail);
 }
 function libraryDownloadControls(parent, entries) {
   const revisions = [...new Map(entries.filter(entry => entry.published?.videos?.length).map(entry => [entry.published.id, entry.published])).values()];
@@ -345,12 +452,12 @@ async function previewVideo(box, revision, video) {
   clearPreviews(box);
   const player = node('video'); player.controls = true; player.playsInline = true; player.src = signed.url; box.append(player);
 }
-function revisionCard(parent, rev, label) {
+function revisionCard(parent, rev, label, parentTitle = parent.querySelector('h3')?.textContent, compact = false) {
   const box = node('article', undefined, 'cloud-revision'), heading = node('div', undefined, 'revision-heading');
   const copy = node('div'); copy.append(node('h4', label), node('p', versionLabel(rev))); heading.append(copy);
-  if (rev.videos?.[0]) thumbnail(heading, rev);
+  if (!compact && rev.videos?.[0]) thumbnail(heading, rev);
   box.append(heading);
-  if (rev.title !== parent.querySelector('h3').textContent) box.append(node('p', rev.title, 'revision-title'));
+  if (rev.title !== parentTitle) box.append(node('p', rev.title, 'revision-title'));
   parent.append(box);
   box.append(node('p', rev.description), node('p', rev.tags.join(' · ')));
   downloadControls(box, rev);
@@ -481,13 +588,14 @@ function ownFigures() {
 async function publishForm() {
   const me = state.me;
   if (!me?.upload_enabled) { body.append(node('p', 'Für Cloud-Uploads brauchst du die Freischaltung des Administrators.')); return; }
+  if (libraryUpload) body.append(action('Zurück zur Bibliotheksbearbeitung', () => resumeLibraryUpload()));
   const local = source, records = await figureVideos(local), libs = state.libraries.filter(l => l.contribute);
   const box = section(`„${local.title}“ hochladen`), selected = [];
   const step = (number, title) => { const group = node('div', undefined, 'upload-step'); group.append(node('h4', `${number} · ${title}`)); box.append(group); return group; };
   const videoStep = step(1, 'Video'), targetStep = step(2, 'Ziel'), optionsStep = step(3, 'Hochladen');
   for (const record of records) selected.push([checkbox(videoStep, `${record.name || 'Video'} · ${MB(record.blob.size)}`, true), record]);
   videoStep.append(node('p', 'Maximal 50 MB pro Video. Identische Videos werden erkannt und nur einmal gespeichert. Bereits zugängliche Videos können ohne erneuten Upload übernommen werden.'));
-  const library = select(targetStep, 'Bibliothek', [['', 'Nur in Meine Cloud-Figuren hochladen'], ...libs.map(l => [l.id, l.title])]);
+  const library = select(targetStep, 'Bibliothek', [['', 'Nur in Meine Cloud-Figuren hochladen'], ...(libraryUpload ? [] : libs.map(l => [l.id, l.title]))]);
   // Reservations can create a figure before any revision exists. They are not
   // valid version targets until the first upload has completed.
   const targets = state.own_figures.filter(f => f.revisions?.length && (f.owner_id === state.me.id || state.me.is_admin));
@@ -499,7 +607,7 @@ async function publishForm() {
   })]);
   const existingLink = localIndex.link(local);
   const linkedTarget = targets.find(f => f.id === existingLink?.cloudFigure || f.revisions.some(r => r.id === existingLink?.revision || local.importFingerprint?.startsWith(`cloud:${r.id}:`)));
-  if (linkedTarget) figure.value = linkedTarget.id;
+  if (linkedTarget && !libraryUpload) figure.value = linkedTarget.id;
   optionsStep.append(node('p', 'Hier stehen deine vorhandenen Cloud-Figuren. Lokales Löschen oder Entfernen aus einer Bibliothek löscht die Cloud-Figur nicht. Dauerhaft löschen kannst du sie unter „Meine Cloud-Figuren“ mit „Cloud-Figur samt Videos löschen“.'));
   const explicitVariant = checkbox(optionsStep, 'Bewusst eine eigene Figur / Variante erstellen, auch wenn das Video bereits existiert');
   const duplicateBox = node('div'); optionsStep.append(duplicateBox);
@@ -540,7 +648,7 @@ async function publishForm() {
         const choice = select(duplicateBox, 'Bestehende Figur', unique.map(m => [m.revision, m.title]));
         duplicateBox.append(action('Bestehende Figur verwenden', () => run('Figur referenzieren …', async () => {
           if (library.value) { await cloudCall('attach', { library: library.value, revision: choice.value }); source = null; area = 'libraries'; await load(library.value); }
-          else { const match = unique.find(m => m.revision === choice.value); attachForm({ ...match, id: match.revision }); }
+          else { const match = unique.find(m => m.revision === choice.value); if (libraryUpload) await resumeLibraryUpload({ figure: match.figure }); else attachForm({ ...match, id: match.revision }); }
         })));
         return;
       }
@@ -559,7 +667,8 @@ async function publishForm() {
       const linked = localIndex.remember(owner, saved.revision, local, reserved.media.map((media, i) => ({ cloud: media.id, local: videos[i].id })), saved.figure);
       await hooks.localChanged?.();
       if (library.value) await cloudCall('attach', { library: library.value, revision: saved.revision });
-      source = null; area = library.value ? 'libraries' : 'figures'; await load(library.value || null);
+      if (libraryUpload) await resumeLibraryUpload(saved);
+      else { source = null; area = library.value ? 'libraries' : 'figures'; await load(library.value || null); }
       if (!linked) report(new Error('Upload erfolgreich. Die lokale Zuordnung konnte nicht dauerhaft gespeichert werden. Bitte freien App-Speicher prüfen.'));
     } catch (error) {
       if (job) await cloudCall('abort', { job }).catch(() => {});
@@ -670,11 +779,11 @@ function adminForm() {
 }
 export function initCloud(callbacks) {
   hooks = callbacks;
-  addEventListener('beforeunload', event => { if (libraryDraft?.dirty()) { event.preventDefault(); event.returnValue = ''; } });
+  addEventListener('beforeunload', event => { if ((libraryDraft ?? libraryUpload?.hook)?.dirty()) { event.preventDefault(); event.returnValue = ''; } });
   peopleView = createPeopleView({ node, action, field, select, checkbox, call: cloudCall, run, confirm: options => hooks.confirm(options), state: () => state, refresh: () => load(null), report, section });
   dialog = document.getElementById('cloudDialog'); body = document.getElementById('cloudBody'); errorBox = document.getElementById('cloudError'); statusBox = document.getElementById('cloudStatus');
   addEventListener('cloud-session-changed', event => {
-    libraryDraft = null; peopleView.reset(); viewEpoch++; renderedView = null; state = null; displayedOwner = null; localFigures = []; localUpdates = [];
+    libraryDraft = null; libraryEditing = null; libraryUpload = null; peopleView.reset(); viewEpoch++; renderedView = null; state = null; displayedOwner = null; localFigures = []; localUpdates = [];
     cancelThumbnails(); clearPreviews(body); body.replaceChildren(); errorBox.hidden = true; cacheStatus('');
     // Explicit login/logout reload their own destination; token rotation leaves forms intact.
     if ((event.detail?.external || event.detail?.expired) && dialog.open) {
