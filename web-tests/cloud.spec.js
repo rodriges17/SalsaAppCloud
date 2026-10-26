@@ -95,7 +95,7 @@ test('manual sign-in link is redeemed inside the current app without navigating 
  await page.getByRole('button',{name:'Anmelden',exact:true}).tap();
  await expect(page.locator('#cloudBody')).toContainText('admin@example.test');
  await expect(page.locator('.cloud-tabs button')).toHaveText(['Meine Figuren','Bibliotheken']);
- await expect(page.locator('.cloud-tabs button').first()).toHaveAttribute('aria-pressed','true');
+ await expect(page.getByRole('button',{name:'Bibliotheken',exact:true})).toHaveAttribute('aria-pressed','true');
  expect(page.url()).not.toContain('token_hash');
  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('salsa-cloud-session:/pwa/:v1')).access_token)).toBe('test-new-user-jwt');
 });
