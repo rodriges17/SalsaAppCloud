@@ -41,3 +41,8 @@ Besitzer und Plattform-Administratoren öffnen „Bibliothek bearbeiten“. Unte
 In „Meine Figuren“ kennzeichnet das Gerätesymbol eine rein lokale Figur, die Wolke eine heruntergeladene oder erfolgreich hochgeladene Figur und das Gerät mit kleinem Stift im Display eine danach lokal angepasste Figur. Titel, Beschreibung, Tags und Videos zählen als Inhalt; der persönliche Lernstatus nicht. Nach erfolgreichem Hochladen des aktuellen Inhalts verschwindet der Stift. Die Cloudansicht bietet bei einer zugehörigen lokalen Figur „Lokale Figur öffnen“ an. Die Zuordnung ist keine Zusage, dass der lokale Inhalt dem aktuellen Cloudinhalt entspricht.
 
 Die einzeilige Statusleiste unter jeder lokalen Figurenkarte enthält das Herkunftsicon, ein Ordnersymbol bei Geräteordnern, den Namen des Speicherordners (oder „App-Speicher“), Dauer und Videoanzahl. Lange Ordnernamen werden gekürzt; der vollständige Name bleibt als Tooltip verfügbar. Antippen des Herkunftsicons erklärt den Status.
+
+
+### Meine Cloud-Figuren: kompakte Karten
+
+Die Übersicht zeigt Vorschaubild, Name und lokalen Status. Ein Klick klappt eine Figur auf und schließt die zuvor geöffnete. Im Tab **Videos & lokal** findest du die Videovorschau und die lokale Übernahme. **Verwalten** enthält Bibliothekszuordnung, eigene Variante, öffentliche Freigabe und Löschen. Beim Schließen oder Tabwechsel stoppt eine laufende Vorschau. Rechte und Bestätigungen bleiben unverändert.

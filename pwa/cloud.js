@@ -560,12 +560,57 @@ function variantButton(box, revision) {
     await run('Variante erstellen …', async () => { await cloudCall('variant', { revision: revision.id }); area = 'figures'; await load(null); });
   }));
 }
+let ownFigureSelection = { id: null, tab: 'videos', owner: null };
 function ownFigures() {
+  if (ownFigureSelection.owner !== state.me?.id) ownFigureSelection = { id: null, tab: 'videos', owner: state.me?.id };
+  if (!state.own_figures.some(f => f.id === ownFigureSelection.id)) ownFigureSelection.id = null;
   if (!state.own_figures.length) body.append(node('p', 'Noch keine eigenen Cloud-Figuren. Lade eine lokale Figur über „In Cloud veröffentlichen“ hoch.'));
+  const list = node('div', undefined, 'cloud-own-list'); body.append(list);
   for (const f of state.own_figures) {
     const revisions = [...f.revisions].sort((a, b) => (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0));
-    const latest = revisions[0], box = section(latest?.title ?? 'Noch nicht fertig hochgeladene Figur');
-    if (latest?.videos?.[0]) { box.querySelector('h3').classList.add('has-thumbnail'); thumbnail(box.querySelector('h3'), latest); }
+    const latest = revisions[0], card = node('details', undefined, 'cloud-own-figure'); card.dataset.ownFigure = f.id;
+    const summary = node('summary', undefined, 'cloud-own-summary');
+    const picture = node('span', undefined, 'cloud-library-picture'); if (latest?.videos?.length) thumbnail(picture, latest);
+    const name = node('div', undefined, 'cloud-own-name'); name.append(node('h3', latest?.title ?? 'Noch nicht fertig hochgeladene Figur'));
+    name.append(node('small', `${latest?.videos?.length ?? 0} Videos · ${f.public_allowed ? 'Öffentliche Freigabe erlaubt' : 'Privat verwendbar'}`));
+    const availability = node('span', undefined, 'cloud-own-availability');
+    const update = () => {
+      if (latest) localIndex.reconcile(latest, localFigures);
+      const local = latest && localIndex.find(latest.id, localFigures);
+      const known = latest && localFigures.find(item => revisions.some(rev => localIndex.link(item)?.revision === rev.id || item.importFingerprint?.startsWith(`cloud:${rev.id}:`)));
+      availability.textContent = local ? localIndex.status(local) === 'modified' ? '☁ ✎ Lokal angepasst' : '☁ Lokal verfügbar' : known?.folderAccessRequired ? 'Ordnerzugriff nötig' : known ? 'Lokale Dateien fehlen' : 'Nur in der Cloud';
+      availability.dataset.local = String(!!local);
+    }; localUpdates.push(update); update();
+    const chevron = node('span', '⌄', 'cloud-library-chevron'); chevron.setAttribute('aria-hidden', 'true'); summary.append(picture, name, availability, chevron); card.append(summary);
+    const content = node('div', undefined, 'cloud-own-content'); card.append(content); let mounted = false, selectedTab = 'videos';
+    const mount = () => {
+      if (mounted) return; mounted = true;
+      const tabs = node('div', undefined, 'cloud-library-editor-tabs cloud-own-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', `Optionen für ${latest?.title ?? 'Cloud-Figur'}`);
+      const videos = node('div', undefined, 'cloud-own-panel'), box = node('div', undefined, 'cloud-own-panel');
+      const videoTab = action('Videos & lokal', () => chooseTab('videos')), manageTab = action('Verwalten', () => chooseTab('manage'));
+      const key = `cloud-own-${f.id}`;
+      for (const [tab, panel, suffix] of [[videoTab, videos, 'videos'], [manageTab, box, 'manage']]) {
+        tab.id = `${key}-${suffix}-tab`; tab.setAttribute('role', 'tab'); tab.setAttribute('aria-controls', `${key}-${suffix}`);
+        panel.id = `${key}-${suffix}`; panel.setAttribute('role', 'tabpanel'); panel.setAttribute('aria-labelledby', tab.id);
+        tab.onkeydown = event => {
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+          event.preventDefault(); const next = event.key === 'Home' ? 'videos' : event.key === 'End' ? 'manage' : suffix === 'videos' ? 'manage' : 'videos';
+          chooseTab(next); (next === 'videos' ? videoTab : manageTab).focus();
+        };
+      }
+      function chooseTab(tab) {
+        selectedTab = tab; ownFigureSelection = { id: f.id, tab, owner: state.me?.id };
+        clearPreviews(content); videos.hidden = tab !== 'videos'; box.hidden = tab !== 'manage';
+        videoTab.setAttribute('aria-selected', String(tab === 'videos')); manageTab.setAttribute('aria-selected', String(tab === 'manage'));
+        videoTab.tabIndex = tab === 'videos' ? 0 : -1; manageTab.tabIndex = tab === 'manage' ? 0 : -1;
+      }
+      tabs.append(videoTab, manageTab); content.append(tabs, videos, box);
+      if (latest) {
+        videos.append(node('h4', 'Videos und lokale Kopie'));
+        if (latest.description) videos.append(node('p', latest.description));
+        if (latest.tags?.length) videos.append(node('p', latest.tags.join(' · ')));
+        downloadControls(videos, latest, { own: true, revisionIds: revisions.map(r => r.id) });
+      } else videos.append(node('p', 'Der Upload dieser Figur ist noch nicht abgeschlossen.'));
     box.append(node('p', `Öffentliche Veröffentlichung: ${f.public_allowed ? 'Erlaubt' : 'Nicht erlaubt'}`));
     if (f.owner_id === state.me?.id) box.append(action(f.public_allowed ? 'Öffentliche Veröffentlichung widerrufen' : 'Öffentliche Veröffentlichung erlauben', () => run('Freigabe ändern …', async () => {
       if (f.public_allowed && !await hooks.confirm({ title: 'Öffentliche Freigabe widerrufen?', message: 'Alle Zuordnungen zu öffentlichen Bibliotheken werden entfernt. Private Zuordnungen bleiben bestehen.', ok: 'Freigabe widerrufen' })) return;
@@ -574,7 +619,7 @@ function ownFigures() {
     box.append(node('p', 'Die Freigabe gilt für diese Figur und alle öffentlichen Bibliotheken, denen sie zugeordnet ist. Beim Widerrufen werden öffentliche Zuordnungen entfernt. Private Bibliotheken bleiben unverändert.'));
     if (latest) {
       if (state.me.upload_enabled) variantButton(box, latest);
-      downloadControls(box, latest, { own: true, revisionIds: revisions.map(r => r.id) });
+
       const assign = action('Einer Bibliothek zuordnen', () => attachForm(latest)); assign.className = 'secondary'; if (state.me.upload_enabled) box.append(assign);
 
     }
@@ -583,6 +628,16 @@ function ownFigures() {
       if (!await hooks.confirm({ title: 'Cloud-Figur löschen?', message: `Die Cloudfigur wird gelöscht und aus folgenden Bibliotheken entfernt: ${affected.libraries.join(', ') || 'keinen'}. Lokale Kopien bleiben erhalten.`, ok: 'Cloud-Figur löschen' })) return;
       await run('Cloud-Figur löschen …', async () => { await cloudCall('delete_figure', { figure: f.id, expected_token: f.content_token }); await load(null); });
     }));
+      chooseTab(ownFigureSelection.id === f.id ? ownFigureSelection.tab : 'videos');
+    };
+    card.ontoggle = () => {
+      if (!card.isConnected) return;
+      if (!card.open) { clearPreviews(content); if (ownFigureSelection.id === f.id) ownFigureSelection.id = null; return; }
+      for (const other of list.querySelectorAll('details[open]')) if (other !== card) other.open = false;
+      mount(); ownFigureSelection = { id: f.id, tab: selectedTab, owner: state.me?.id };
+    };
+    list.append(card);
+    if (ownFigureSelection.id === f.id) { mount(); card.open = true; }
   }
 }
 async function publishForm() {

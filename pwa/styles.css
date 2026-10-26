@@ -319,3 +319,20 @@ button.storage-choice:disabled{opacity:1;cursor:default}
 
 .card-folder-icon{display:inline-flex;flex:0 0 16px;align-items:center;color:inherit}
 .card-folder-icon svg{display:block;width:16px;height:16px}
+
+/* Selected prototype C: compact own-cloud cards, options on expansion. */
+.cloud-own-list{display:grid;gap:10px;min-width:0}
+.cloud-own-figure{border:1px solid var(--border);border-radius:14px;background:var(--card);min-width:0}
+.cloud-own-figure[open]{border-color:var(--lavender)}
+.cloud-own-summary{display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer;list-style:none;min-height:66px}
+.cloud-own-summary::-webkit-details-marker{display:none}
+.cloud-own-summary:focus-visible{outline:2px solid var(--lavender);outline-offset:-3px;border-radius:12px}
+.cloud-own-name{flex:1;min-width:0}.cloud-own-name h3{font-size:14px;overflow-wrap:anywhere;margin:0}
+.cloud-own-name small{display:block;color:var(--muted);font-size:11px;margin-top:5px}
+.cloud-own-availability{font-size:11px;color:var(--muted);text-align:right;max-width:115px}.cloud-own-availability[data-local=true]{color:var(--success)}
+.cloud-own-figure[open] .cloud-library-chevron{transform:rotate(180deg)}
+.cloud-own-content{padding:0 14px 16px}.cloud-own-tabs{padding:0 0 10px}.cloud-own-tabs button{font-size:13px}
+.cloud-own-panel{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.cloud-own-panel[hidden]{display:none}
+.cloud-own-panel p,.cloud-own-panel h4{flex-basis:100%;font-size:12px;line-height:1.6;margin:0}.cloud-own-panel button{font-size:12px;min-height:44px}
+.cloud-own-panel>button:last-child:not(.primary){max-width:100%}
+@media(max-width:540px){.cloud-own-summary{gap:9px;padding:12px 10px}.cloud-own-name h3{font-size:13px}.cloud-own-name small{font-size:10px}.cloud-own-availability{font-size:10px;max-width:90px}.cloud-own-content{padding:0 10px 14px}}
