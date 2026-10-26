@@ -1,3 +1,4 @@
+import { cloudLocalIndex } from './cloud-local.js';
 import { createBackup, figureSignature, sourceKey } from './backup-format.js';
 import { checksum } from './package.js';
 import * as app from './app-storage.js';
@@ -217,10 +218,13 @@ export async function transferFigure(figure, targetFolder) {
     if (!targetFolder) {
       const saved = await app.saveFigure(copy, drafts), verified = await app.figureVideos(saved);
       for (let i = 0; i < records.length; i++) if (records[i].blob.size !== verified[i].blob.size || await checksum(records[i].blob) !== await checksum(verified[i].blob)) throw new Error('Die neue App-Kopie konnte nicht geprüft werden. Die bisherige Figur bleibt erhalten.');
+      cloudLocalIndex.copy(figure, saved);
       return saved;
     }
     const folder = await entries(targetFolder); if (!folder) throw new Error('Bitte zuerst einen Geräteordner auswählen.');
-    return writeFolderFigure(folder, copy, drafts, null, mirror(folder));
+    const saved = await writeFolderFigure(folder, copy, drafts, null, mirror(folder));
+    cloudLocalIndex.copy(figure, saved);
+    return saved;
   });
 }
 

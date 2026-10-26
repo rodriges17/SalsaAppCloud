@@ -51,3 +51,13 @@ test('origin icons distinguish local, cloud and content changes while ignoring l
  const changed={...local,title:'Neu'};index.remember('owner','revision',changed,pairs,'stable-cloud-figure');
  assert.equal(index.status(changed),'cloud');
 });
+
+test('moving a local figure preserves cloud origin and the local-modification flag',()=>{
+ const index=createCloudLocalIndex(fake(),'links');
+ index.remember('owner','revision',figure,pairs,'cloud-figure');
+ const target={...figure,id:'moved',storageFolder:'folder',videoIds:['x','y']};
+ index.copy(figure,target);assert.equal(index.status(target),'cloud');assert.equal(index.link(target).cloudFigure,'cloud-figure');
+ const modified={...figure,title:'Local edit'},other={...target,id:'moved-edited',title:'Local edit'};
+ index.copy(modified,other);assert.equal(index.status(other),'modified');
+ assert.equal(index.find('revision',[target]).id,'moved');
+});

@@ -38,6 +38,12 @@ export function createCloudLocalIndex(storage, key) {
       }
       return 'local';
     },
+    copy(source, target) {
+      const modified = this.status(source) === 'modified', link = this.link(source);
+      if (!link) return;
+      const pairs = link.pairs.map(pair => ({cloud: pair.cloud, local: target.videoIds[source.videoIds.indexOf(pair.local)]})).filter(pair => pair.local);
+      if (pairs.length) this.remember(link.owner, link.revision, target, pairs, link.cloudFigure, modified ? '@locally-modified' : undefined);
+    },
     reconcile(revision, figures) {
       for (const figure of figures) {
         const link = this.link(figure);
