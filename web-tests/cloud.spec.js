@@ -354,10 +354,13 @@ test('direct cloud replacement can be cancelled and preserves identity and learn
 test('local content changes show cloud with a pencil while learning status does not',async({page})=>{
  await signIn(page);await mock(page,true,true,true,{noLibraries:true});
  await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Lokal übernehmen',exact:true}).tap();await finishCloudImport(page);
- await page.evaluate(async()=>{const s=await import('/pwa/storage.js'),f=(await s.listFigures())[0];await s.saveFigure({...f,status:'Sitzt'},(await s.figureVideos(f)).map(v=>({...v,existing:true,confirmed:true})),f.revision);});
- await page.reload();await expect(page.locator('[data-cloud-status=cloud]')).toHaveCount(1);
- await page.evaluate(async()=>{const s=await import('/pwa/storage.js'),f=(await s.listFigures())[0];await s.saveFigure({...f,title:'Meine Anpassung'},(await s.figureVideos(f)).map(v=>({...v,existing:true,confirmed:true})),f.revision);});
- await page.reload();await expect(page.locator('[data-cloud-status=modified]')).toHaveCount(1);
+ await page.locator('.card-options').tap();await page.getByRole('button',{name:'Bearbeiten',exact:true}).tap();
+ await page.locator('#figureStatus').selectOption('Sitzt');await page.locator('#saveFigure').tap();await expect(page.locator('#editor')).not.toBeVisible();
+ await expect(page.locator('[data-cloud-status=cloud]')).toHaveCount(1);
+ await page.locator('.card-options').tap();await page.getByRole('button',{name:'Bearbeiten',exact:true}).tap();
+ await page.locator('#figureTitle').fill('Meine Anpassung');await page.locator('#saveFigure').tap();await expect(page.locator('#editor')).not.toBeVisible();
+ await expect(page.locator('[data-cloud-status=modified]')).toHaveCount(1);
+ expect(await page.evaluate(async()=>{const s=await import('/pwa/storage.js');return (await s.figureVideos((await s.listFigures())[0]))[0].blob.size;})).toBeGreaterThan(0);
  await page.locator('#cloudButton').tap();await expect(page.locator('.cloud-local-status').first()).toContainText('lokal angepasst');
 });
 
