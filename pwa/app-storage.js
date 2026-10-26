@@ -20,7 +20,19 @@ export function database() {
 function read(store, key) { return database().then(db => new Promise((resolve, reject) => { const tx = db.transaction(store); const request = key === undefined ? tx.objectStore(store).getAll() : tx.objectStore(store).get(key); let value; request.onsuccess = () => { value = request.result; }; tx.oncomplete = () => resolve(value); tx.onabort = () => reject(tx.error); tx.onerror = () => {}; })); }
 function writeImport(record) { return database().then(db => new Promise((resolve, reject) => { const tx = db.transaction('imports', 'readwrite'); tx.objectStore('imports').put(record); tx.oncomplete = resolve; tx.onabort = () => reject(tx.error); tx.onerror = () => {}; })); }
 const hydratePoster = record => record ? { ...record, poster: record.posterBytes ? new Blob([record.posterBytes], { type: 'image/jpeg' }) : null } : record;
-export async function listFigures() { return (await read('figures')).map(hydratePoster); }
+export async function listFigures() {
+  const figures = (await read('figures')).map(hydratePoster);
+  if (!figures.length) return figures;
+  const records = new Map((await read('videos')).map(record => [record.id, record]));
+  const cache = await caches.open(MEDIA_CACHE);
+  return Promise.all(figures.map(async figure => {
+    const present = await Promise.all(figure.videoIds.map(async id => {
+      const record = records.get(id);
+      return record?.figureId === figure.id && !!record.cacheKey && !!await cache.match(record.cacheKey);
+    }));
+    return { ...figure, storageProblem: present.every(Boolean) && present.length ? '' : 'Eine lokale Videodatei fehlt. Bitte die Figur bearbeiten und das Video ersetzen.' };
+  }));
+}
 export async function getVideo(id) {
   const record = await read('videos', id); if (!record) return undefined;
   const response = await (await caches.open(MEDIA_CACHE)).match(record.cacheKey);

@@ -122,7 +122,7 @@ function renderOverview() {
     main.addEventListener('contextmenu', event => { event.preventDefault(); closeMenus(); showMenu(); });
     const details = el('div', 'card-details'); details.append(main, statusBar); card.append(thumbnailButton, details, options);
     if (figure.folderAccessRequired || figure.storageProblem) {
-      card.append(el('span', 'card-storage-warning', figure.folderAccessRequired ? 'Ordner gespeichert – Zugriff erneut erlauben' : `Geräteordner: ${figure.storageProblem}`));
+      card.append(el('span', 'card-storage-warning', figure.folderAccessRequired ? 'Ordner gespeichert – Zugriff erneut erlauben' : `${figure.storageFolder ? 'Geräteordner' : 'App-Speicher'}: ${figure.storageProblem}`));
     }
     if (figure.folderAccessRequired && folderSupported()) {
       card.classList.add('needs-folder-access');
@@ -145,8 +145,8 @@ function renderFilters() {
     node.setAttribute('aria-pressed', String(value === statusFilter)); $('statusFilters').append(node);
   }
 }
-function changed() { channel?.postMessage('changed'); }
-channel?.addEventListener('message', () => refresh());
+function changed() { channel?.postMessage('changed'); dispatchEvent(new Event('local-figures-changed')); }
+channel?.addEventListener('message', () => { dispatchEvent(new Event('local-figures-changed')); void refresh(); });
 window.addEventListener('focus', () => refresh());
 $('search').addEventListener('input', renderOverview);
 // Native select pickers can retain :focus-visible after a touch selection.
@@ -676,10 +676,9 @@ document.querySelectorAll('[data-nav]').forEach(nav => {
     else { window.scrollTo({ top: 0 }); focusFiguresNavigation(); }
   };
 });
-async function chooseCloudImport({ title, fingerprint, revisionIds }) {
+async function chooseCloudImport({ title, fingerprint, revisionIds, figureId }) {
   const current = await listFigures();
-  const normalize = value => value.trim().normalize('NFC').toLocaleLowerCase('de');
-  const matches = current.filter(f => f.importFingerprint === fingerprint || normalize(f.title) === normalize(title) || revisionIds.some(id => f.importFingerprint?.startsWith(`cloud:${id}:`)));
+  const matches = cloudLocalIndex.importCandidates({ title, fingerprint, revisionIds, figureId }, current);
   if (!matches.length) return {};
   const dialog = el('dialog', 'small-dialog'); dialog.id = 'cloudImportConflict';
   const heading = el('h2', '', 'Figur bereits lokal vorhanden'); heading.id = 'cloudImportConflictTitle'; dialog.setAttribute('aria-labelledby', heading.id);

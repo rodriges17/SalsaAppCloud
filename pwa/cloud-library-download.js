@@ -51,7 +51,8 @@ export async function downloadLibrary(revisions, services, { signal, targetFolde
       signal?.throwIfAborted(); emit('check', revision.title);
       try {
         if (revision.videos.some(video => !Number.isSafeInteger(video.size) || video.size <= 0) || revision.videos.reduce((sum, video) => sum + video.size, 0) > 250 * 1024 * 1024) throw new Error('Diese Figur überschreitet 250 MB oder enthält ungültige Dateigrößen. Bitte einzeln übernehmen.');
-        const linked = figures.find(f => cloudLocalIndex.link(f)?.revision === revision.id && !f.storageProblem && !f.folderAccessRequired);
+        const local = cloudLocalIndex.resolve(revision, figures);
+        const linked = local.current;
         const enrich = async target => {
           const saved = await enrichCloudMetadata(target, revision, services, signal);
           figures.splice(figures.indexOf(target), 1, saved);
@@ -66,17 +67,18 @@ export async function downloadLibrary(revisions, services, { signal, targetFolde
         }
         if (media.every(({ video, hash }) => hash && sources.has(hashKey(video.size, hash)))) {
           const match = figures.find(f => !f.storageProblem && !f.folderAccessRequired && media.every(({ video, hash }) => figureKeys.get(identity(f))?.has(hashKey(video.size, hash))));
-          if (match) await enrich(match);
-          result.skipped++; emit('skip', revision.title); continue;
+          if (match) { await enrich(match); result.skipped++; emit('skip', revision.title); continue; }
         }
-        const target = figures.find(f => !f.storageProblem && !f.folderAccessRequired && f.importFingerprint?.startsWith(`cloud:${revision.id}:`));
+        const target = local.kind === 'partial' && !local.modified ? local.figure : null;
         const drafts = target ? await abortable(async () => Promise.all((await readMedia(target)).map(async record => ({ ...await record.load(), existing: true, confirmed: true }))), signal) : [];
         const targetKeys = new Set(target ? figureKeys.get(identity(target)) ?? [] : []);
-        const completedMedia = [];
+        const completedMedia = [], pairs = [];
+        const existingDrafts = new Map();
+        for (const draft of drafts) existingDrafts.set(hashKey(draft.blob.size, await abortable(() => videoHash(draft.blob), signal)), draft);
         for (let i = 0; i < media.length; i++) {
           signal?.throwIfAborted();
           const { video, hash } = media[i], key = hash ? hashKey(video.size, hash) : null;
-          if (key && targetKeys.has(key)) continue;
+          if (key && existingDrafts.has(key)) { pairs.push({ cloud: video.id, local: existingDrafts.get(key).id }); continue; }
           emit('download', revision.title, i + 1, media.length);
           const source = key ? sources.get(key) : null;
           let draft;
@@ -95,7 +97,8 @@ export async function downloadLibrary(revisions, services, { signal, targetFolde
             draft = { ...await abortable(() => inspectVideo(blob, signal), signal), blob };
           }
           draft = { ...draft, id: crypto.randomUUID(), name: video.name || 'Video', confirmed: true, existing: false };
-          drafts.push(draft); completedMedia.push({ hash, draft });
+          drafts.push(draft); completedMedia.push({ hash, draft }); pairs.push({ cloud: video.id, local: draft.id });
+          if (key) existingDrafts.set(key, draft);
           if (key) targetKeys.add(key);
         }
         if (!target && services.readPoster) {
@@ -108,7 +111,7 @@ export async function downloadLibrary(revisions, services, { signal, targetFolde
         // Do not race an atomic save with cancellation: finish this figure, then stop.
         const modified = target && cloudLocalIndex.status(target) === 'modified';
         const saved = await saveFigure(figure, drafts, target?.revision ?? null, { targetFolder });
-        cloudLocalIndex.remember('@device', revision.id, saved, revision.videos.map((v, i) => ({ cloud: v.id, local: drafts[i]?.id ?? saved.videoIds[i] })), revision.figure_id, modified ? '@locally-modified' : undefined);
+        cloudLocalIndex.remember('@device', revision.id, saved, pairs, revision.figure_id, modified ? '@locally-modified' : undefined);
         result.saved++;
         if (target) figures.splice(figures.indexOf(target), 1, saved); else figures.push(saved);
         // Keep lazy locators, not all downloaded video blobs, between figures.

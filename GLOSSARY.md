@@ -28,3 +28,9 @@ Der zuletzt geladene Stand der zugänglichen Cloud-Figuren und Bibliotheken eins
 
 **Medien-Sitzung**:
 Der geordnete Zugriff auf die Videos einer Figur für einen geöffneten Bildschirm oder einen vollständigen Lesevorgang. Parallele Zugriffe teilen die laufende Prüfung; beim erneuten Öffnen beginnt eine neue Sitzung.
+
+**Lokale Cloud-Verfügbarkeit**:
+Die Verfügbarkeit einer Cloud-Version als einzelne vollständige, lesbare lokale Kopie. Teilkopien, fehlende Dateien, fehlender Ordnerzugriff und eine vorhandene ältere Version werden unterschieden. Mehrere Teilkopien ergeben zusammen keine vollständige Kopie.
+
+**Cloud-Herkunft**:
+Die Zuordnung einer lokalen Figur zu ihrer Cloud-Figur und der übernommenen oder hochgeladenen Version. Lokale Inhaltsänderungen bleiben erkennbar; Lernstand und Verfügbarkeit sind davon unabhängig.

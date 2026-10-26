@@ -1,7 +1,7 @@
 import { runNavigationHoverCase } from './navigation-hover-case.js';
 import { runStorageSettingsCase } from './storage-settings-case.js';
 // The same behavior contract runs against the PWA and the bundled Android UI.
-export const PARITY_CASES = ['navigation-return-hover', 'storage-settings-status', 'library-share-links', 'zip-save-feedback', 'menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change', 'cloud-cache-frame-reuse', 'cloud-guest-public-first', 'cloud-library-download', 'cloud-guest-no-publish', 'cloud-single-direct-download', 'cloud-library-order'];
+export const PARITY_CASES = ['navigation-return-hover', 'storage-settings-status', 'library-share-links', 'zip-save-feedback', 'menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change', 'cloud-cache-frame-reuse', 'cloud-guest-public-first', 'cloud-library-download', 'cloud-guest-no-publish', 'cloud-single-direct-download', 'cloud-library-order', 'cloud-local-state'];
 export async function runParityCase(page, { root, fixture, native = false, scenario, consoleErrors = [], browserName = 'chromium' }) {
  const assert = (value, message) => { if (!value) throw new Error(message); };
  const frame = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -209,6 +209,56 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   }
   await page.locator('#search').fill('Cloud Drehung');await page.waitForFunction(()=>document.querySelectorAll('.figure-card').length===1);
  }
+ if(scenario==='cloud-local-state'){
+  const bytes=await(await page.request.get(new URL(fixture,page.url()).href)).body();
+  const library={id:'state-library',title:'Status-Bibliothek',visibility:'public',owner_id:'other'};
+  let latest='state-rev';
+  const revision=()=>({id:latest,title:'Cloud Drehung',description:'Cloud',tags:[],created_at:'2026-10-26T00:00:00Z',videos:['a','b'].map(id=>({id:'cloud-'+id,name:id,size:bytes.length,type:'video/mp4'}))});
+  const scope=new URL(root,page.url()).pathname;
+  await page.evaluate(scope=>localStorage.setItem(`salsa-cloud-session:${scope}:v1`,JSON.stringify({access_token:'contract',refresh_token:'contract',expires_at:Date.now()+3600000})),scope);
+  await page.route('**/functions/v1/cloud',route=>{
+   const {action}=route.request().postDataJSON();let data={ok:true};
+   if(action==='state')data={me:{id:'contract',email:'contract@example.test',upload_enabled:true,used:0,quota:500000000},libraries:[library],own_figures:[{id:'state-figure',owner_id:'contract',revisions:[revision()]}]};
+   if(action==='library')data={library,entries:[{figure_id:'state-figure',published:revision()}],members:[],manage:false};
+   if(action==='poster_get')data={poster:null,can_write:false};
+   return route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
+  });
+  await seed(1,'cloud:state-rev:cloud-a');
+  await page.locator('#cloudButton').click();
+  const availability=page.locator('.cloud-own-availability');
+  await page.waitForFunction(()=>document.querySelector('.cloud-own-availability')?.textContent==='Teilweise lokal verfügbar');
+  await page.locator('.cloud-own-figure summary').click();
+  await page.getByRole('checkbox').first().waitFor();
+  assert(await page.getByRole('checkbox').count()===2,'Partial copies hide missing-video selection');
+  await page.evaluate(async({root,fixture})=>{
+   const storage=await import(root+'storage.js'),{cloudLocalIndex:index}=await import(root+'cloud-local.js');
+   const current=(await storage.listFigures())[0],drafts=await storage.figureVideos(current),blob=await(await fetch(fixture)).blob();
+   const saved=await storage.saveFigure({...current,importFingerprint:'cloud:state-rev:cloud-a,cloud-b'},[...drafts.map(v=>({...v,existing:true,confirmed:true})),{id:'local-b',blob,name:'b',confirmed:true,duration:6}],current.revision);
+   index.remember('@device','state-rev',saved,[{cloud:'cloud-a',local:saved.videoIds[0]},{cloud:'cloud-b',local:saved.videoIds[1]}],'state-figure');
+   dispatchEvent(new Event('local-figures-changed'));
+  },{root,fixture});
+  await page.waitForFunction(()=>document.querySelector('.cloud-own-availability')?.textContent==='Lokal verfügbar');
+  assert(await page.getByRole('checkbox').count()===0,'Complete copy retains download checkboxes');
+  await page.evaluate(async root=>{
+   const storage=await import(root+'storage.js'),current=(await storage.listFigures())[0];
+   await storage.saveFigure({...current,title:'Meine lokale Anpassung'},(await storage.figureVideos(current)).map(v=>({...v,existing:true,confirmed:true})),current.revision);
+   dispatchEvent(new Event('local-figures-changed'));
+  },root);
+  await page.waitForFunction(()=>document.querySelector('.cloud-own-availability')?.title.includes('lokal angepasst'));
+  await page.evaluate(async root=>{
+   const storage=await import(root+'storage.js'),current=(await storage.listFigures())[0],records=await(await import(root+'app-storage.js')).figureVideoRecords(current);
+   const cache=await caches.open(storage.MEDIA_CACHE);window.savedMedia={key:records[0].cacheKey,response:await cache.match(records[0].cacheKey)};await cache.delete(records[0].cacheKey);dispatchEvent(new Event('local-figures-changed'));
+  },root);
+  await page.waitForFunction(()=>document.querySelector('.cloud-own-availability')?.textContent==='Lokale Dateien fehlen');
+  await page.evaluate(async root=>{const storage=await import(root+'storage.js');await(await caches.open(storage.MEDIA_CACHE)).put(savedMedia.key,savedMedia.response);dispatchEvent(new Event('local-figures-changed'));},root);
+  await page.waitForFunction(()=>document.querySelector('.cloud-own-availability')?.textContent==='Lokal verfügbar');
+  latest='new-state-rev';await page.getByRole('button',{name:'Aktualisieren',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('.cloud-own-availability')?.textContent==='Neuere Cloud-Version verfügbar');
+  await page.getByRole('button',{name:'Bibliotheken',exact:true}).click();await page.getByRole('button',{name:'Öffnen',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('.cloud-library-availability')?.textContent==='Neuere Cloud-Version verfügbar');
+  await page.locator('.cloud-library-summary').click();await page.getByRole('button',{name:'Ältere lokale Figur öffnen',exact:true}).click();
+  await page.locator('#editor').waitFor();assert(await page.locator('#figureTitle').inputValue()==='Meine lokale Anpassung','Opening an old copy overwrote local changes');
+ }
  if(scenario.startsWith('cloud-repair')){
   const bytes=await(await page.request.get(new URL(fixture,page.url()).href)).body();
   const origin=new URL(page.url()).origin,scope=new URL(root,page.url()).pathname;
@@ -230,8 +280,16 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   }
   await page.locator('#cloudButton').click();
   await page.locator('.cloud-own-figure summary').first().click();
-  const open=page.getByRole('button',{name:'Lokale Figur öffnen',exact:true});await open.waitFor();await open.click();
-  await page.locator('#editor').waitFor();
+  if(scenario==='cloud-repair-missing'){
+   await page.locator('.cloud-local-status').filter({hasText:'Lokale Dateien fehlen'}).waitFor();
+   assert(await page.getByRole('button',{name:'Lokale Figur öffnen',exact:true}).count()===0,'Unreadable files count as locally available');
+   await page.getByRole('button',{name:'Lokal übernehmen',exact:true}).click();
+   await page.locator('#cloudImportConflict').getByRole('button',{name:'Vorhandene Figur ersetzen',exact:true}).click();
+   await page.waitForFunction(()=>!document.querySelector('#cloudDialog').open);
+  }else{
+   const open=page.getByRole('button',{name:'Lokale Figur öffnen',exact:true});await open.waitFor();await open.click();
+   await page.locator('#editor').waitFor();
+  }
   const saved=await page.evaluate(async root=>(await(await import(root+'storage.js')).listFigures()),root);
   assert(saved.length===1&&saved[0].id==='parity-0'&&saved[0].status==='Sitzt','Opening a cloud-linked figure changed local identity or learning status');
  }

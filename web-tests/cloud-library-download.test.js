@@ -130,3 +130,25 @@ test('filling missing tags keeps a locally modified figure marked modified',asyn
  const saved=await enrichCloudMetadata(local,f.rev('modified',['a']),f.services);
  assert.equal(saved.description,'My note');assert.deepEqual(saved.tags,['Salsa']);assert.equal(saved.status,'Sitzt');assert.equal(cloudLocalIndex.status(saved),'modified');
 });
+
+test('bulk completion does not skip a linked partial copy and maps reversed existing media correctly',async()=>{
+ const f=await fixture(),local=f.add({importFingerprint:'cloud:one:b'},['b']);
+ cloudLocalIndex.remember('@device','one',local,[{cloud:'b',local:local.videoIds[0]}]);
+ const result=await downloadLibrary([f.rev('one',['a','b'])],f.services);
+ assert.equal(result.saved,1);assert.equal(result.skipped,0);assert.deepEqual(f.network,['a']);
+ const saved=f.figures.find(x=>x.id===local.id),link=cloudLocalIndex.link(saved);
+ for(const pair of link.pairs) assert.equal(f.records.get(saved.id).find(record=>record.id===pair.local).name,pair.cloud);
+ assert.equal(cloudLocalIndex.resolve(f.rev('one',['a','b']),f.figures).kind,'available');
+});
+test('separate readable copies are consolidated rather than jointly counted as one full figure',async()=>{
+ const f=await fixture();f.add({importFingerprint:'cloud:one:a'},['a']);f.add({importFingerprint:'cloud:one:b'},['b']);
+ const result=await downloadLibrary([f.rev('one',['a','b'])],f.services);
+ assert.equal(result.saved,1);assert.equal(result.skipped,0);assert.deepEqual(f.network,[]);
+ assert.equal(cloudLocalIndex.resolve(f.rev('one',['a','b']),f.figures).kind,'available');
+});
+test('bulk completion preserves a locally modified partial copy as a separate figure',async()=>{
+ const f=await fixture(),local=f.add({importFingerprint:'cloud:one:a'},['a']);
+ cloudLocalIndex.remember('@device','one',local,[{cloud:'a',local:local.videoIds[0]}]);local.title='My local changes';
+ const before=JSON.stringify(local);const result=await downloadLibrary([f.rev('one',['a','b'])],f.services);
+ assert.equal(result.saved,1);assert.equal(JSON.stringify(f.figures.find(x=>x.id===local.id)),before);assert.equal(f.figures.length,2);
+});
