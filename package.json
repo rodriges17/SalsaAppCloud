@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test web-tests/*.test.js",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "prototype:figure-status": "python3 -m http.server 4175 --bind 0.0.0.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.3.14",
