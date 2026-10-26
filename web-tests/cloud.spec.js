@@ -654,3 +654,11 @@ test('guest header login opens a dialog, cancels without leaving the library, an
  await page.screenshot({path:info.outputPath('guest-header-login-dialog.png')});await page.getByRole('button',{name:'Als Admin anmelden',exact:true}).tap();
  await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();await expect(page.locator('#cloudLoginDialog')).toBeHidden();await expect(trigger).toBeHidden();await expect(page.getByRole('button',{name:'Abmelden',exact:true})).toBeVisible();
 });
+
+
+test('a private library link still offers guest login when reading its details is denied',async({page})=>{
+ await mock(page);
+ await page.route(`${host}/functions/v1/cloud`,async route=>{const input=route.request().postDataJSON();if(input.action!=='library')return route.fallback();return route.fulfill({status:403,contentType:'application/json',body:JSON.stringify({error:'Bitte für diese private Bibliothek anmelden.'})});});
+ await page.goto('/pwa/?library=lib-1');await expect(page.locator('#cloudError')).toContainText('anmelden');
+ await page.getByRole('button',{name:'Anmeldedialog öffnen',exact:true}).tap();await expect(page.getByRole('dialog',{name:'Anmelden',exact:true})).toBeVisible();
+});

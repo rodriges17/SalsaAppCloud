@@ -871,6 +871,7 @@ export function initCloud(callbacks) {
   addEventListener('cloud-session-changed', event => {
     libraryDraft = null; libraryEditing = null; libraryUpload = null; peopleView.reset(); viewEpoch++; renderedView = null; state = null; displayedOwner = null; localFigures = []; localUpdates = [];
     cancelThumbnails(); clearPreviews(body); body.replaceChildren(); errorBox.hidden = true; cacheStatus('');
+    if (loginTrigger) loginTrigger.hidden = signedIn();
     // Explicit login/logout reload their own destination; token rotation leaves forms intact.
     if ((event.detail?.external || event.detail?.expired) && dialog.open) {
       if (busy) authReloadPending = true;
@@ -896,6 +897,7 @@ export async function openCloud(local = null, library = null) {
   errorBox.hidden = true; if (displayedOwner !== cloudIdentity() || local) { cancelThumbnails(); clearPreviews(body); body.replaceChildren(); }
   // Do not let dialog focus restoration reopen the search keyboard on return.
   if (document.activeElement?.matches('input, textarea, [contenteditable=true]')) document.activeElement.blur();
+  loginTrigger.hidden = signedIn();
   dialog.showModal();
   if (local) await run('Cloud-Inhalte werden geladen …', () => load(library)); else await load(library, true);
 }
