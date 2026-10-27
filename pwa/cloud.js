@@ -789,7 +789,7 @@ async function publishForm() {
         progress: value => {
           if (!workflow.currentAccount) return;
           statusBox.textContent = value.message;
-          const cancel = document.getElementById('cloudCancelUpload'); cancel.hidden = false; cancel.disabled = !value.canCancel;
+          const cancel = document.getElementById('cloudCancelUpload'); cancel.hidden = !value.canCancel; cancel.disabled = !value.canCancel;
         }
       });
       if (!workflow.currentAccount || result.kind === 'account-changed') return;

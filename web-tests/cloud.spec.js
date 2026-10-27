@@ -734,7 +734,7 @@ test('shared upload checks an unknown commit result before allowing another uplo
  await expect(page.getByRole('button',{name:'Speicherstand erneut prüfen',exact:true})).toBeVisible();expect(committed).toBe(true);
  await page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true}).tap();await expect(page.locator('#cloudBody [role=alert]')).toContainText('Speicherstand');
  check=false;await page.getByRole('button',{name:'Speicherstand erneut prüfen',exact:true}).tap();await expect(page.locator('#cloudUploadRecovery')).toBeHidden();
- expect(calls.filter(c=>c.action==='reserve')).toHaveLength(1);expect(calls.some(c=>c.action==='abort')).toBe(false);
+ await expect(page.locator('#cloudCancelUpload')).toBeHidden();expect(calls.filter(c=>c.action==='reserve')).toHaveLength(1);expect(calls.some(c=>c.action==='abort')).toBe(false);
 });
 test('shared upload disables cancellation while the definitive commit is pending',async({page})=>{
  await signIn(page);await mock(page,true,false,true,{reflectUpload:true});await localUpload(page);
