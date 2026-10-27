@@ -235,7 +235,6 @@ button.storage-choice:disabled{opacity:1;cursor:default}
 .cloud-public-intro p, .cloud-guest-login-content > p, .cloud-login-panel > p { color: var(--muted); font-size: 14px; line-height: 1.6; }
 .cloud-public-libraries { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 14px; }
 .cloud-public-libraries .cloud-card { background: var(--card); align-content: start; }
-.cloud-public-libraries .cloud-card > button { align-self: end; }
 .cloud-public-badge { color: var(--success); font-size: 12px; }
 .cloud-guest-login { margin-top: 14px; border: 1px solid var(--border); border-radius: 14px; }
 .cloud-guest-login > summary { padding: 16px; min-height: 60px; cursor: pointer; color: var(--muted); }
@@ -391,3 +390,9 @@ button.storage-choice:disabled{opacity:1;cursor:default}
 
 /* Preserve the existing short-window layout while centering the title. */
 @media(max-height:540px){.page-intro{padding-block:4px}}
+
+/* The complete library card is a native navigation link. */
+a.cloud-library-card{color:var(--text);text-decoration:none;text-align:left;cursor:pointer}
+a.cloud-library-card:focus-visible{outline:3px solid var(--lavender);outline-offset:3px}
+a.cloud-library-card:active{background:var(--selection)}
+@media(hover:hover){a.cloud-library-card:hover{background:var(--elevated)}}

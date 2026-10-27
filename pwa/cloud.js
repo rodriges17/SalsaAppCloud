@@ -46,6 +46,18 @@ function select(form, label, options, selected) {
 }
 function checkbox(form, label, checked = false) { const wrap = node('label', undefined, 'cloud-check'), input = node('input'); input.type = 'checkbox'; input.checked = checked; wrap.append(input, node('span', label)); form.append(wrap); return input; }
 function section(title, parent = body) { const s = node('section', undefined, 'cloud-card'); s.append(node('h3', title)); parent.append(s); return s; }
+function libraryCard(library, parent = body) {
+  const card = node('a', undefined, 'cloud-card cloud-library-card');
+  const url = new URL('./', location.href); url.searchParams.set('cloud', '1'); url.searchParams.set('library', library.id);
+  card.href = url.href; card.dataset.libraryId = library.id;
+  card.setAttribute('aria-label', `Bibliothek „${library.title}“ öffnen`);
+  card.append(node('h3', library.title)); parent.append(card);
+  card.onclick = event => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault(); if (!busy) void load(library.id, true).catch(report);
+  };
+  return card;
+}
 async function run(message, work, errorTarget = errorBox) {
   if (busy) return; busy = true; errorBox.hidden = true; errorTarget.hidden = true; statusBox.textContent = message;
   body.inert = true; if (loginDialog) loginDialog.inert = true; document.getElementById('cloudBack').disabled = true; dialog.querySelectorAll('[data-nav]').forEach(button => { button.disabled = true; });
@@ -217,8 +229,7 @@ async function renderCloud(library, detail) {
   body.append(node('h3', 'Bibliotheken'));
   if (state.me?.upload_enabled) { const create = action('Bibliothek erstellen', () => navigate('create')); create.className = 'primary'; body.append(create); }
   for (const lib of state.libraries) {
-    const box = section(lib.title); if (lib.owner_id === state.me?.id) box.append(node('p', 'Besitzer · Bibliothek verwalten', 'cloud-role-badge')); else if (lib.manage) box.append(node('p', 'Plattform-Administrator · Bibliothek verwalten', 'cloud-role-badge')); else if (lib.contribute) box.append(node('p', 'Mitwirkender', 'cloud-role-badge')); else box.append(node('p', 'Lesen', 'cloud-role-badge')); box.append(node('p', `${lib.visibility === 'public' ? 'Öffentlich' : 'Privat'} · ${lib.collaborative ? 'Mitwirkende erlaubt' : 'Nur Besitzer'} · ${lib.moderated ? 'Mit Freigabe' : 'Sofort veröffentlichen'}`));
-    box.append(action('Öffnen', () => load(lib.id, true)));
+    const box = libraryCard(lib); if (lib.owner_id === state.me?.id) box.append(node('p', 'Besitzer · Bibliothek verwalten', 'cloud-role-badge')); else if (lib.manage) box.append(node('p', 'Plattform-Administrator · Bibliothek verwalten', 'cloud-role-badge')); else if (lib.contribute) box.append(node('p', 'Mitwirkender', 'cloud-role-badge')); else box.append(node('p', 'Lesen', 'cloud-role-badge')); box.append(node('p', `${lib.visibility === 'public' ? 'Öffentlich' : 'Privat'} · ${lib.collaborative ? 'Mitwirkende erlaubt' : 'Nur Besitzer'} · ${lib.moderated ? 'Mit Freigabe' : 'Sofort veröffentlichen'}`));
   }
   if (!state.libraries.length) body.append(node('p', 'Noch keine zugänglichen Bibliotheken.'));
 
@@ -769,10 +780,9 @@ function publicLibraries() {
   const catalog = node('div', undefined, 'cloud-public-libraries');
   body.append(catalog);
   for (const library of state.libraries.filter(library => library.visibility === 'public')) {
-    const card = section(library.title, catalog);
+    const card = libraryCard(library, catalog);
     card.append(node('p', 'Öffentlich', 'cloud-public-badge'));
     if (library.description) card.append(node('p', library.description));
-    card.append(action('Öffnen', () => load(library.id, true)));
   }
   if (!catalog.childElementCount) catalog.append(node('p', 'Noch keine öffentlichen Bibliotheken.'));
 }
