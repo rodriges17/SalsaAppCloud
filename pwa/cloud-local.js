@@ -3,6 +3,9 @@ import { localContentSignature } from './cloud-provenance.js';
 // Keep it outside figure metadata so linking never rewrites videos or learning status.
 export function createCloudLocalIndex(storage, key) {
   let links, persisted;
+  const stamp = revision => JSON.stringify([revision.created_at ?? null, revision.title, revision.description ?? '', revision.tags ?? [], revision.videos ?? []]);
+  const observations = () => { try { return JSON.parse(storage.getItem(key + ':remote') || '{}'); } catch { return {}; } };
+  let remote = observations();
   function read() {
     try {
       const raw = storage.getItem(key) || '[]';
@@ -15,11 +18,21 @@ export function createCloudLocalIndex(storage, key) {
     return links;
   }
   return {
-    remember(owner, revision, figure, pairs, cloudFigure = null, baseline = localContentSignature(figure)) {
+    observe(revision) {
+      if (!revision?.id) return;
+      remote = observations(); remote[revision.id] = stamp(revision);
+      try { storage.setItem(key + ':remote', JSON.stringify(remote)); } catch { /* Optional status cache. */ }
+    },
+    remoteChanged(figure) {
+      remote = observations();
+      const link = this.link(figure);
+      return !!(link?.remoteBaseline && remote[link.revision] && link.remoteBaseline !== remote[link.revision]);
+    },
+    remember(owner, revision, figure, pairs, cloudFigure = null, baseline = localContentSignature(figure), remoteBaseline = remote[revision] ?? null) {
       if (!owner || !revision || !pairs.length) throw new Error('Die lokale Zuordnung ist unvollständig.');
       const folder = figure.storageFolder || null;
       const next = read().filter(v => !(v.owner === owner && v.revision === revision && v.figure === figure.id && v.folder === folder));
-      next.push({ owner, revision, cloudFigure, baseline, figure: figure.id, folder, pairs: pairs.map(p => ({ cloud: p.cloud, local: p.local })) });
+      next.push({ owner, revision, cloudFigure, baseline, remoteBaseline, figure: figure.id, folder, pairs: pairs.map(p => ({ cloud: p.cloud, local: p.local })) });
       links = next;
       try { const raw = JSON.stringify(next); storage.setItem(key, raw); persisted = raw; return true; } catch { return false; }
     },
@@ -29,7 +42,10 @@ export function createCloudLocalIndex(storage, key) {
     status(figure) {
       const link = this.link(figure);
       if (link && !link.baseline) this.remember(link.owner, link.revision, figure, link.pairs, link.cloudFigure);
-      if (link) return link.baseline && link.baseline !== localContentSignature(figure) ? 'modified' : 'cloud';
+      if (link) {
+        const modified = link.baseline && link.baseline !== localContentSignature(figure);
+        return this.remoteChanged(figure) ? modified ? 'conflict' : 'remote' : modified ? 'modified' : 'cloud';
+      }
       if (figure.importFingerprint?.startsWith('cloud:')) {
         const [, revision, ids] = figure.importFingerprint.split(':');
         const pairs = (ids ?? '').split(',').filter(Boolean).map((cloud, i) => ({cloud, local: figure.videoIds[i]})).filter(p => p.local);
@@ -39,10 +55,10 @@ export function createCloudLocalIndex(storage, key) {
       return 'local';
     },
     copy(source, target) {
-      const modified = this.status(source) === 'modified', link = this.link(source);
+      const modified = ['modified', 'conflict'].includes(this.status(source)), link = this.link(source);
       if (!link) return;
       const pairs = link.pairs.map(pair => ({cloud: pair.cloud, local: target.videoIds[source.videoIds.indexOf(pair.local)]})).filter(pair => pair.local);
-      if (pairs.length) this.remember(link.owner, link.revision, target, pairs, link.cloudFigure, modified ? '@locally-modified' : undefined);
+      if (pairs.length) this.remember(link.owner, link.revision, target, pairs, link.cloudFigure, modified ? '@locally-modified' : undefined, link.remoteBaseline);
     },
     reconcile(revision, figures) {
       for (const figure of figures) {
@@ -51,7 +67,7 @@ export function createCloudLocalIndex(storage, key) {
         const old = link?.revision ?? (imported?.[0] === 'cloud' ? imported[1] : null);
         if (old && old !== revision.id && revision.legacy_ids?.includes(old)) {
           const pairs = link?.pairs ?? (imported[2] ?? '').split(',').map((cloud, i) => ({cloud, local: figure.videoIds[i]})).filter(p => p.local);
-          if (pairs.length) this.remember(link?.owner ?? '@device', revision.id, figure, pairs, revision.figure_id, link?.baseline);
+          if (pairs.length) this.remember(link?.owner ?? '@device', revision.id, figure, pairs, revision.figure_id, link?.baseline, link?.remoteBaseline);
         }
       }
     },
@@ -59,6 +75,7 @@ export function createCloudLocalIndex(storage, key) {
     // Provenance describes intentional edits; storageProblem describes unreadable files.
     resolve(revision, figures, { figureId = revision?.figure_id, revisionIds = [] } = {}) {
       if (!revision) return { kind: 'cloud', label: 'Nur in der Cloud', available: false, modified: false, figure: null, current: null };
+      this.observe(revision);
       this.reconcile(revision, figures);
       const currentIds = new Set([revision.id, ...(revision.legacy_ids ?? [])]);
       const history = new Set([...currentIds, ...revisionIds]);
@@ -70,10 +87,10 @@ export function createCloudLocalIndex(storage, key) {
         const fallback = imported?.[0] === 'cloud' ? { revision: imported[1], pairs: (imported[2] ?? '').split(',').filter(Boolean).map((cloud, i) => ({ cloud, local: figure.videoIds[i] })) } : null;
         const link = origin ?? fallback;
         if (!link || !(history.has(link.revision) || figureId && link.cloudFigure === figureId)) continue;
-        const modified = this.status(figure) === 'modified';
+        const modified = ['modified', 'conflict'].includes(this.status(figure));
         const ids = new Set(figure.videoIds);
         const covered = new Set(link.pairs.filter(pair => ids.has(pair.local) || modified).map(pair => pair.cloud));
-        const isCurrent = currentIds.has(link.revision);
+        const isCurrent = currentIds.has(link.revision) && !this.remoteChanged(figure);
         const readable = !figure.storageProblem && !figure.folderAccessRequired && ids.size > 0;
         const complete = isCurrent && required.length > 0 && required.every(video => covered.has(video.id));
         candidates.push({ figure, modified, isCurrent, readable, complete, covered });

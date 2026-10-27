@@ -165,3 +165,16 @@ test('bulk imports visit all library positions in ascending order', async()=>{
  const times=f.saves.map(s=>s.figure.createdAt);
  assert.ok(times[0]<times[1] && times[1]<times[2]);
 });
+test('metadata-only replacement keeps existing media IDs and performs no network download',async()=>{
+ const f=await fixture(),target=f.add({},['a','b']),ids=[...target.videoIds];
+ const revision={...f.rev('metadata-only',['b','a']),description:'Changed description',tags:['Updated']};
+ await downloadFigure(revision,f.services,{target});
+ assert.deepEqual(f.network,[]);assert.deepEqual(f.saves[0].drafts.map(v=>v.id),[ids[1],ids[0]]);
+ assert.ok(f.saves[0].drafts.every(v=>v.existing));assert.equal(f.saves[0].figure.description,'Changed description');
+});
+test('failed replacement leaves old figure and media untouched',async()=>{
+ const f=await fixture(),target=f.add({},['a']),snapshot=structuredClone(target);
+ f.services.fetchVideo=async()=>{throw new Error('Offline');};
+ await assert.rejects(downloadFigure(f.rev('failure',['a','b']),f.services,{target}),/Offline/);
+ assert.equal(f.saves.length,0);assert.deepEqual(target,snapshot);
+});

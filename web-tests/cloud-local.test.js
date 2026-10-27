@@ -119,3 +119,16 @@ test('renamed uploaded originals participate in explicit replacement choices',()
  assert.deepEqual(index.importCandidates({title:'different',revisionIds:['old']},[figure]),[figure]);
  assert.deepEqual(index.importCandidates({title:'different',revisionIds:['rev'],figureId:'other'},[figure]),[]);
 });
+test('same revision id detects remote metadata updates and simultaneous local changes',()=>{
+ const storage=fake(),index=createCloudLocalIndex(storage,'sync');
+ const rev={id:'rev',figure_id:'cloud',created_at:'one',title:'A',videos:[{id:'cloud-a'}]};
+ const local={...figure,title:'A',videoIds:['a']};
+ index.observe(rev);index.remember('owner','rev',local,[pairs[0]],'cloud');
+ assert.equal(index.status(local),'cloud');
+ index.observe({...rev,created_at:'two',title:'B'});
+ assert.equal(index.status(local),'remote');
+ assert.equal(index.resolve({...rev,created_at:'two',title:'B'},[local]).kind,'outdated');
+ assert.equal(index.status({...local,title:'Local edit'}),'conflict');
+ const after=createCloudLocalIndex(storage,'sync');assert.equal(after.status(local),'remote');
+ after.remember('owner','rev',local,[pairs[0]],'cloud');assert.equal(after.status(local),'cloud');
+});
