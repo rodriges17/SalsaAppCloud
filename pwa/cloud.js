@@ -34,7 +34,7 @@ async function leaveLibraryDraft() {
   libraryDraft = null; libraryEditing = null; libraryUpload = null; source = null; return true;
 }
 
-let loginDialog, loginTrigger;
+let loginDialog, loginTrigger, cloudNavigation, accountDialog, accountTrigger;
 let dialog, body, errorBox, statusBox, hooks, state, current, busy = false, controller, source = null, area = 'figures';
 function report(error, target = errorBox) { target.textContent = error?.message ?? 'Cloud-Aufruf fehlgeschlagen.'; target.hidden = false; target.scrollIntoView({ block: 'nearest' }); }
 function field(form, label, value = '', type = 'text') {
@@ -60,11 +60,11 @@ function libraryCard(library, parent = body) {
   };
   return card;
 }
-async function run(message, work, errorTarget = errorBox) {
-  if (busy) return; busy = true; errorBox.hidden = true; errorTarget.hidden = true; statusBox.textContent = message;
-  body.inert = true; if (loginDialog) loginDialog.inert = true; document.getElementById('cloudBack').disabled = true; dialog.querySelectorAll('[data-nav]').forEach(button => { button.disabled = true; });
-  try { return await work(); } catch (error) { if (error.accessChanged) await recoverAccess(); report(error, errorTarget.isConnected ? errorTarget : errorBox); }
-  finally { busy = false; body.inert = false; if (loginDialog) loginDialog.inert = false; document.getElementById('cloudBack').disabled = false; dialog.querySelectorAll('[data-nav]').forEach(button => { button.disabled = false; }); statusBox.textContent = ''; if (authReloadPending && dialog.open) { authReloadPending = false; source = null; area = 'initial'; void load(null, true); } }
+async function run(message, work, errorTarget = errorBox, retainStatus = false) {
+  if (busy) return; busy = true; statusBox.closest('footer').setAttribute('aria-busy', 'true'); errorBox.hidden = true; errorTarget.hidden = true; statusBox.textContent = message;
+  body.inert = true; if (loginDialog) loginDialog.inert = true; document.getElementById('cloudBack').disabled = true; dialog.querySelectorAll('[data-nav], #cloudNavigation button, .cloud-refresh-trigger, #cloudAccountOpen').forEach(button => { button.disabled = true; });
+  try { return await work(); } catch (error) { if (error.accessChanged) await recoverAccess(); if (retainStatus) statusBox.textContent = error?.message ?? 'Download fehlgeschlagen.'; report(error, errorTarget.isConnected ? errorTarget : errorBox); }
+  finally { busy = false; statusBox.closest('footer').setAttribute('aria-busy', 'false'); body.inert = false; if (loginDialog) loginDialog.inert = false; document.getElementById('cloudBack').disabled = false; dialog.querySelectorAll('[data-nav], #cloudNavigation button, .cloud-refresh-trigger, #cloudAccountOpen').forEach(button => { button.disabled = false; }); if (!retainStatus) statusBox.textContent = ''; if (authReloadPending && dialog.open) { authReloadPending = false; source = null; area = 'initial'; void load(null, true); } }
 }
 async function recoverAccess() {
   const inputs = [...body.querySelectorAll('label')].map(label => { const input = label.querySelector('input,textarea,select'); return input && input.type !== 'password' ? { label: label.firstChild?.textContent, value: input.value, checked: input.checked } : null; }).filter(Boolean);
@@ -80,6 +80,7 @@ const hasOwnArea = value => !!value?.me && (value.me.upload_enabled || value.own
 const initialArea = value => hasOwnArea(value) ? 'figures' : 'libraries';
 async function close() { if (busy || !await leaveLibraryDraft()) return; libraryDraft = null; libraryEditing = null; libraryUpload = null; viewEpoch++; renderedView = null; clearTimeout(statusTimer); cancelThumbnails(); dialog.close(); body.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); }); source = null; hooks.closed?.(); }
 async function cloudBack() {
+  if (accountDialog?.open) { dismissAccount(); return; }
   if (busy) return;
   if (loginDialog?.open) { dismissLogin(); return; }
   if (libraryUpload) { await resumeLibraryUpload(); return; }
@@ -91,6 +92,25 @@ async function cloudBack() {
   if (current) { await navigate('libraries'); return; }
   await close();
 }
+
+function dismissAccount() {
+  if (!accountDialog?.open) return;
+  accountDialog.close(); accountTrigger.setAttribute('aria-expanded', 'false'); accountTrigger.focus();
+}
+function renderAccount() {
+  accountTrigger.hidden = !state?.me;
+  if (!state?.me) { dismissAccount(); accountDialog.replaceChildren(); return; }
+  const me = state.me;
+  accountDialog.replaceChildren();
+  const heading = node('div', undefined, 'cloud-account-heading'), title = node('h3', 'Mein Konto'); title.id = 'cloudAccountTitle';
+  const closeButton = action('×', dismissAccount); closeButton.setAttribute('aria-label', 'Kontomenü schließen'); heading.append(title, closeButton);
+  accountDialog.append(heading, node('p', me.email, 'cloud-account-email'), node('p', me.is_admin ? 'Plattform-Administrator' : me.upload_enabled ? 'Figuren hochladen erlaubt' : 'Lesen erlaubt, Uploads gesperrt', 'cloud-account-role'));
+  const usage = node('div', undefined, 'cloud-account-usage'), meter = node('meter'); meter.min = 0; meter.max = Math.max(1, Number(me.quota) || 0); meter.value = Math.max(0, Number(me.used) || 0); meter.setAttribute('aria-label', 'Belegter Cloud-Speicher'); meter.setAttribute('aria-valuetext', `${MB(me.used)} / ${MB(me.quota)} belegt`);
+  usage.append(node('h4', 'Cloud-Speicher'), meter, node('p', `${MB(me.used)} / ${MB(me.quota)} belegt`)); accountDialog.append(usage);
+  if (me.is_admin) accountDialog.append(action('Plattformverwaltung', () => { dismissAccount(); return navigate('admin'); }));
+  accountDialog.append(action('Abmelden', async () => { dismissAccount(); if (!await leaveLibraryDraft()) return; await run('Abmelden …', async () => { await logout(); source = null; area = 'initial'; await load(null); }); }));
+}
+
 function cloudStatusLabel(target, text, modified = false) {
   const icon = node('span', undefined, 'cloud-status-icon'); icon.innerHTML = cloudIcon(modified);
   target.replaceChildren(icon, node('span', text));
@@ -168,16 +188,16 @@ async function load(library = current, allowCache = false) {
     }
     cacheStatus(cached ? 'Änderungen werden geladen …' : 'Cloud-Inhalte werden geladen …');
     const { snapshot, detail: freshDetail } = await cloudReadState.refresh(owner, library, { available, force: allowCache === 'refresh', onAccessChanged: () => {
-      if (active()) { cancelThumbnails(); clearPreviews(body); body.replaceChildren(); renderedView = null; state = null; displayedOwner = null; cached = null; }
+      if (active()) { cancelThumbnails(); clearPreviews(body); body.replaceChildren(); renderedView = null; state = null; displayedOwner = null; cached = null; cloudNavigation.replaceChildren(); cloudNavigation.hidden = true; renderAccount(); }
     } });
     if (!active()) return;
     // Do not interrupt a form, an active download, expanded history or a video preview.
     const editing = !snapshot.accessChanged && (libraryEditing || libraryDraft?.dirty() || cached && (busy || allowCache !== 'refresh' && body.querySelector('details[open], video, form input:focus, form textarea:focus, input[type=checkbox]:not(:checked)')));
     const changed = allowCache === 'refresh' || !cached || JSON.stringify(contentState(state)) !== JSON.stringify(contentState(snapshot.value)) || library && JSON.stringify(detail?.value) !== JSON.stringify(freshDetail?.value);
     if (!editing && changed) {
-      const scroll = cached ? body.scrollTop : 0;
+      const scroll = cached ? body.parentElement.scrollTop : 0;
       state = snapshot.value; displayedOwner = owner;
-      await renderCloud(library, freshDetail?.value); body.scrollTop = scroll;
+      await renderCloud(library, freshDetail?.value); body.parentElement.scrollTop = scroll;
     }
     if (active() && !busy) { errorBox.hidden = true; cacheStatus(editing && changed ? 'Änderungen geladen – bitte nach Abschluss deines Vorgangs aktualisieren.' : 'Alles aktuell', !editing); }
     maintainCloud(owner, snapshot.value.me);
@@ -185,7 +205,7 @@ async function load(library = current, allowCache = false) {
     if (epoch !== viewEpoch || !dialog.open || owner && owner !== cloudIdentity()) return;
     if (error.cacheCleared && owner) {
       if (epoch !== viewEpoch || !dialog.open || owner !== cloudIdentity()) return;
-      cancelThumbnails(); clearPreviews(body); body.replaceChildren(); state = null; displayedOwner = null; cached = null;
+      cancelThumbnails(); clearPreviews(body); body.replaceChildren(); state = null; displayedOwner = null; cached = null; cloudNavigation.replaceChildren(); cloudNavigation.hidden = true; renderAccount();
     }
     if (cached) cacheStatus(`Aktualisierung nicht möglich – letzter geladener Stand wird angezeigt. ${lastStand(cached.updatedAt)}`);
     else { cacheStatus(''); report(error); if (!body.childElementCount) body.append(action('Erneut versuchen', () => load(library, true))); }
@@ -198,7 +218,7 @@ async function renderCloud(library, detail) {
   if (area === 'initial' || area === 'figures' && !source && !hasOwnArea(state)) area = initialArea(state);
   renderedView = { owner: cloudIdentity(), area, library };
   if (!state.me && !['figures', 'libraries'].includes(area)) area = 'libraries';
-  cancelThumbnails(); clearPreviews(body); body.replaceChildren();
+  cancelThumbnails(); clearPreviews(body); body.replaceChildren(); body.parentElement.scrollTop = 0;
   posterView = createPosterView(body, state.me);
   loginTrigger.hidden = !!state.me; if (state.me) dismissLogin();
   const toolbar = node('div', undefined, 'cloud-tabs');
@@ -206,14 +226,10 @@ async function renderCloud(library, detail) {
   for (const [key, label] of [...(hasOwnArea(state) ? [['figures', 'Meine Figuren']] : []), ['libraries', 'Bibliotheken']]) {
     const button = action(label, () => navigate(key)); if (key === 'figures') button.setAttribute('aria-label', 'Meine Cloud-Figuren'); button.setAttribute('aria-pressed', String(!source && (current ? key === 'libraries' : area === key || (area === 'create' && key === 'libraries')))); toolbar.append(button);
   }
-  const utilities = node('div', undefined, 'cloud-utilities');
-  if (state.me?.is_admin) utilities.append(action('Plattformverwaltung', () => navigate('admin')));
-  utilities.append(action('Aktualisieren', () => load(current, 'refresh')));
-  if (signedIn()) utilities.append(action('Abmelden', async () => { if (!await leaveLibraryDraft()) return; await logout(); await run('Laden …', () => load(null)); }));
-  if (state.me) body.append(toolbar, utilities);
-  if (state.me?.is_admin) body.append(node('p', 'Plattform-Administrator', 'cloud-role-badge'));
-  if (state.me) body.append(node('p', `${state.me.email} · ${MB(state.me.used)} / ${MB(state.me.quota)} belegt${state.me.upload_enabled ? '' : ' · Lesen erlaubt, Uploads gesperrt'}`, 'cloud-account'));
-  else {
+  cloudNavigation.replaceChildren(); cloudNavigation.hidden = !state.me;
+  if (state.me) cloudNavigation.append(toolbar);
+  renderAccount();
+  if (!state.me) {
     if (current) {
       await libraryView(current, detail);
     }
@@ -429,9 +445,9 @@ function libraryDownloadControls(parent, entries) {
   const revisions = [...new Map(entries.filter(entry => entry.published?.videos?.length).map(entry => [entry.published.id, { ...entry.published, figure_id: entry.figure_id }])).values()];
   if (!revisions.length) return;
   const box = node('div', undefined, 'cloud-library-download');
-  const resultText = node('p', undefined, 'cloud-library-download-result'); resultText.setAttribute('role', 'status'); resultText.hidden = true;
+  const resultText = statusBox;
   const failures = node('ul'); failures.hidden = true;
-  const progress = node('progress'); progress.setAttribute('aria-label', 'Bibliothek lokal verfügbar machen'); progress.hidden = true;
+  const progress = document.getElementById('cloudDownloadProgress');
   const start = action('Alle Figuren lokal verfügbar machen', () => run('Lokalen Bestand prüfen …', async () => {
     if (libraryDraft?.dirty()) throw new Error('Bitte zuerst die Bibliothek speichern, bevor du alle Figuren lokal verfügbar machst.');
     const settings = await storageSettings();
@@ -458,7 +474,6 @@ function libraryDownloadControls(parent, entries) {
         progress.value = state.done;
         const phase = { index: 'Lokalen Bestand prüfen', check: 'Vorhandene Videos prüfen', download: `Video ${state.video} von ${state.videos} laden`, save: 'Figur speichern', saved: 'Figur gespeichert', skip: 'Bereits vorhanden', error: 'Figur konnte nicht gespeichert werden', done: 'Abgeschlossen', cancelled: 'Abgebrochen' }[state.phase];
         resultText.textContent = `${phase}${state.title ? `: ${state.title}` : ''} · ${state.done} / ${state.total} Figuren`;
-        statusBox.textContent = resultText.textContent;
       } });
       resultText.textContent = `${result.cancelled ? 'Abgebrochen' : 'Fertig'}: ${result.saved} gespeichert · ${result.skipped} bereits vorhanden${result.failed.length ? ` · ${result.failed.length} fehlgeschlagen` : ''}.`;
       if (result.failed.length) { failures.hidden = false; result.failed.forEach(error => failures.append(node('li', `${error.title}: ${error.message}`))); }
@@ -467,9 +482,9 @@ function libraryDownloadControls(parent, entries) {
       await hooks.localChanged?.();
       await refreshLocalFigures();
     } finally { controller = null; cancel.hidden = true; cancel.textContent = 'Upload abbrechen'; progress.hidden = true; }
-  }));
+  }, errorBox, true));
   start.className = 'primary';
-  box.append(start, node('p', 'Alle veröffentlichten Figuren direkt im gewählten lokalen Speicher sichern. Vorhandene Videos werden wiederverwendet; bestehende Lernstände und Notizen bleiben erhalten.'), progress, resultText, failures);
+  box.append(start, node('p', 'Alle veröffentlichten Figuren direkt im gewählten lokalen Speicher sichern. Vorhandene Videos werden wiederverwendet; bestehende Lernstände und Notizen bleiben erhalten.'), failures);
   parent.append(box);
 }
 function versionLabel(revision) {
@@ -932,12 +947,16 @@ export function initCloud(callbacks) {
   addEventListener('beforeunload', event => { if ((libraryDraft ?? libraryUpload?.hook)?.dirty()) { event.preventDefault(); event.returnValue = ''; } });
   peopleView = createPeopleView({ node, action, field, select, checkbox, call: cloudCall, run, confirm: options => hooks.confirm(options), state: () => state, refresh: () => load(null), report, section });
   dialog = document.getElementById('cloudDialog'); body = document.getElementById('cloudBody'); errorBox = document.getElementById('cloudError'); statusBox = document.getElementById('cloudStatus');
+  const downloadProgress = node('progress'); downloadProgress.id = 'cloudDownloadProgress'; downloadProgress.setAttribute('aria-label', 'Bibliothek lokal verfügbar machen'); downloadProgress.hidden = true; statusBox.after(downloadProgress);
+  cloudNavigation = node('div', undefined, 'cloud-navigation'); cloudNavigation.id = 'cloudNavigation'; cloudNavigation.hidden = true; dialog.querySelector('.screen-header').after(cloudNavigation);
+  const refreshTrigger = action('Aktualisieren', () => { if (!busy) return load(current, 'refresh'); }); refreshTrigger.className = 'cloud-refresh-trigger'; refreshTrigger.setAttribute('aria-label', 'Aktualisieren'); refreshTrigger.title = 'Aktualisieren'; refreshTrigger.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 7a7 7 0 0 1 12-1l2 6M4 12l2 6a7 7 0 0 0 12-1"/></svg>'; dialog.querySelector('.screen-header').append(refreshTrigger);
   uploadRecovery = node('section', undefined, 'cloud-card'); uploadRecovery.id = 'cloudUploadRecovery'; uploadRecovery.setAttribute('role', 'status'); uploadRecovery.hidden = true; body.before(uploadRecovery);
   addEventListener('cloud-session-changed', event => {
     uploadWorkflow?.cancel(); uploadRecovery.hidden = true; uploadRecovery.replaceChildren();
     libraryDraft = null; libraryEditing = null; libraryUpload = null; peopleView.reset(); viewEpoch++; renderedView = null; state = null; displayedOwner = null; localInventoryEpoch++; localFigures = []; localUpdates = [];
-    cancelThumbnails(); clearPreviews(body); body.replaceChildren(); errorBox.hidden = true; cacheStatus('');
+    cancelThumbnails(); clearPreviews(body); body.replaceChildren(); cloudNavigation.replaceChildren(); cloudNavigation.hidden = true; errorBox.hidden = true; cacheStatus('');
     if (loginTrigger) loginTrigger.hidden = signedIn();
+    dismissAccount(); accountTrigger.hidden = true; accountDialog.replaceChildren();
     // Explicit login/logout reload their own destination; token rotation leaves forms intact.
     if ((event.detail?.external || event.detail?.expired) && dialog.open) {
       if (busy) authReloadPending = true;
@@ -950,6 +969,13 @@ export function initCloud(callbacks) {
   loginTrigger.setAttribute('aria-label', 'Anmeldedialog öffnen'); loginTrigger.title = 'Anmelden'; loginTrigger.setAttribute('aria-haspopup', 'dialog'); loginTrigger.setAttribute('aria-controls', loginDialog.id);
   loginTrigger.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5M3 12h12m-4-4 4 4-4 4"/></svg>';
   dialog.querySelector('.screen-header').append(loginTrigger);
+  accountDialog = node('dialog', undefined, 'cloud-account-menu'); accountDialog.id = 'cloudAccountMenu'; accountDialog.setAttribute('aria-labelledby', 'cloudAccountTitle'); dialog.append(accountDialog);
+  accountDialog.addEventListener('cancel', event => { event.preventDefault(); event.stopPropagation(); dismissAccount(); });
+  accountDialog.addEventListener('click', event => { if (event.target !== accountDialog) return; const rect = accountDialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dismissAccount(); });
+  accountDialog.addEventListener('close', () => accountTrigger.setAttribute('aria-expanded', 'false'));
+  accountTrigger = action('', () => { if (busy) return; renderAccount(); if (state?.me) { accountDialog.showModal(); accountTrigger.setAttribute('aria-expanded', 'true'); } });
+  accountTrigger.id = 'cloudAccountOpen'; accountTrigger.className = 'cloud-login-trigger'; accountTrigger.hidden = true; accountTrigger.title = 'Mein Konto'; accountTrigger.setAttribute('aria-label', 'Kontomenü öffnen'); accountTrigger.setAttribute('aria-haspopup', 'dialog'); accountTrigger.setAttribute('aria-controls', accountDialog.id); accountTrigger.setAttribute('aria-expanded', 'false');
+  accountTrigger.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 22v-3a8 8 0 0 1 16 0v3"/></svg>'; dialog.querySelector('.screen-header').append(accountTrigger);
   document.getElementById('cloudBack').onclick = cloudBack;
   dialog.querySelector('[data-nav=figures]').onclick = close;
   dialog.querySelector('[data-nav=cloud]').onclick = () => { if (!busy) navigate('initial'); };
@@ -960,10 +986,10 @@ export function initCloud(callbacks) {
 }
 export async function openCloud(local = null, library = null) {
   if (busy || dialog.open) return; if (local && !signedIn()) return; source = local; current = library; area = 'initial';
-  errorBox.hidden = true; if (displayedOwner !== cloudIdentity() || local) { cancelThumbnails(); clearPreviews(body); body.replaceChildren(); }
+  errorBox.hidden = true; if (displayedOwner !== cloudIdentity()) { cloudNavigation.replaceChildren(); cloudNavigation.hidden = true; } if (displayedOwner !== cloudIdentity() || local) { cancelThumbnails(); clearPreviews(body); body.replaceChildren(); }
   // Do not let dialog focus restoration reopen the search keyboard on return.
   if (document.activeElement?.matches('input, textarea, [contenteditable=true]')) document.activeElement.blur();
-  loginTrigger.hidden = signedIn();
+  loginTrigger.hidden = signedIn(); accountTrigger.hidden = !state?.me || displayedOwner !== cloudIdentity();
   dialog.showModal();
   if (local) await run('Cloud-Inhalte werden geladen …', () => load(library)); else await load(library, true);
 }

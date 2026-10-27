@@ -188,7 +188,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
     await page.waitForFunction(()=>document.querySelector('#cloudStatus').textContent.includes('Aktualisierung nicht möglich'));
     fail=false;version=3;await page.getByRole('button',{name:'Aktualisieren',exact:true}).click();await page.getByRole('heading',{name:'Cache A 3',exact:true}).waitFor();
    }else{
-    await page.getByRole('button',{name:'Abmelden',exact:true}).click();await page.locator('#cloudLoginOpen').waitFor();
+    await page.locator('#cloudAccountOpen').click();await page.getByRole('button',{name:'Abmelden',exact:true}).click();await page.locator('#cloudLoginOpen').waitFor();
     assert(await page.evaluate(async({root,owner})=>!(await(await import(root+'cloud-cache.js')).readCloudCache(owner,'state'))&&!await(await import(root+'cloud-cache.js')).readCloudCache(owner,'poster:cache-revision:2026-10-23T00:00:00Z'),{root,owner}),'Logout retained private snapshots or posters');
     const other=await page.context().newPage();await other.goto(page.url());await other.evaluate(key=>localStorage.setItem(key,JSON.stringify({access_token:'account-b',refresh_token:'refresh-b',cache_id:'account-b-session',expires_at:Date.now()+3600000})),key);
     await page.getByRole('heading',{name:'Cache B 1',exact:true}).waitFor();stall=false;release();
@@ -357,14 +357,14 @@ export async function runParityCase(page, { root, fixture, native = false, scena
    return;
   }
   await openLibrary();await page.getByRole('button',{name:'Alle Figuren lokal verfügbar machen',exact:true}).click();
-  await page.waitForFunction(()=>document.querySelector('.cloud-library-download-result')?.textContent.startsWith('Fertig: 1 gespeichert · 1 bereits vorhanden'));
+  await page.waitForFunction(()=>document.querySelector('#cloudStatus')?.textContent.startsWith('Fertig: 1 gespeichert · 1 bereits vorhanden'));
   await page.waitForFunction(()=>!document.getElementById('cloudBody').inert);
   assert(downloads===1,'Shared video content was downloaded more than once');
   assert(!await page.locator('#editor').isVisible(),'Bulk downloads must not open one editor per figure');
   const saved=await page.evaluate(async root=>{const s=await import(root+'storage.js');const figures=await s.listFigures();return {count:figures.length,status:figures[0].status,duration:(await s.figureVideos(figures[0]))[0].duration};},root);
   assert(saved.count===1&&saved.status==='Neu'&&saved.duration>0,'Bulk download did not save usable local video metadata');
   await page.locator('#cloudDialog [data-nav=figures]').click();await openLibrary();await page.getByRole('button',{name:'Alle Figuren lokal verfügbar machen',exact:true}).click();
-  await page.waitForFunction(()=>document.querySelector('.cloud-library-download-result')?.textContent.startsWith('Fertig: 0 gespeichert · 2 bereits vorhanden'));
+  await page.waitForFunction(()=>document.querySelector('#cloudStatus')?.textContent.startsWith('Fertig: 0 gespeichert · 2 bereits vorhanden'));
   assert(downloads===1,'Repeated bulk download fetched already available video content');
   return;
  }
