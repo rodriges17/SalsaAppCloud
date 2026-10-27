@@ -396,3 +396,13 @@ a.cloud-library-card{color:var(--text);text-decoration:none;text-align:left;curs
 a.cloud-library-card:focus-visible{outline:3px solid var(--lavender);outline-offset:3px}
 a.cloud-library-card:active{background:var(--selection)}
 @media(hover:hover){a.cloud-library-card:hover{background:var(--elevated)}}
+
+/* Variant B: one vertically centered row of at most three tag chips. */
+.card-details .card-main{align-self:stretch;height:100%}
+.card-details .card-copy:has(.card-tags){height:100%;grid-template-rows:auto auto minmax(22px,1fr)}
+.card-details .card-tags{display:flex;align-items:center;gap:4px;min-width:0;width:100%;overflow:hidden;white-space:nowrap;line-height:1.2;align-self:center;padding-block:2px}
+.card-tag-chip{display:inline-flex;align-items:center;gap:4px;flex:0 0 auto;max-width:100%;min-width:0;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--lavender)}
+.card-tags:not([data-total="1"]) .card-tag-chip{max-width:calc(100% - 22px)}
+.card-tag-chip svg{display:block;width:12px;height:12px;flex:0 0 12px}
+.card-tag-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card-tags-more{flex:0 0 16px;text-align:center;color:var(--muted)}

@@ -1,6 +1,6 @@
 import { cloudLocalIndex } from './cloud-local.js';
 import { provenanceIcon, provenanceLabel } from './cloud-provenance.js';
-const APP_VERSION = '2026-10-27-library-card-v1';
+const APP_VERSION = '2026-10-27-tag-chips-v1';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';
@@ -71,7 +71,43 @@ async function refresh() {
   try { figures = await listFigures(); renderOverview(); }
   catch (error) { $('empty').hidden = false; $('empty').replaceChildren(el('h2', '', 'Speicher nicht verfügbar'), el('p', '', storageMessage(error))); }
 }
+// Tag chips share the exact icon used by the tag filter.
+const tagIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 3 8 0 10 10-8 8L3 11V3Z"/><circle cx="7" cy="7" r="1"/></svg>';
+function fitCardTags(row) {
+  const chips = [...row.querySelectorAll('.card-tag-chip')];
+  const more = row.querySelector('.card-tags-more');
+  chips.forEach(chip => { chip.hidden = false; });
+  more.hidden = false;
+  const gap = parseFloat(getComputedStyle(row).columnGap) || 0;
+  const available = row.clientWidth;
+  let used = 0, count = 0;
+  for (const chip of chips) {
+    const width = chip.getBoundingClientRect().width;
+    const reserve = count < Number(row.dataset.total) - 1 ? more.getBoundingClientRect().width + gap : 0;
+    if (used + width + reserve > available + 0.5) break;
+    used += width + gap; count++;
+  }
+  chips.forEach((chip, index) => { chip.hidden = index >= count; });
+  more.hidden = count === Number(row.dataset.total);
+}
+const tagRowsObserver = new ResizeObserver(entries => entries.forEach(({ target }) => fitCardTags(target)));
+document.fonts.ready.then(() => document.querySelectorAll('.card-tags').forEach(fitCardTags));
+function createCardTags(tags) {
+  const row = el('span', 'card-tags');
+  row.dataset.total = tags.length;
+  row.title = tags.join(' · ');
+  row.setAttribute('role', 'group'); row.setAttribute('aria-label', `Tags: ${tags.join(', ')}`);
+  tags.slice(0, 3).forEach(tag => {
+    const chip = el('span', 'card-tag-chip'); chip.setAttribute('aria-hidden', 'true');
+    chip.innerHTML = tagIcon; chip.append(el('span', 'card-tag-text', tag)); row.append(chip);
+  });
+  const more = el('span', 'card-tags-more', '…'); more.setAttribute('aria-hidden', 'true'); row.append(more);
+  tagRowsObserver.observe(row);
+  return row;
+}
+
 function renderOverview() {
+  tagRowsObserver.disconnect();
   closeMenus(); posterURLs.forEach(url => URL.revokeObjectURL(url)); posterURLs = [];
   const visible = filterFigures(figures, { query: $('search').value, status: statusFilter, tag: selectedTag, sort: $('sort').value });
   $('figureCount').textContent = `${visible.length} Figuren`;
@@ -86,7 +122,7 @@ function renderOverview() {
     if (figure.poster) { const url = URL.createObjectURL(figure.poster); posterURLs.push(url); thumb = el('img', 'card-thumb'); thumb.src = url; thumb.alt = ''; }
     else { thumb = el('span', 'card-thumb thumb-placeholder', '▷'); thumb.setAttribute('aria-hidden', 'true'); }
     const copy = el('span', 'card-copy'); copy.append(el('span', 'card-title', figure.title), el('span', 'card-status status-' + (figure.status === 'Sitzt' ? 'learned' : figure.status === 'Am Üben' ? 'practice' : 'new'), figure.status));
-    if (figure.tags.length) copy.append(el('span', 'card-tags', figure.tags.join(' · ')));
+    if (figure.tags.length) copy.append(createCardTags(figure.tags));
     main.append(copy);
     const thumbnailButton = button('', () => openPlayer(figure), 'card-thumbnail-button');
     thumbnailButton.setAttribute('aria-label', `Vorschaubild von ${figure.title} abspielen`); thumbnailButton.append(thumb);
