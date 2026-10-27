@@ -71,7 +71,29 @@ test('missing folder video can be repaired through confirmed replacement without
 });
 test('explicit transfer in both directions verifies copy before removing the old copy',async({page,browserName},info)=>{
  test.skip(browserName!=='chromium');await enablePicker(page,'transfer-'+info.testId.replace(/\W/g,''));await start(page);await seed(page,'Umzug');await page.reload();await choose(page);
- async function move(label){await page.getByRole('button',{name:'Optionen für Umzug',exact:true}).tap();await page.getByRole('button',{name:label,exact:true}).tap();await page.locator('#confirmOK').tap();await expect(page.locator('#confirmTitle')).toHaveText('Kopie erfolgreich geprüft');await page.locator('#confirmOK').tap();await expect(page.locator('#toast')).toHaveText('Übertragung abgeschlossen.');}
+ async function move(label){
+  await page.evaluate(()=>{const original=FileSystemFileHandle.prototype.getFile;window.releaseTransfer=null;
+   FileSystemFileHandle.prototype.getFile=async function(...args){
+    if(/\.(mp4|mov|m4v|webm|ogv|media)$/i.test(this.name)){FileSystemFileHandle.prototype.getFile=original;await new Promise(r=>window.releaseTransfer=r);}
+    return original.apply(this,args);
+   };
+  });
+  await page.getByRole('button',{name:'Optionen für Umzug',exact:true}).tap();await page.getByRole('button',{name:label,exact:true}).tap();await page.locator('#confirmOK').tap();
+  await expect(page.getByRole('dialog',{name:'Figur wird übertragen',exact:true})).toBeVisible();
+  await expect(page.locator('#transferProgressName')).toHaveText('„Umzug“');
+  await expect(page.locator('#transferProgressDirection')).toHaveText(label.includes('Geräteordner')?'App-Speicher → Geräteordner':'Geräteordner → App-Speicher');
+  await page.waitForFunction(()=>typeof window.releaseTransfer==='function');
+  await page.waitForTimeout(4700);
+  await page.keyboard.press('Escape');await page.touchscreen.tap(8,8);
+  await expect(page.locator('#transferProgressDialog')).toBeVisible();
+  await expect(page.locator('#transferProgressDialog .is-busy')).toBeVisible();
+  await page.screenshot({path:info.outputPath(label.includes('Geräteordner')?'transfer-to-folder.png':'transfer-to-app.png')});
+  await page.evaluate(()=>window.releaseTransfer());
+  await expect(page.locator('#confirmTitle')).toHaveText('Kopie erfolgreich geprüft');
+  await expect(page.locator('#transferProgressDialog')).toBeHidden();
+  await page.locator('#confirmOK').tap();await expect(page.locator('#toast')).toHaveText('Übertragung abgeschlossen.');
+  await expect(page.locator('#transferProgressDialog')).toBeHidden();
+ }
  await move('In Geräteordner übertragen');expect((await disk(page)).count).toBe(1);
  expect(await page.evaluate(async()=>{const {database}=await import('/pwa/storage.js');const db=await database();return new Promise(r=>{const q=db.transaction('figures').objectStore('figures').count();q.onsuccess=()=>r(q.result);});})).toBe(0);
  await move('In App-Speicher übertragen');expect((await disk(page)).count).toBe(0);await page.reload();await page.getByRole('button',{name:'Umzug lernen',exact:true}).tap();await expect(page.locator('#learningVideo')).toHaveJSProperty('videoWidth',320);
@@ -184,4 +206,17 @@ test('folder editor stays editable without autofocus and ignores obsolete verifi
  await page.evaluate(()=>window.restoreEditorMedia());
  await page.locator('#saveFigure').tap();await expect(page.locator('#editor')).toBeHidden();
  expect(await page.evaluate(async()=>{const {listFigures}=await import('/pwa/storage.js');return (await listFigures())[0].description;})).toBe('Während der Prüfung bearbeitet');
+});
+
+test('failed transfer closes its progress dialog and preserves the source',async({page,browserName},info)=>{
+ test.skip(browserName!=='chromium');await enablePicker(page,'transfer-error-'+info.testId.replace(/\W/g,''));await start(page);await seed(page,'Fehlerfall');await page.reload();await choose(page);
+ await page.evaluate(()=>{const original=FileSystemFileHandle.prototype.getFile;
+  FileSystemFileHandle.prototype.getFile=async function(...args){
+   if(/\.(mp4|mov|m4v|webm|ogv|media)$/i.test(this.name)){FileSystemFileHandle.prototype.getFile=original;throw new Error('Übertragungstest fehlgeschlagen');}
+   return original.apply(this,args);
+  };
+ });
+ await page.getByRole('button',{name:'Optionen für Fehlerfall',exact:true}).tap();await page.getByRole('button',{name:'In Geräteordner übertragen',exact:true}).tap();await page.locator('#confirmOK').tap();
+ await expect(page.locator('#toast')).toContainText('fehlgeschlagen');await expect(page.locator('#transferProgressDialog')).toBeHidden();
+ await expect(page.getByRole('button',{name:'Fehlerfall lernen',exact:true})).toBeVisible();await expect(page.locator('#toast')).not.toHaveText('Übertragung abgeschlossen.');
 });

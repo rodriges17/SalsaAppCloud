@@ -414,3 +414,11 @@ a.cloud-library-card:active{background:var(--selection)}
 /* Approved variant D: learning state directly before the storage-status icon. */
 .card-details .card-storage-status .card-status{flex:0 0 auto;white-space:nowrap;margin-left:auto}
 .card-details .card-storage-status .card-provenance{margin-left:0}
+
+/* Storage transfers stay visible until the pending operation settles. */
+.figure-transfer-dialog{text-align:center;max-width:380px}
+.figure-transfer-dialog .figure-transfer-spinner{display:flex;justify-content:center;margin:0 auto 20px}
+.figure-transfer-dialog .figure-transfer-spinner::before{width:42px;height:42px;flex-basis:42px;border-width:4px}
+.figure-transfer-dialog h2{margin:0 0 12px}
+.figure-transfer-dialog #transferProgressName{font-weight:600;overflow-wrap:anywhere}
+.figure-transfer-dialog #transferProgressDirection{font-size:14px;overflow-wrap:anywhere}

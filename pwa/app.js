@@ -1,6 +1,6 @@
 import { cloudLocalIndex } from './cloud-local.js';
 import { provenanceIcon, provenanceLabel } from './cloud-provenance.js';
-const APP_VERSION = '2026-10-27-editor-import-v1';
+const APP_VERSION = '2026-10-27-transfer-dialog-v1';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';
@@ -377,7 +377,7 @@ window.addEventListener('popstate', async event => {
   if (learning && target !== 'player') closePlayer();
   route = target === 'home' ? 'home' : 'home';
 });
-window.addEventListener('beforeunload', event => { if (editor && (editor.busy || isDirty())) { event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('beforeunload', event => { if ($('transferProgressDialog').open || (editor && (editor.busy || isDirty()))) { event.preventDefault(); event.returnValue = ''; } });
 
 async function openPlayer(figure) {
   if (opening || editor || learning) return; opening = true;
@@ -538,6 +538,14 @@ async function renderDeviceStorage() {
   } else choices.append(el('p', 'muted', 'Geräteordner werden in diesem Browser nicht unterstützt. Verwende aktuelles Chrome auf Android oder Desktop. Auf iPhone/Safari bleibt der App-Speicher mit ZIP-Sicherung verfügbar.'));
   controls.append(choices);
 }
+$('transferProgressDialog').addEventListener('cancel', event => event.preventDefault());
+async function showTransferProgress(figure, target) {
+  $('transferProgressName').textContent = `„${figure.title}“`;
+  $('transferProgressDirection').textContent = target ? 'App-Speicher → Geräteordner' : 'Geräteordner → App-Speicher';
+  $('transferProgressDialog').showModal();
+  // Paint the dialog before copying or verifying video data.
+  await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+}
 async function moveFigure(figure) {
   if (opening || editor || learning) return; opening = true;
   try {
@@ -550,13 +558,17 @@ async function moveFigure(figure) {
     }
     const destination = target ? settings.folders.find(f => f.id === target)?.name : 'App-Speicher';
     if (!await confirmAction({ title: 'Figur übertragen?', message: `„${figure.title}“ nach „${destination}“ kopieren und prüfen? Die bisherige Kopie bleibt zunächst erhalten.`, ok: 'Kopieren und prüfen' })) return;
-    toast('Figur wird kopiert und geprüft …');
+    await showTransferProgress(figure, target);
     await transferFigure(figure, target);
     await refresh(); changed();
-    if (await confirmAction({ title: 'Kopie erfolgreich geprüft', message: 'Die neue Kopie ist gespeichert. Sollen die bisherigen verwalteten Videos und Angaben dieser Figur am alten Speicherort jetzt entfernt werden? Ursprüngliche Importdateien bleiben erhalten.', ok: 'Bisherige Kopie entfernen', cancel: 'Beide behalten' })) await deleteFigure(figure);
-    changed(); await refresh(); toast('Übertragung abgeschlossen.');
-  } catch (e) { toast(storageMessage(e)); await refresh(); }
-  finally { opening = false; }
+    $('transferProgressDialog').close();
+    if (await confirmAction({ title: 'Kopie erfolgreich geprüft', message: 'Die neue Kopie ist gespeichert. Sollen die bisherigen verwalteten Videos und Angaben dieser Figur am alten Speicherort jetzt entfernt werden? Ursprüngliche Importdateien bleiben erhalten.', ok: 'Bisherige Kopie entfernen', cancel: 'Beide behalten' })) {
+      await showTransferProgress(figure, target);
+      await deleteFigure(figure);
+    }
+    changed(); await refresh(); $('transferProgressDialog').close(); toast('Übertragung abgeschlossen.');
+  } catch (e) { $('transferProgressDialog').close(); toast(storageMessage(e)); await refresh(); }
+  finally { $('transferProgressDialog').close(); opening = false; }
 }
 
 let offlineReady = false;
