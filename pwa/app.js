@@ -1,6 +1,6 @@
 import { cloudLocalIndex } from './cloud-local.js';
 import { provenanceIcon, provenanceLabel } from './cloud-provenance.js';
-const APP_VERSION = '2026-10-27-tag-chips-v2';
+const APP_VERSION = '2026-10-27-status-footer-v1';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';
@@ -121,7 +121,9 @@ function renderOverview() {
     let thumb;
     if (figure.poster) { const url = URL.createObjectURL(figure.poster); posterURLs.push(url); thumb = el('img', 'card-thumb'); thumb.src = url; thumb.alt = ''; }
     else { thumb = el('span', 'card-thumb thumb-placeholder', '▷'); thumb.setAttribute('aria-hidden', 'true'); }
-    const copy = el('span', 'card-copy'); copy.append(el('span', 'card-title', figure.title), el('span', 'card-status status-' + (figure.status === 'Sitzt' ? 'learned' : figure.status === 'Am Üben' ? 'practice' : 'new'), figure.status));
+    const copy = el('span', 'card-copy'); copy.append(el('span', 'card-title', figure.title));
+    const learningStatus = el('span', 'card-status status-' + (figure.status === 'Sitzt' ? 'learned' : figure.status === 'Am Üben' ? 'practice' : 'new'), figure.status);
+    learningStatus.title = `Lernstand: ${figure.status}`;
     if (figure.tags.length) copy.append(createCardTags(figure.tags));
     main.append(copy);
     const thumbnailButton = button('', () => openPlayer(figure), 'card-thumbnail-button');
@@ -138,9 +140,9 @@ function renderOverview() {
     const folderIcon = el('span', 'card-folder-icon'); folderIcon.setAttribute('aria-hidden', 'true');
     folderIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M20 20H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2Z"/></svg>';
     statusBar.append(folderIcon);
-    statusBar.append(folder, badge);
+    statusBar.append(folder, learningStatus, badge);
     metadata.title = metadata.textContent;
-    const learningLine = el('span', 'card-learning-line'); learningLine.append(copy.querySelector('.card-status'), metadata);
+    const learningLine = el('span', 'card-learning-line'); learningLine.append(metadata);
     copy.insertBefore(learningLine, copy.querySelector('.card-tags'));
     const options = button('⋮', event => { event.stopPropagation(); const wasOpen = options.getAttribute('aria-expanded') === 'true'; closeMenus(); if (!wasOpen) showMenu(); }, 'card-options');
     options.setAttribute('aria-label', `Optionen für ${figure.title}`); options.setAttribute('aria-expanded', 'false');

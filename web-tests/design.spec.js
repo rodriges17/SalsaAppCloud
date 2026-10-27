@@ -112,7 +112,7 @@ test('search and filters stay fixed below the header while figures scroll',async
  await page.getByRole('button',{name:'Sitzt',exact:true}).tap();await expect(page.locator('.figure-card')).toHaveCount(0);await expect(page.locator('#search')).toBeInViewport();
 });
 
-test('square compact cards keep folder left, provenance right and the heading centered at 320px', async ({ page }, info) => {
+test('square compact cards keep learning state beside storage status and separate tags at 320px', async ({ page }, info) => {
   await page.setViewportSize({ width: 320, height: 740 });
   await start(page); await seed(page);
   await page.evaluate(async () => {
@@ -128,6 +128,8 @@ test('square compact cards keep folder left, provenance right and the heading ce
   const header = await page.locator('.page-intro h2').boundingBox(), add = await page.locator('#openAddFigure').boundingBox();
   expect(Math.abs(header.y + header.height/2 - add.y - add.height/2)).toBeLessThan(1);
   await expect(page.locator('.card-storage-status .card-folder-icon')).toHaveCount(2);
+  await expect(page.locator('.card-storage-status > .card-status')).toHaveCount(2);
+  await expect(page.locator('.card-copy .card-status')).toHaveCount(0);
   const changed = page.locator('.card-provenance[data-cloud-status=modified]');
   await expect(changed).toHaveCount(1);
   await expect(page.locator('.card-provenance[data-cloud-status=cloud]')).toHaveCount(1);
@@ -143,9 +145,14 @@ test('square compact cards keep folder left, provenance right and the heading ce
       const r = row.getBoundingClientRect(), thumb = row.closest('.figure-card').querySelector('.card-thumb').getBoundingClientRect();
       const items = [...row.children].map(n => n.getBoundingClientRect());
       const provenance = row.querySelector('.card-provenance').getBoundingClientRect(), folderBox = folder.getBoundingClientRect(), card = row.closest('.figure-card').getBoundingClientRect();
-      return { square: Math.abs(thumb.width-thumb.height)<1, compact: card.height <= 104, ordered: folderBox.left < provenance.left && Math.abs(provenance.right-r.right)<1, beside: r.left >= thumb.right && r.bottom <= thumb.bottom + 2, contained: items.every(b => b.left >= r.left && b.right <= r.right + 1), aligned: items.every(b => Math.abs((b.top+b.bottom)/2-(items[0].top+items[0].bottom)/2) < 2), mono: getComputedStyle(row.querySelector('svg')).color === getComputedStyle(row).color, ellipsis: getComputedStyle(folder).textOverflow };
+      const learning = row.querySelector('.card-status').getBoundingClientRect();
+      const copy = row.closest('.card-details').querySelector('.card-copy');
+      const tag = copy.querySelector('.card-tags').getBoundingClientRect();
+      const chip = copy.querySelector('.card-tag-chip').getBoundingClientRect();
+      const meta = copy.querySelector('.card-learning-line').getBoundingClientRect();
+      return { footerState: learning.right < provenance.left && provenance.left - learning.right <= 6 && folderBox.right <= learning.left, tagsSpaced: chip.top - meta.bottom >= 6 && tag.bottom <= r.top, square: Math.abs(thumb.width-thumb.height)<1, compact: card.height <= 104, ordered: folderBox.left < provenance.left && Math.abs(provenance.right-r.right)<1, beside: r.left >= thumb.right && r.bottom <= thumb.bottom + 2, contained: items.every(b => b.left >= r.left && b.right <= r.right + 1), aligned: items.every(b => Math.abs((b.top+b.bottom)/2-(items[0].top+items[0].bottom)/2) < 2), mono: getComputedStyle(row.querySelector('svg')).color === getComputedStyle(row).color, ellipsis: getComputedStyle(folder).textOverflow };
     }));
-    expect(results.every(r => r.square && r.compact && r.ordered && r.beside && r.contained && r.aligned && r.mono && r.ellipsis === 'ellipsis')).toBe(true);
+    expect(results.every(r => r.footerState && r.tagsSpaced && r.square && r.compact && r.ordered && r.beside && r.contained && r.aligned && r.mono && r.ellipsis === 'ellipsis')).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({path:info.outputPath(`${theme}-inline-storage-status.png`)});
   }
