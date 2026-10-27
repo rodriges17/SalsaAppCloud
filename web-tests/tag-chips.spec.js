@@ -4,7 +4,7 @@ const source = readFileSync('pwa/app.js', 'utf8');
 const helper = source.slice(source.indexOf('// Tag chips share'), source.indexOf('function renderOverview()'));
 const css = readFileSync('pwa/styles.css', 'utf8');
 test('tag chips fit one line, show overflow and recover after resizing', async ({ page }) => {
-  await page.setContent('<div class="card-details" style="width:400px"><span id="target"></span></div>');
+  await page.setContent('<div class="card-details" style="width:400px"><span id="target" style="min-width:0"></span></div>');
   await page.addStyleTag({ content: css });
   await page.evaluate(code => {
     const el = (tag, className, text) => { const node = document.createElement(tag); node.className = className; if (text !== undefined) node.textContent = text; return node; };
