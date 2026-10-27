@@ -3,7 +3,7 @@ import { localContentSignature } from './cloud-provenance.js';
 // Keep it outside figure metadata so linking never rewrites videos or learning status.
 export function createCloudLocalIndex(storage, key) {
   let links, persisted;
-  const stamp = revision => JSON.stringify([revision.created_at ?? null, revision.title, revision.description ?? '', revision.tags ?? [], revision.videos ?? []]);
+  const stamp = revision => JSON.stringify([revision.title, revision.description ?? '', revision.tags ?? [], (revision.videos ?? []).map(video => [video.id, video.name ?? '', video.size ?? null, video.type ?? ''])]);
   const observations = () => { try { return JSON.parse(storage.getItem(key + ':remote') || '{}'); } catch { return {}; } };
   let remote = observations();
   function read() {

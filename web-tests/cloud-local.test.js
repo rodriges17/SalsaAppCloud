@@ -132,3 +132,12 @@ test('same revision id detects remote metadata updates and simultaneous local ch
  const after=createCloudLocalIndex(storage,'sync');assert.equal(after.status(local),'remote');
  after.remember('owner','rev',local,[pairs[0]],'cloud');assert.equal(after.status(local),'cloud');
 });
+
+test('cloud status ignores transport timestamps and video property ordering',()=>{
+ const index=createCloudLocalIndex(fake(),'canonical');
+ const rev={id:'rev',title:'A',created_at:'one',videos:[{id:'cloud-a',name:'Video',size:20,type:'video/mp4'}]};
+ index.observe(rev);index.remember('owner','rev',figure,[pairs[0]]);
+ index.observe({...rev,created_at:undefined,videos:[{type:'video/mp4',size:20,name:'Video',id:'cloud-a'}]});
+ assert.equal(index.status(figure),'cloud');
+ index.observe({...rev,videos:[{...rev.videos[0],name:'Renamed'}]});assert.equal(index.status(figure),'remote');
+});
