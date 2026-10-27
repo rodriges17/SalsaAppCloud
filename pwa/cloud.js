@@ -1,3 +1,4 @@
+import { createFigureUpload } from './cloud-upload.js';
 import { cloudIcon } from './cloud-provenance.js';
 import { createLibraryDraft } from './cloud-library-draft.js';
 import { mountLibraryOrder } from './cloud-library-order.js';
@@ -15,6 +16,7 @@ import { createPosterView, posterPayload } from './cloud-posters.js';
 const node = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
 const MB = value => `${(Number(value ?? 0) / 1000000).toFixed(1)} MB`;
 const action = (label, work) => { const b = node('button', label, 'secondary'); b.type = 'button'; b.onclick = () => Promise.resolve().then(work).catch(report); return b; };
+let uploadWorkflow = null, uploadRecovery, uploadViewError = null;
 let peopleView, libraryDraft = null, libraryEditing = null, libraryUpload = null, lastLibraryDetail = null;
 async function leaveLibraryDraft() {
   const activeDraft = libraryDraft ?? libraryUpload?.hook;
@@ -683,6 +685,29 @@ function ownFigures() {
     if (ownFigureSelection.id === f.id) { mount(); card.open = true; }
   }
 }
+function renderUploadRecovery(afterSaved = uploadRecovery?.afterSaved) {
+  if (!uploadRecovery) return;
+  uploadRecovery.afterSaved = afterSaved;
+  uploadRecovery.replaceChildren();
+  const workflow = uploadWorkflow, result = workflow?.outcome;
+  uploadRecovery.hidden = !workflow?.currentAccount || !(result?.kind === 'unknown' || result?.kind === 'not-saved' || result?.localPending || result?.attachPending || uploadViewError);
+  if (uploadRecovery.hidden) return;
+  const retry = (label, work) => uploadRecovery.append(action(label, () => run(label + ' …', async () => {
+    const result = await work();
+    if (!workflow.currentAccount || uploadWorkflow !== workflow) return;
+    if (result.kind === 'saved') await afterSaved?.(result);
+    renderUploadRecovery(afterSaved);
+  })));
+  if (result.kind === 'unknown') {
+    uploadRecovery.append(node('p', 'Speicherstand unklar. Bitte vor einem erneuten Upload prüfen.'));
+    retry('Speicherstand erneut prüfen', () => workflow.reconcile());
+  } else if (result.kind === 'not-saved') uploadRecovery.append(node('p', 'Figur wurde nicht gespeichert. Du kannst erneut hochladen.'));
+  else {
+    if (result.attachPending) { uploadRecovery.append(node('p', 'Figur gespeichert. Bibliothekszuordnung fehlgeschlagen.')); retry('Zuordnung erneut versuchen', () => workflow.retryAttach()); }
+    if (result.localPending) { uploadRecovery.append(node('p', 'Upload erfolgreich. Die lokale Cloud-Zuordnung konnte nicht gespeichert werden. Bitte freien App-Speicher prüfen.')); retry('Lokale Zuordnung erneut speichern', () => workflow.retryLocal()); }
+    if (uploadViewError) { uploadRecovery.append(node('p', uploadViewError)); retry('Ansicht erneut laden', async () => result); }
+  }
+}
 async function publishForm() {
   const me = state.me;
   if (!me?.upload_enabled) { body.append(node('p', 'Für Cloud-Uploads brauchst du die Freischaltung des Administrators.')); return; }
@@ -728,26 +753,48 @@ async function publishForm() {
   allowed.checked = linkedTarget?.public_allowed ?? false;
   updateVisibility();
   const upload = action('Ausgewählte Figur hochladen', () => run('Upload vorbereiten …', async () => {
+    if (uploadWorkflow?.currentAccount && uploadWorkflow.pending) { renderUploadRecovery(); throw new Error('Bitte zuerst den Speicherstand prüfen oder offene Zuordnungen abschließen.'); }
     const videos = selected.filter(([check]) => check.checked).map(([, v]) => v);
-    if (!videos.length) throw new Error('Bitte mindestens ein Video auswählen.');
-    if (videos.some(v => v.blob.size > CLOUD_FILE_LIMIT)) throw new Error('Ein Video überschreitet 50 MB. Bitte ein kleineres Originalvideo auswählen.');
-    if (state.libraries.find(l => l.id === library.value)?.visibility === 'public' && !allowed.checked) throw new Error('Für diese öffentliche Bibliothek musst du der öffentlichen Veröffentlichung zustimmen.');
-    const owner = state.me.id;
-    let job = null; controller = new AbortController(); document.getElementById('cloudCancelUpload').hidden = false;
+    const owner = state.me.id, libraryId = library.value, account = cloudIdentity();
+    const workflow = createFigureUpload({ call: cloudCall, upload: uploadMedia, hash: videoHash, mediaHash: cloudMediaHash, poster: posterPayload, identity: cloudIdentity, remember: async (...args) => {
+      const current = await cloudCall('state');
+      if (account !== cloudIdentity()) throw new Error('Das Konto wurde inzwischen gewechselt.');
+      const revision = current.own_figures?.find(f => f.id === args[4])?.revisions?.find(r => r.id === args[1]);
+      if (revision) localIndex.observe(revision);
+      return localIndex.remember(...args);
+    } });
+    uploadWorkflow = workflow; uploadViewError = null;
+    const afterSaved = async result => {
+      if (!workflow.currentAccount || result.kind !== 'saved') return;
+      ownFigureSelection = { id: result.saved.figure, tab: 'videos', owner }; savedLibraryFigure = result.saved.figure;
+      // A failed read or render is follow-up work, never an upload failure.
+      try {
+        const committed = await cloudCall('state');
+        if (!workflow.currentAccount) return;
+        const revision = committed.own_figures?.find(f => f.id === result.saved.figure)?.revisions?.find(r => r.id === result.saved.revision);
+        if (revision) localIndex.observe(revision);
+        await hooks.localChanged?.();
+        if (!workflow.currentAccount) return;
+        if (libraryUpload) await resumeLibraryUpload(result.saved);
+        else { source = null; area = libraryId && !result.attachPending ? 'libraries' : 'figures'; await load(libraryId && !result.attachPending ? libraryId : null); }
+        uploadViewError = null;
+      } catch { if (workflow.currentAccount) uploadViewError = 'Figur gespeichert. Die Ansicht konnte nicht aktualisiert werden.'; }
+      if (workflow.currentAccount) renderUploadRecovery(afterSaved);
+    };
     try {
-      statusBox.textContent = 'Videos auf Duplikate prüfen …';
-      const hashes = [];
-      for (const video of videos) { controller.signal.throwIfAborted(); hashes.push(await videoHash(video.blob)); }
-      const previous = targets.find(f => f.id === figure.value)?.revisions?.[0];
-      if (previous) for (const video of previous.videos) {
-        controller.signal.throwIfAborted(); statusBox.textContent = 'Cloud-Prüfsummen prüfen und ergänzen …';
-        await cloudMediaHash({ revision: previous.id, media: video.id });
-      }
-      const { matches } = await cloudCall('duplicates', { hashes });
+      const result = await workflow.start({ owner, local, videos, target: targets.find(f => f.id === figure.value), library: libraryId, variant: explicitVariant.checked, allowed: allowed.checked, remoteChanged: localIndex.remoteChanged(local), publicLibrary: state.libraries.find(l => l.id === libraryId)?.visibility === 'public', fileLimit: CLOUD_FILE_LIMIT }, {
+        confirm: hooks.confirm,
+        progress: value => {
+          if (!workflow.currentAccount) return;
+          statusBox.textContent = value.message;
+          const cancel = document.getElementById('cloudCancelUpload'); cancel.hidden = false; cancel.disabled = !value.canCancel;
+        }
+      });
+      if (!workflow.currentAccount || result.kind === 'account-changed') return;
       duplicateBox.replaceChildren();
-      if (!figure.value && !explicitVariant.checked && matches.length) {
+      if (result.kind === 'duplicates') {
         duplicateBox.append(node('p', 'Dieses Video gehört bereits zu einer zugänglichen Figur. Verwende die bestehende Figur oder wähle ausdrücklich eine eigene Variante.'));
-        const unique = [...new Map(matches.map(m => [m.figure, m])).values()];
+        const unique = [...new Map(result.matches.map(m => [m.figure, m])).values()];
         const choice = select(duplicateBox, 'Bestehende Figur', unique.map(m => [m.revision, m.title]));
         duplicateBox.append(action('Bestehende Figur verwenden', () => run('Figur referenzieren …', async () => {
           if (library.value) { await cloudCall('attach', { library: library.value, revision: choice.value }); source = null; area = 'libraries'; await load(library.value); }
@@ -755,39 +802,13 @@ async function publishForm() {
         })));
         return;
       }
-      if (figure.value && !allowed.checked && state.own_figures.find(f => f.id === figure.value)?.public_allowed && !await hooks.confirm({ title: 'Öffentliche Freigabe widerrufen?', message: 'Öffentliche Bibliothekszuordnungen werden entfernt.', ok: 'Widerrufen und speichern' })) return;
-      const fresh = await cloudCall('state');
-      const freshTarget = fresh.own_figures?.find(f => f.id === figure.value);
-      if (freshTarget) {
-        const latest = freshTarget.revisions?.[0]; if (latest) localIndex.observe(latest);
-        if ((localIndex.remoteChanged(local) || targets.find(f => f.id === figure.value)?.content_token !== freshTarget.content_token) && !await hooks.confirm({ title: 'Cloud-Version überschreiben?', message: 'Die Cloud-Version wurde inzwischen geändert. Mit deiner lokalen Version überschreiben?', ok: 'Cloud-Version überschreiben' })) return;
-      }
-      const reserved = await cloudCall('reserve', { figure: figure.value || null, expected_token: freshTarget?.content_token, variant: explicitVariant.checked, videos: videos.map((v, i) => ({ size: v.blob.size, type: v.blob.type, reuse: matches.find(m => m.hash === hashes[i])?.media })) }); job = reserved.job;
-      for (let i = 0; i < videos.length; i++) {
-        controller.signal.throwIfAborted(); statusBox.textContent = `Video ${i + 1} von ${videos.length} hochladen …`;
-        if (!reserved.media[i].reused) {
-          await uploadMedia(reserved.media[i].path, videos[i].blob, controller.signal);
-          await cloudCall('finalize', { id: reserved.media[i].id });
-        }
-      }
-      controller.signal.throwIfAborted();
-      const poster = await posterPayload(local.poster).catch(() => null);
-      const saved = await cloudCall('commit', { job, ...(poster ? { poster } : {}), public_allowed: allowed.checked, title: local.title, description: local.description, tags: local.tags, videos: reserved.media.map((m, i) => ({ id: m.id, name: videos[i].name })) }); job = null;
-      const committed = await cloudCall('state');
-      const committedRevision = committed.own_figures?.find(f => f.id === saved.figure)?.revisions?.find(r => r.id === saved.revision);
-      if (committedRevision) localIndex.observe(committedRevision);
-      ownFigureSelection = { id: saved.figure, tab: 'videos', owner };
-      savedLibraryFigure = saved.figure;
-      const linked = localIndex.remember(owner, saved.revision, local, reserved.media.map((media, i) => ({ cloud: media.id, local: videos[i].id })), saved.figure);
-      await hooks.localChanged?.();
-      if (library.value) await cloudCall('attach', { library: library.value, revision: saved.revision });
-      if (libraryUpload) await resumeLibraryUpload(saved);
-      else { source = null; area = library.value ? 'libraries' : 'figures'; await load(library.value || null); }
-      if (!linked) report(new Error('Upload erfolgreich. Die lokale Zuordnung konnte nicht dauerhaft gespeichert werden. Bitte freien App-Speicher prüfen.'));
-    } catch (error) {
-      if (job) await cloudCall('abort', { job }).catch(() => {});
-      throw error;
-    } finally { controller = null; document.getElementById('cloudCancelUpload').hidden = true; }
+      if (result.kind === 'saved') await afterSaved(result);
+      else if (result.kind === 'cancelled') report(new Error('Upload abgebrochen.'), uploadError);
+      else renderUploadRecovery(afterSaved);
+    } finally {
+      document.getElementById('cloudCancelUpload').hidden = true;
+      document.getElementById('cloudCancelUpload').disabled = false;
+    }
   }, uploadError));
   upload.className = 'primary'; box.append(upload, uploadError);
 }
@@ -909,7 +930,9 @@ export function initCloud(callbacks) {
   addEventListener('beforeunload', event => { if ((libraryDraft ?? libraryUpload?.hook)?.dirty()) { event.preventDefault(); event.returnValue = ''; } });
   peopleView = createPeopleView({ node, action, field, select, checkbox, call: cloudCall, run, confirm: options => hooks.confirm(options), state: () => state, refresh: () => load(null), report, section });
   dialog = document.getElementById('cloudDialog'); body = document.getElementById('cloudBody'); errorBox = document.getElementById('cloudError'); statusBox = document.getElementById('cloudStatus');
+  uploadRecovery = node('section', undefined, 'cloud-card'); uploadRecovery.id = 'cloudUploadRecovery'; uploadRecovery.setAttribute('role', 'status'); uploadRecovery.hidden = true; body.before(uploadRecovery);
   addEventListener('cloud-session-changed', event => {
+    uploadWorkflow?.cancel(); uploadRecovery.hidden = true; uploadRecovery.replaceChildren();
     libraryDraft = null; libraryEditing = null; libraryUpload = null; peopleView.reset(); viewEpoch++; renderedView = null; state = null; displayedOwner = null; localInventoryEpoch++; localFigures = []; localUpdates = [];
     cancelThumbnails(); clearPreviews(body); body.replaceChildren(); errorBox.hidden = true; cacheStatus('');
     if (loginTrigger) loginTrigger.hidden = signedIn();
@@ -928,7 +951,7 @@ export function initCloud(callbacks) {
   document.getElementById('cloudBack').onclick = cloudBack;
   dialog.querySelector('[data-nav=figures]').onclick = close;
   dialog.querySelector('[data-nav=cloud]').onclick = () => { if (!busy) navigate('initial'); };
-  document.getElementById('cloudCancelUpload').onclick = () => controller?.abort();
+  document.getElementById('cloudCancelUpload').onclick = () => { if (uploadWorkflow?.currentAccount && ['hashing', 'reserving', 'uploading', 'poster'].includes(uploadWorkflow.phase)) uploadWorkflow.cancel(); else controller?.abort(); };
   dialog.addEventListener('cancel', e => { e.preventDefault(); void cloudBack(); });
   document.getElementById('cloudButton').onclick = () => openCloud();
   const query = new URLSearchParams(location.search); if (query.has('library') || query.has('cloud')) setTimeout(() => openCloud(null, query.get('library')), 0);
