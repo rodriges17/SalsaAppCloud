@@ -61,6 +61,15 @@ Deno.serve(async req => {
       for (const item of items) await verifyContent(adminClient, item);
       return response({ processed: items.length });
     }
+    if (action === 'media') {
+      // Authorize through the caller's normal RPC before privileged hash repair.
+      const media = await rpc('media');
+      if (!media.content_hash) {
+        await verifyContent(adminClient, { id: payload.media, path: media.path });
+        return response(await rpc('media'));
+      }
+      return response(media);
+    }
     if (action === 'media_url') {
       const media = await rpc('media');
       const signed = checked(await adminClient.storage.from('salsa-cloud').createSignedUrl(media.path, 300));

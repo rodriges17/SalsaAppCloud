@@ -119,3 +119,25 @@ test('renamed uploaded originals participate in explicit replacement choices',()
  assert.deepEqual(index.importCandidates({title:'different',revisionIds:['old']},[figure]),[figure]);
  assert.deepEqual(index.importCandidates({title:'different',revisionIds:['rev'],figureId:'other'},[figure]),[]);
 });
+test('same revision id detects remote metadata updates and simultaneous local changes',()=>{
+ const storage=fake(),index=createCloudLocalIndex(storage,'sync');
+ const rev={id:'rev',figure_id:'cloud',created_at:'one',title:'A',videos:[{id:'cloud-a'}]};
+ const local={...figure,title:'A',videoIds:['a']};
+ index.observe(rev);index.remember('owner','rev',local,[pairs[0]],'cloud');
+ assert.equal(index.status(local),'cloud');
+ index.observe({...rev,created_at:'two',title:'B'});
+ assert.equal(index.status(local),'remote');
+ assert.equal(index.resolve({...rev,created_at:'two',title:'B'},[local]).kind,'outdated');
+ assert.equal(index.status({...local,title:'Local edit'}),'conflict');
+ const after=createCloudLocalIndex(storage,'sync');assert.equal(after.status(local),'remote');
+ after.remember('owner','rev',local,[pairs[0]],'cloud');assert.equal(after.status(local),'cloud');
+});
+
+test('cloud status ignores transport timestamps and video property ordering',()=>{
+ const index=createCloudLocalIndex(fake(),'canonical');
+ const rev={id:'rev',title:'A',created_at:'one',videos:[{id:'cloud-a',name:'Video',size:20,type:'video/mp4'}]};
+ index.observe(rev);index.remember('owner','rev',figure,[pairs[0]]);
+ index.observe({...rev,created_at:undefined,videos:[{type:'video/mp4',size:20,name:'Video',id:'cloud-a'}]});
+ assert.equal(index.status(figure),'cloud');
+ index.observe({...rev,videos:[{...rev.videos[0],name:'Renamed'}]});assert.equal(index.status(figure),'remote');
+});

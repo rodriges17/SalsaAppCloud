@@ -54,6 +54,16 @@ export async function downloadLibrary(revisions, services, { signal, targetFolde
         if (revision.videos.some(video => !Number.isSafeInteger(video.size) || video.size <= 0) || revision.videos.reduce((sum, video) => sum + video.size, 0) > 250 * 1024 * 1024) throw new Error('Diese Figur überschreitet 250 MB oder enthält ungültige Dateigrößen. Bitte einzeln übernehmen.');
         const local = cloudLocalIndex.resolve(revision, figures);
         const linked = local.current;
+        if (local.kind === 'outdated' && local.figure) {
+          if (local.modified && !await services.confirmReplace?.(local.figure)) { result.skipped++; emit('skip', revision.title); continue; }
+          const saved = await downloadFigure(revision, services, { target: local.figure, signal, progress: () => emit('check', revision.title) });
+          figures.splice(figures.indexOf(local.figure), 1, saved);
+          for (const [key, source] of sources) if (identity(source.figure) === identity(saved)) sources.delete(key);
+          await localVideoContent([saved], readMedia, () => !signal?.aborted, undefined, ({ figure, record, size, hash }) => {
+            sources.set(hashKey(size, hash), { figure, recordId: record.id });
+          });
+          result.saved++; emit('saved', revision.title); continue;
+        }
         const enrich = async target => {
           const saved = await enrichCloudMetadata(target, revision, services, signal);
           figures.splice(figures.indexOf(target), 1, saved);
@@ -111,7 +121,7 @@ export async function downloadLibrary(revisions, services, { signal, targetFolde
         figure.importFingerprint = `cloud:${revision.id}:${revision.videos.map(v => v.id).join(',')}`;
         // Do not race an atomic save with cancellation: finish this figure, then stop.
         const modified = target && cloudLocalIndex.status(target) === 'modified';
-        const saved = await saveFigure(figure, drafts, target?.revision ?? null, { targetFolder });
+        const saved = await saveFigure(figure, drafts, target?.revision ?? null, { targetFolder: target ? target.storageFolder ?? null : targetFolder });
         cloudLocalIndex.remember('@device', revision.id, saved, pairs, revision.figure_id, modified ? '@locally-modified' : undefined);
         result.saved++;
         if (target) figures.splice(figures.indexOf(target), 1, saved); else figures.push(saved);
@@ -168,8 +178,10 @@ export async function inspectCloudVideo(blob, signal) {
 
 // A single explicit import saves immediately; only replacing an existing figure
 // needs the caller's conflict choice. Local file imports still use their editor.
-export async function downloadFigure(revision, services, { target = null, targetFolder = null, signal } = {}) {
+export async function downloadFigure(revision, services, { target = null, targetFolder = null, signal, progress = () => {} } = {}) {
   const { listFigures, readMedia, readCloudMedia, fetchVideo, inspectVideo, saveFigure } = services;
+  cloudLocalIndex.observe(revision);
+  progress('Vorhandene Videos und Prüfsummen prüfen …');
   const sources = new Map(), drafts = [], verified = [];
   await abortable(async () => localVideoContent(await listFigures(), readMedia, () => !signal?.aborted, undefined, ({figure, record, size, hash}) => {
     sources.set(hashKey(size, hash), {figure, recordId: record.id});
@@ -179,17 +191,18 @@ export async function downloadFigure(revision, services, { target = null, target
     const metadata = await abortable(() => readCloudMedia({ revision: revision.id, media: video.id }), signal);
     const hash = validHash(metadata.content_hash) ? metadata.content_hash : null;
     const source = hash && sources.get(hashKey(video.size, hash));
-    let blob;
+    let blob, loaded;
     if (source) blob = await abortable(async () => {
       const record = (await readMedia(source.figure)).find(record => record.id === source.recordId);
       if (!record) throw new Error('Eine lokale Videodatei fehlt.');
-      return (await record.load()).blob;
+      loaded = await record.load(); return loaded.blob;
     }, signal);
-    else blob = await abortable(() => fetchVideo(revision, video, signal), signal);
+    else { progress(`Video ${drafts.length + 1} von ${revision.videos.length} herunterladen …`); blob = await abortable(() => fetchVideo(revision, video, signal), signal); }
     if (blob.size !== video.size) throw new Error('Unvollständiger Download.');
     if (hash && await abortable(() => videoHash(blob), signal) !== hash) throw new Error('Die Prüfsumme des Downloads stimmt nicht.');
-    const info = await abortable(() => inspectVideo(blob, signal), signal);
-    const draft = { ...info, blob, id: crypto.randomUUID(), name: video.name || 'Video', confirmed: true, existing: false };
+    const info = loaded ?? await abortable(() => inspectVideo(blob, signal), signal);
+    const existing = !!(source && target && source.figure.id === target.id && (source.figure.storageFolder ?? null) === (target.storageFolder ?? null));
+    const draft = { ...info, blob, id: existing ? source.recordId : crypto.randomUUID(), name: video.name || 'Video', confirmed: true, existing };
     drafts.push(draft); verified.push({draft, hash});
   }
   if (services.readPoster) {
@@ -198,7 +211,8 @@ export async function downloadFigure(revision, services, { target = null, target
   }
   signal?.throwIfAborted();
   const figure = { ...target, id: target?.id ?? crypto.randomUUID(), title: revision.title, description: revision.description ?? '', tags: revision.tags ?? [], status: target?.status ?? 'Neu', importFingerprint: `cloud:${revision.id}:${revision.videos.map(v => v.id).join(',')}` };
-  const saved = await saveFigure(figure, drafts, target?.revision ?? null, { targetFolder });
+  progress('Figur speichern …');
+  const saved = await saveFigure(figure, drafts, target?.revision ?? null, { targetFolder: target ? target.storageFolder ?? null : targetFolder });
   cloudLocalIndex.remember('@device', revision.id, saved, revision.videos.map((v, i) => ({ cloud: v.id, local: drafts[i].id })), revision.figure_id);
   const records = await readMedia(saved).catch(() => []);
   for (const {draft, hash} of verified) {

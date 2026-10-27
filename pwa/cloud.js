@@ -192,6 +192,7 @@ async function load(library = current, allowCache = false) {
 async function renderCloud(library, detail) {
   libraryDraft = null;
   current = library; localUpdates = [];
+  for (const f of state.own_figures ?? []) for (const rev of f.revisions ?? []) localIndex.observe(rev);
   if (area === 'initial' || area === 'figures' && !source && !hasOwnArea(state)) area = initialArea(state);
   renderedView = { owner: cloudIdentity(), area, library };
   if (!state.me && !['figures', 'libraries'].includes(area)) area = 'libraries';
@@ -279,6 +280,7 @@ function libraryShare(id, lib) {
 }
 async function libraryView(id, detail) {
   lastLibraryDetail = detail;
+  for (const entry of detail.entries) localIndex.observe(entry.published ?? entry.pending);
   const lib = detail.library, manage = !!state.me && !!detail.manage;
   if (libraryEditing?.id === id && manage) { renderLibraryEditor(id, detail); return; }
   libraryEditing = null;
@@ -321,6 +323,7 @@ async function libraryView(id, detail) {
       }
     };
     entriesBox.append(box);
+    if (savedLibraryFigure === entry.figure_id) { box.open = true; savedLibraryFigure = null; }
   }
   if (!detail.entries.length) entriesBox.append(node('p', 'Noch keine sichtbaren Figuren in dieser Bibliothek.'));
   libraryShare(id, lib);
@@ -436,7 +439,7 @@ function libraryDownloadControls(parent, entries) {
     progress.hidden = false; progress.max = revisions.length; progress.value = 0; resultText.hidden = false; failures.replaceChildren(); failures.hidden = true;
     try {
       const result = await downloadLibrary(revisions, {
-        listFigures, readMedia: figureMedia, readCloudMedia: cloudMediaHash, inspectVideo: inspectCloudVideo, saveFigure,
+        listFigures, readMedia: figureMedia, readCloudMedia: cloudMediaHash, confirmReplace: figure => hooks.confirm({ title: 'Lokale Änderungen überschreiben?', message: `„${figure.title}“ wurde lokal geändert. Mit der Cloud-Version überschreiben?`, ok: 'Mit Cloud-Version überschreiben' }), inspectVideo: inspectCloudVideo, saveFigure,
         async fetchVideo(revision, video, signal) {
           const signed = await cloudCall('media_url', { revision: revision.id, media: video.id }); signal.throwIfAborted();
           const response = await fetch(signed.url, { signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]) });
@@ -503,10 +506,10 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
   }
   const fingerprint = selected => `cloud:${rev.id}:${selected.map(v => v.id).join(',')}`;
   const label = own ? 'Lokal übernehmen' : multiple ? 'Ausgewählte Videos in meine Figuren übernehmen' : 'In meine Figuren übernehmen';
-  const download = async () => {
+  const download = async (replace = false) => {
     await refreshLocalFigures();
     const linked = localIndex.resolve(rev, localFigures, { revisionIds }).current;
-    if (linked) {
+    if (linked && !replace) {
       const saved = await run('Angaben ergänzen …', () => enrichCloudMetadata(linked, rev, { readMedia: figureMedia, saveFigure }));
       if (!saved) return;
       await hooks.localChanged?.(); await close(); if (!dialog.open) return hooks.openLocal?.(saved); return;
@@ -516,7 +519,8 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
     const selected = chosen.filter(([check]) => !check || check.checked).map(([, v]) => v);
     if (!selected.length) throw new Error('Bitte mindestens ein Video auswählen.');
     if (selected.reduce((n, v) => n + v.size, 0) > 250 * 1024 * 1024) throw new Error('Bitte weniger Videos wählen: maximal 250 MB pro Übernahme.');
-    const target = await hooks.chooseImport({ title: rev.title, fingerprint: fingerprint(selected), revisionIds, figureId: rev.figure_id });
+    const resolved = localIndex.resolve(rev, localFigures, { revisionIds });
+    const target = resolved.figure && !resolved.modified ? { figure: resolved.figure } : await hooks.chooseImport({ title: rev.title, fingerprint: fingerprint(selected), revisionIds, figureId: rev.figure_id });
     if (!target) return;
     const settings = await storageSettings();
     if (!target.figure && settings.activeFolder && settings.folders.find(folder => folder.id === settings.activeFolder)?.access !== 'granted') throw new Error('Bitte den gewählten Geräteordner in den Einstellungen freigeben.');
@@ -524,7 +528,7 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
     const cancel = document.getElementById('cloudCancelUpload'); cancel.textContent = 'Download abbrechen'; cancel.hidden = false;
     try {
       await downloadFigure({ ...rev, videos: selected }, {
-        listFigures, readMedia: figureMedia, readCloudMedia: cloudMediaHash, inspectVideo: inspectCloudVideo, saveFigure,
+        listFigures, readMedia: figureMedia, readCloudMedia: cloudMediaHash, confirmReplace: figure => hooks.confirm({ title: 'Lokale Änderungen überschreiben?', message: `„${figure.title}“ wurde lokal geändert. Mit der Cloud-Version überschreiben?`, ok: 'Mit Cloud-Version überschreiben' }), inspectVideo: inspectCloudVideo, saveFigure,
         async fetchVideo(revision, video, signal) {
           const signed = await cloudCall('media_url', { revision: revision.id, media: video.id }); signal.throwIfAborted();
           const response = await fetch(signed.url, { signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]) });
@@ -537,16 +541,16 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
           const value = await cloudCall('poster_get', { revision: revision.id });
           return value.poster ? new Blob([Uint8Array.from(atob(value.poster), character => character.charCodeAt(0))], { type: 'image/jpeg' }) : null;
         }
-      }, { signal, target: target.figure ?? null, targetFolder: settings.activeFolder ?? null });
+      }, { signal, target: target.figure ?? null, targetFolder: settings.activeFolder ?? null, progress: text => { statusBox.textContent = text; } });
       await hooks.localChanged?.();
       busy = false; close(); hooks.localSaved?.();
     } finally { controller = null; cancel.hidden = true; cancel.textContent = 'Upload abbrechen'; }
 
   });
   };
-  const take = action(label, download);
+  const take = action(label, () => download());
   // Keep recovery available when files were removed or modified outside the app.
-  const repair = action('Lokale Kopie erneut herunterladen', download); repair.className = 'subtle'; repair.hidden = true;
+  const repair = action('Cloud-Version übernehmen', () => download(true)); repair.className = 'subtle'; repair.hidden = true;
   if (own) take.className = 'primary';
   const openOlder = action('Ältere lokale Figur öffnen', async () => {
     await refreshLocalFigures();
@@ -569,7 +573,7 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
     });
     take.textContent = local.available ? 'Lokale Figur öffnen' : label;
     take.disabled = accessRequired;
-    repair.hidden = true;
+    repair.hidden = !local.modified;
     take.title = local.available ? 'Die zugehörige lokale Figur öffnen.' : '';
     openOlder.hidden = local.kind !== 'outdated';
 
@@ -600,6 +604,7 @@ function variantButton(box, revision) {
     await run('Variante erstellen …', async () => { await cloudCall('variant', { revision: revision.id }); area = 'figures'; await load(null); });
   }));
 }
+let savedLibraryFigure = null;
 let ownFigureSelection = { id: null, tab: 'videos', owner: null };
 function ownFigures() {
   if (ownFigureSelection.owner !== state.me?.id) ownFigureSelection = { id: null, tab: 'videos', owner: state.me?.id };
@@ -733,6 +738,11 @@ async function publishForm() {
       statusBox.textContent = 'Videos auf Duplikate prüfen …';
       const hashes = [];
       for (const video of videos) { controller.signal.throwIfAborted(); hashes.push(await videoHash(video.blob)); }
+      const previous = targets.find(f => f.id === figure.value)?.revisions?.[0];
+      if (previous) for (const video of previous.videos) {
+        controller.signal.throwIfAborted(); statusBox.textContent = 'Cloud-Prüfsummen prüfen und ergänzen …';
+        await cloudMediaHash({ revision: previous.id, media: video.id });
+      }
       const { matches } = await cloudCall('duplicates', { hashes });
       duplicateBox.replaceChildren();
       if (!figure.value && !explicitVariant.checked && matches.length) {
@@ -746,7 +756,13 @@ async function publishForm() {
         return;
       }
       if (figure.value && !allowed.checked && state.own_figures.find(f => f.id === figure.value)?.public_allowed && !await hooks.confirm({ title: 'Öffentliche Freigabe widerrufen?', message: 'Öffentliche Bibliothekszuordnungen werden entfernt.', ok: 'Widerrufen und speichern' })) return;
-      const reserved = await cloudCall('reserve', { figure: figure.value || null, expected_token: targets.find(f => f.id === figure.value)?.content_token, variant: explicitVariant.checked, videos: videos.map((v, i) => ({ size: v.blob.size, type: v.blob.type, reuse: matches.find(m => m.hash === hashes[i])?.media })) }); job = reserved.job;
+      const fresh = await cloudCall('state');
+      const freshTarget = fresh.own_figures?.find(f => f.id === figure.value);
+      if (freshTarget) {
+        const latest = freshTarget.revisions?.[0]; if (latest) localIndex.observe(latest);
+        if ((localIndex.remoteChanged(local) || targets.find(f => f.id === figure.value)?.content_token !== freshTarget.content_token) && !await hooks.confirm({ title: 'Cloud-Version überschreiben?', message: 'Die Cloud-Version wurde inzwischen geändert. Mit deiner lokalen Version überschreiben?', ok: 'Cloud-Version überschreiben' })) return;
+      }
+      const reserved = await cloudCall('reserve', { figure: figure.value || null, expected_token: freshTarget?.content_token, variant: explicitVariant.checked, videos: videos.map((v, i) => ({ size: v.blob.size, type: v.blob.type, reuse: matches.find(m => m.hash === hashes[i])?.media })) }); job = reserved.job;
       for (let i = 0; i < videos.length; i++) {
         controller.signal.throwIfAborted(); statusBox.textContent = `Video ${i + 1} von ${videos.length} hochladen …`;
         if (!reserved.media[i].reused) {
@@ -757,6 +773,11 @@ async function publishForm() {
       controller.signal.throwIfAborted();
       const poster = await posterPayload(local.poster).catch(() => null);
       const saved = await cloudCall('commit', { job, ...(poster ? { poster } : {}), public_allowed: allowed.checked, title: local.title, description: local.description, tags: local.tags, videos: reserved.media.map((m, i) => ({ id: m.id, name: videos[i].name })) }); job = null;
+      const committed = await cloudCall('state');
+      const committedRevision = committed.own_figures?.find(f => f.id === saved.figure)?.revisions?.find(r => r.id === saved.revision);
+      if (committedRevision) localIndex.observe(committedRevision);
+      ownFigureSelection = { id: saved.figure, tab: 'videos', owner };
+      savedLibraryFigure = saved.figure;
       const linked = localIndex.remember(owner, saved.revision, local, reserved.media.map((media, i) => ({ cloud: media.id, local: videos[i].id })), saved.figure);
       await hooks.localChanged?.();
       if (library.value) await cloudCall('attach', { library: library.value, revision: saved.revision });

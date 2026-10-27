@@ -1,6 +1,6 @@
 import { cloudLocalIndex } from './cloud-local.js';
 import { provenanceIcon, provenanceLabel } from './cloud-provenance.js';
-const APP_VERSION = '2026-10-27-transfer-dialog-v1';
+const APP_VERSION = '2026-10-27-content-sync-v1';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';
@@ -745,6 +745,6 @@ async function chooseCloudImport({ title, fingerprint, revisionIds, figureId }) 
     document.body.append(dialog); dialog.showModal(); actions.firstChild.focus();
   });
 }
-initCloud({ openLocal: figure => { openEditor(figure); }, confirm: confirmAction, closed: () => { if (!$('overview').hidden) focusFiguresNavigation(); }, localChanged: async () => { changed(); await refresh(); }, localFigures: listFigures, chooseImport: chooseCloudImport, localSaved: () => toast('Figur lokal gespeichert.') });
+initCloud({ openLocal: figure => { openEditor(figure); }, confirm: confirmAction, closed: () => { void refresh(); if (!$('overview').hidden) focusFiguresNavigation(); }, localChanged: async () => { changed(); await refresh(); }, localFigures: listFigures, chooseImport: chooseCloudImport, localSaved: () => toast('Figur lokal gespeichert.') });
 try { await cleanupInterruptedImports(); } catch { /* Refresh reports unavailable storage. */ }
 await refresh();
