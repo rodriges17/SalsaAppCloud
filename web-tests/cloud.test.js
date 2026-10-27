@@ -317,6 +317,7 @@ test('upload outcome: exact receipt survives response loss, repeated commit and 
  await root('select cloud_finish_media($1,$2)',[r.media[0].id,A]);
  const payload={job:r.job,title:'Receipt',description:'',tags:[],videos:[{id:r.media[0].id,name:'Video'}]};
  const saved=await api(A,'commit',payload);
+ assert.equal(saved.content.title,'Receipt');
  assert.deepEqual(await api(A,'upload_status',{job:r.job}),{status:'saved',saved});
  assert.deepEqual(await api(A,'commit',payload),saved);
  await assert.rejects(api(B,'upload_status',{job:r.job}),/Berechtigung/);

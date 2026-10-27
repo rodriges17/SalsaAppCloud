@@ -757,11 +757,13 @@ async function publishForm() {
     const videos = selected.filter(([check]) => check.checked).map(([, v]) => v);
     const owner = state.me.id, libraryId = library.value, account = cloudIdentity();
     const workflow = createFigureUpload({ call: cloudCall, upload: uploadMedia, hash: videoHash, mediaHash: cloudMediaHash, poster: posterPayload, identity: cloudIdentity, remember: async (...args) => {
+      if (account !== cloudIdentity()) throw new Error('Das Konto wurde inzwischen gewechselt.');
+      if (args[5]) return localIndex.remember(...args.slice(0, 5), undefined, args[5]);
       const current = await cloudCall('state');
       if (account !== cloudIdentity()) throw new Error('Das Konto wurde inzwischen gewechselt.');
       const revision = current.own_figures?.find(f => f.id === args[4])?.revisions?.find(r => r.id === args[1]);
       if (revision) localIndex.observe(revision);
-      return localIndex.remember(...args);
+      return localIndex.remember(...args.slice(0, 5));
     } });
     uploadWorkflow = workflow; uploadViewError = null;
     const afterSaved = async result => {

@@ -11,7 +11,7 @@ export function createFigureUpload(services) {
   async function exclusive(work){if(active)throw new Error('Bitte den aktuellen Upload-Vorgang abwarten.');active=true;try{return await work();}finally{active=false;}}
   async function local(){
     checkAccount();
-    try{const linked=await services.remember(input.owner,outcome.saved.revision,input.local,reserved.media.map((m,i)=>({cloud:m.id,local:input.videos[i].id})),outcome.saved.figure);checkAccount();if(linked===false)throw new Error('Die lokale Cloud-Zuordnung konnte nicht gespeichert werden.');outcome.localPending=false;outcome.localError=null;}
+    try{const linked=await services.remember(input.owner,outcome.saved.revision,input.local,reserved.media.map((m,i)=>({cloud:m.id,local:input.videos[i].id})),outcome.saved.figure,outcome.saved.content);checkAccount();if(linked===false)throw new Error('Die lokale Cloud-Zuordnung konnte nicht gespeichert werden.');outcome.localPending=false;outcome.localError=null;}
     catch(error){if(!sameAccount())throw error;outcome.localPending=true;outcome.localError=error;}
   }
   async function attach(){

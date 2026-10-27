@@ -30,6 +30,7 @@ export function createCloudLocalIndex(storage, key) {
     },
     remember(owner, revision, figure, pairs, cloudFigure = null, baseline = localContentSignature(figure), remoteBaseline = remote[revision] ?? null) {
       if (!owner || !revision || !pairs.length) throw new Error('Die lokale Zuordnung ist unvollständig.');
+      if (remoteBaseline && typeof remoteBaseline === 'object') remoteBaseline = stamp(remoteBaseline);
       const folder = figure.storageFolder || null;
       const next = read().filter(v => !(v.owner === owner && v.revision === revision && v.figure === figure.id && v.folder === folder));
       next.push({ owner, revision, cloudFigure, baseline, remoteBaseline, figure: figure.id, folder, pairs: pairs.map(p => ({ cloud: p.cloud, local: p.local })) });
