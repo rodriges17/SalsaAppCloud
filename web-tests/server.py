@@ -30,9 +30,9 @@ class Handler(SimpleHTTPRequestHandler):
         body = (Path('pwa') / name).read_bytes()
         legacy = versions.get(scenario) != 'current'
         if legacy and name == 'sw.js':
-            body = body.replace(b'2026-10-26-compact-cloud-v1', b'qa-legacy-shell').replace(b"assets.map(url => new Request(url, { cache: 'reload' }))", b'assets')
+            body = re.sub(rb"const VERSION = '[^']+';", b"const VERSION = 'qa-legacy-shell';", body, count=1).replace(b"assets.map(url => new Request(url, { cache: 'reload' }))", b'assets')
         if legacy and name == 'app.js':
-            body = body.replace(b'2026-10-26-compact-cloud-v1', b'qa-legacy-shell')
+            body = re.sub(rb"const APP_VERSION = '[^']+';", b"const APP_VERSION = 'qa-legacy-shell';", body, count=1)
         if legacy and name == 'styles.css':
             body += b'\n/* QA_STALE_HTTP_CSS */\n#importFigure { pointer-events: none !important; }\n'
         self.send_response(200)
