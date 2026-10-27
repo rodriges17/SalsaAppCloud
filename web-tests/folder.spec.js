@@ -162,7 +162,7 @@ test('folder editor stays editable without autofocus and ignores obsolete verifi
  test.skip(browserName!=='chromium');
  await enablePicker(page,'editor-loading-'+info.testId.replace(/\W/g,''));await start(page);await choose(page);await seed(page);await page.reload();
  await expect(page.getByRole('button',{name:'Ordner Ocho lernen',exact:true})).toBeVisible();
- await page.evaluate(()=>{const original=FileSystemFileHandle.prototype.getFile;window.releaseEditorMedia=[];
+ await page.evaluate(()=>{const original=FileSystemFileHandle.prototype.getFile;window.releaseEditorMedia=[];window.restoreEditorMedia=()=>{FileSystemFileHandle.prototype.getFile=original;};
   FileSystemFileHandle.prototype.getFile=async function(){if(/\.(mp4|mov|m4v|webm|ogv|media)$/i.test(this.name))await new Promise(r=>window.releaseEditorMedia.push(r));return original.call(this);};
  });
  async function edit(){await page.getByRole('button',{name:'Optionen für Ordner Ocho',exact:true}).tap();await page.getByRole('button',{name:'Bearbeiten',exact:true}).tap();}
@@ -181,6 +181,7 @@ test('folder editor stays editable without autofocus and ignores obsolete verifi
  await expect(page.locator('#draftVideos .draft-card')).toHaveCount(1);
  await expect(page.locator('#figureDescription')).toHaveValue('Während der Prüfung bearbeitet');await expect(page.locator('#figureDescription')).toBeFocused();
  await expect(page.locator('#figureTitle')).not.toBeFocused();
+ await page.evaluate(()=>window.restoreEditorMedia());
  await page.locator('#saveFigure').tap();await expect(page.locator('#editor')).toBeHidden();
  expect(await page.evaluate(async()=>{const {listFigures}=await import('/pwa/storage.js');return (await listFigures())[0].description;})).toBe('Während der Prüfung bearbeitet');
 });
