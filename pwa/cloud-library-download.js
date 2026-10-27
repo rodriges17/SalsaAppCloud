@@ -121,8 +121,7 @@ export async function downloadLibrary(revisions, services, { signal, targetFolde
         figure.importFingerprint = `cloud:${revision.id}:${revision.videos.map(v => v.id).join(',')}`;
         // Do not race an atomic save with cancellation: finish this figure, then stop.
         const modified = target && cloudLocalIndex.status(target) === 'modified';
-        progress('Figur speichern …');
-  const saved = await saveFigure(figure, drafts, target?.revision ?? null, { targetFolder: target ? target.storageFolder ?? null : targetFolder });
+        const saved = await saveFigure(figure, drafts, target?.revision ?? null, { targetFolder: target ? target.storageFolder ?? null : targetFolder });
         cloudLocalIndex.remember('@device', revision.id, saved, pairs, revision.figure_id, modified ? '@locally-modified' : undefined);
         result.saved++;
         if (target) figures.splice(figures.indexOf(target), 1, saved); else figures.push(saved);

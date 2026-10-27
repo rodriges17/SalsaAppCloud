@@ -323,7 +323,7 @@ async function libraryView(id, detail) {
       }
     };
     entriesBox.append(box);
-    if (ownFigureSelection.id === entry.figure_id) box.open = true;
+    if (savedLibraryFigure === entry.figure_id) { box.open = true; savedLibraryFigure = null; }
   }
   if (!detail.entries.length) entriesBox.append(node('p', 'Noch keine sichtbaren Figuren in dieser Bibliothek.'));
   libraryShare(id, lib);
@@ -604,6 +604,7 @@ function variantButton(box, revision) {
     await run('Variante erstellen …', async () => { await cloudCall('variant', { revision: revision.id }); area = 'figures'; await load(null); });
   }));
 }
+let savedLibraryFigure = null;
 let ownFigureSelection = { id: null, tab: 'videos', owner: null };
 function ownFigures() {
   if (ownFigureSelection.owner !== state.me?.id) ownFigureSelection = { id: null, tab: 'videos', owner: state.me?.id };
@@ -776,6 +777,7 @@ async function publishForm() {
       const committedRevision = committed.own_figures?.find(f => f.id === saved.figure)?.revisions?.find(r => r.id === saved.revision);
       if (committedRevision) localIndex.observe(committedRevision);
       ownFigureSelection = { id: saved.figure, tab: 'videos', owner };
+      savedLibraryFigure = saved.figure;
       const linked = localIndex.remember(owner, saved.revision, local, reserved.media.map((media, i) => ({ cloud: media.id, local: videos[i].id })), saved.figure);
       await hooks.localChanged?.();
       if (library.value) await cloudCall('attach', { library: library.value, revision: saved.revision });

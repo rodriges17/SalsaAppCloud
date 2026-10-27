@@ -178,3 +178,11 @@ test('failed replacement leaves old figure and media untouched',async()=>{
  await assert.rejects(downloadFigure(f.rev('failure',['a','b']),f.services,{target}),/Offline/);
  assert.equal(f.saves.length,0);assert.deepEqual(target,snapshot);
 });
+
+test('bulk progress always reports a structured phase and numeric counts',async()=>{
+ const f=await fixture(),events=[];
+ const result=await downloadLibrary([f.rev('progress',['a'])],f.services,{progress:event=>{
+  assert.equal(typeof event,'object');assert.equal(typeof event.phase,'string');assert.ok(Number.isFinite(event.done));events.push(event);
+ }});
+ assert.equal(result.saved,1);assert.ok(events.some(event=>event.phase==='save'));
+});
