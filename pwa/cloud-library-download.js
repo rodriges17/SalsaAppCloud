@@ -46,7 +46,8 @@ export async function downloadLibrary(revisions, services, { signal, targetFolde
       if (!figureKeys.has(identity(figure))) figureKeys.set(identity(figure), new Set());
       figureKeys.get(identity(figure)).add(key);
     }), signal);
-    const importTime = Math.max(Date.now(), ...figures.map(f => Number(f.createdAt) || 0)) + unique.length;
+    // Import position 1 first; later positions receive later creation times.
+    const importTime = Math.max(Date.now(), ...figures.map(f => Number(f.createdAt) || 0)) + 1;
     for (const [position, revision] of unique.entries()) {
       signal?.throwIfAborted(); emit('check', revision.title);
       try {
@@ -106,7 +107,7 @@ export async function downloadLibrary(revisions, services, { signal, targetFolde
           catch (error) { if (signal?.aborted) throw error; }
         }
         signal?.throwIfAborted(); emit('save', revision.title);
-        const figure = target ? missingCloudMetadata(target, revision) : { id: crypto.randomUUID(), title: revision.title, description: revision.description ?? '', tags: revision.tags ?? [], status: 'Neu', createdAt: importTime - position };
+        const figure = target ? missingCloudMetadata(target, revision) : { id: crypto.randomUUID(), title: revision.title, description: revision.description ?? '', tags: revision.tags ?? [], status: 'Neu', createdAt: importTime + position };
         figure.importFingerprint = `cloud:${revision.id}:${revision.videos.map(v => v.id).join(',')}`;
         // Do not race an atomic save with cancellation: finish this figure, then stop.
         const modified = target && cloudLocalIndex.status(target) === 'modified';

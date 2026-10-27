@@ -324,3 +324,10 @@ test('standalone HTML guides open under an installed app shell and link to each 
  await page.goto('/pwa/anleitungen/teilen.html');await expect(page.getByRole('heading',{name:'Bibliotheken teilen',exact:true})).toBeVisible();await expect(page.locator('img')).toHaveCount(2);
  await page.getByRole('link',{name:'Zur Benutzerverwaltung',exact:false}).click();await expect(page.getByRole('heading',{name:'Personen & Zugriff verwalten',exact:true})).toBeVisible();await page.locator('img').evaluateAll(async images=>{for(const image of images){image.loading='eager';await image.decode();}});expect(await page.locator('img').evaluateAll(images=>images.every(image=>image.naturalWidth>0&&image.src.startsWith('data:image/png;base64,')))).toBe(true);
 });
+
+test('editing app storage opens without text focus and does not summon it after video checks', async({page})=>{
+ await start(page);await addFigure(page);await openEdit(page);
+ await expect(page.locator('#editorLoading')).toBeHidden();
+ await expect(page.locator('#figureTitle')).toBeEnabled();
+ expect(await page.evaluate(()=>document.activeElement.matches('input,textarea,select'))).toBe(false);
+});

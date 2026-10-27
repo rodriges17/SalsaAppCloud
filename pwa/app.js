@@ -1,6 +1,6 @@
 import { cloudLocalIndex } from './cloud-local.js';
 import { provenanceIcon, provenanceLabel } from './cloud-provenance.js';
-const APP_VERSION = '2026-10-27-tag-spacing-v1';
+const APP_VERSION = '2026-10-27-editor-import-v1';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';
@@ -229,7 +229,7 @@ async function openEditor(figure = null, imported = null) {
     active = editor;
     renderDrafts(); setBusy(false); setEditorLoading(active.loading); $('editor').showModal(); pushRoute('editor');
     opening = false;
-    if (!active.loading) { $('figureTitle').focus(); return; }
+    if (!active.loading) { if (!figure) $('figureTitle').focus(); return; }
     $('editorBack').focus();
     // Paint the editor and its spinner before starting video verification.
     await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
@@ -240,7 +240,7 @@ async function openEditor(figure = null, imported = null) {
     if (editor !== active) return;
     active.drafts = loaded.map(r => ({ ...r, existing: !r.missing, confirmed: !r.missing }));
     active.initialDrafts = draftSignature(active.drafts);
-    renderDrafts(); setEditorLoading(false); $('figureTitle').focus();
+    renderDrafts(); setEditorLoading(false);
   } catch (error) {
     if (editor === active && error.name !== 'AbortError') {
       active.loadFailed = true; setEditorLoading(false); setError('editorError', storageMessage(error));
@@ -259,14 +259,15 @@ $('addChoiceDialog').addEventListener('click', event => {
 });
 $('addFigure').onclick = () => { $('addChoiceDialog').close(); openEditor(); };
 function updateSave() { $('saveFigure').disabled = !editor || editor.busy || editor.loading || editor.loadFailed || !$('figureTitle').value.trim() || !editor.drafts.length || editor.drafts.some(d => !d.confirmed); }
-function setBusy(value) { editor.busy = value; $('editorFields').disabled = value || editor.loading || editor.loadFailed; $('editorBack').disabled = value; $('saveProgress').hidden = !value; $('saveIndicator').hidden = !value; updateSave(); }
+function setBusy(value) { editor.busy = value; $('editorFields').disabled = value; $('pickVideos').disabled = value || editor.loading || editor.loadFailed; $('reviewAll').disabled = $('pickVideos').disabled; $('editorBack').disabled = value; $('saveProgress').hidden = !value; $('saveIndicator').hidden = !value; updateSave(); }
 function setEditorLoading(value) {
   editor.loading = value;
   $('editorLoading').hidden = !value;
   $('editorLoading').classList.toggle('is-busy', value);
   $('editorLoading').textContent = value ? 'Videos werden geladen und geprüft …' : '';
-  $('editorForm').setAttribute('aria-busy', String(value));
-  $('editorFields').disabled = value || editor.busy || editor.loadFailed;
+  $('draftVideos').setAttribute('aria-busy', String(value));
+  $('editorFields').disabled = editor.busy;
+  $('pickVideos').disabled = value || editor.busy || editor.loadFailed; $('reviewAll').disabled = $('pickVideos').disabled;
   updateSave();
 }
 $('editorForm').addEventListener('input', updateSave);

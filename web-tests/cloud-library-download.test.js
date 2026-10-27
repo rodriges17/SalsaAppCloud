@@ -91,12 +91,16 @@ test('single import never saves corrupted downloads or cancelled metadata reads'
  await assert.rejects(pending);assert.equal(f.saves.length,0);assert.deepEqual(f.network,[]);
 });
 
-test('bulk import chronology preserves library order above older copies, leaves existing dates intact',async()=>{
+test('bulk imports save position one first with ascending chronology and keep existing dates intact',async()=>{
  const f=await fixture(),old=f.add({createdAt:Date.now()+5000},['b']);
  const result=await downloadLibrary([f.rev('first',['a']),f.rev('existing',['b']),f.rev('last',['c'])],f.services);
  assert.equal(result.saved,2);assert.equal(result.skipped,1);
  const sorted=[...f.figures].sort((a,b)=>b.createdAt-a.createdAt);
- assert.deepEqual(sorted.map(f=>f.title),['Cloud first','Cloud last','Local']);
+ assert.deepEqual(f.network,['a','c']);
+ const created=f.saves.filter(s=>s.figure.id!==old.id);
+ assert.deepEqual(created.map(s=>s.figure.title),['Cloud first','Cloud last']);
+ assert.ok(created[0].figure.createdAt < created[1].figure.createdAt);
+ assert.deepEqual(sorted.map(f=>f.title),['Cloud last','Cloud first','Local']);
  assert.equal(f.figures.find(x=>x.id===old.id).createdAt,old.createdAt);
  assert.equal(f.figures.find(x=>x.id===old.id).status,'Sitzt');
 });
@@ -151,4 +155,13 @@ test('bulk completion preserves a locally modified partial copy as a separate fi
  cloudLocalIndex.remember('@device','one',local,[{cloud:'a',local:local.videoIds[0]}]);local.title='My local changes';
  const before=JSON.stringify(local);const result=await downloadLibrary([f.rev('one',['a','b'])],f.services);
  assert.equal(result.saved,1);assert.equal(JSON.stringify(f.figures.find(x=>x.id===local.id)),before);assert.equal(f.figures.length,2);
+});
+
+test('bulk imports visit all library positions in ascending order', async()=>{
+ const f=await fixture();
+ await downloadLibrary([f.rev('1',['a']),f.rev('2',['b']),f.rev('3',['c'])],f.services);
+ assert.deepEqual(f.network,['a','b','c']);
+ assert.deepEqual(f.saves.map(s=>s.figure.title),['Cloud 1','Cloud 2','Cloud 3']);
+ const times=f.saves.map(s=>s.figure.createdAt);
+ assert.ok(times[0]<times[1] && times[1]<times[2]);
 });
