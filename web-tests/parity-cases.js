@@ -28,7 +28,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
    if(action==='library_commit'){saved=payload;entries=payload.order.map(id=>entries.find(e=>e.figure_id===id));result={id:library.id};}
    await route.fulfill({contentType:'application/json',body:JSON.stringify(result)});
   });
-  await page.locator('#cloudButton').click();await page.getByRole('button',{name:'Öffnen',exact:true}).click();
+  await page.locator('#cloudButton').click();await page.locator('a.cloud-library-card').click();
   await page.getByRole('button',{name:'Bibliothek bearbeiten',exact:true}).click();
   await page.locator('.cloud-order-number').nth(2).waitFor();
   assert((await page.locator('.cloud-order-number').allTextContents()).join(',')==='1,2,3','Numbering is not ascending');
@@ -68,7 +68,11 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   });
   await page.locator('#cloudButton').click();await page.getByRole('button',{name:'Bibliotheken',exact:true}).click();
   for(let index=0;index<libraries.length;index++){
-   await page.getByRole('button',{name:'Öffnen',exact:true}).nth(index).click();
+   const card=page.locator('a.cloud-library-card').nth(index);
+   await card.waitFor();assert(await card.locator('button').count()===0,'Library card retains an extra open button');
+   const destination=new URL(await card.getAttribute('href'));
+   assert(destination.searchParams.get('library')===libraries[index].id&&!destination.hash&&!destination.searchParams.has('token_hash'),'Card link leaks login data or corrupts the library ID');
+   if(index===0){await card.focus();await page.keyboard.press('Enter');}else await card.locator('p').first().click();
    const field=page.getByRole('textbox',{name:'Bibliothekslink',exact:true});await field.waitFor();
    const value=await field.inputValue(),link=new URL(value);
    assert(link.origin==='https://rodriges17.github.io'&&link.pathname==='/SalsaAppCloud/','Library link uses an internal, test or preview address');
@@ -86,7 +90,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
     assert(await field.evaluate(input=>input.selectionStart===0&&input.selectionEnd===input.value.length),'Fallback did not select the canonical link');
     await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async value=>{window.copiedLibraryLink=value;}}}));
    }
-   await page.getByRole('button',{name:'Bibliotheken',exact:true}).click();await page.getByRole('button',{name:'Öffnen',exact:true}).first().waitFor();
+   await page.getByRole('button',{name:'Bibliotheken',exact:true}).click();await page.locator('a.cloud-library-card').first().waitFor();
   }
   assert(calls.every(action=>['state','cleanup','library'].includes(action)),'Sharing unexpectedly changes library permissions');
  }
@@ -162,7 +166,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
    assert(await page.getByRole('heading',{name:'Cache A 1',exact:true}).count()===0,'Revoked session left private contents visible');
    assert(await page.evaluate(async({root,owner})=>!(await(await import(root+'cloud-cache.js')).readCloudCache(owner,'state')),{root,owner}),'Revoked session retained private snapshots');
   }else if(scenario==='cloud-cache-permission-change'){
-   await page.getByRole('button',{name:'Bibliotheken',exact:true}).click();await page.getByRole('button',{name:'Öffnen',exact:true}).click();await page.getByRole('heading',{name:'Private Details',exact:true}).waitFor();await page.locator('#cloudDialog [data-nav=figures]').click();
+   await page.getByRole('button',{name:'Bibliotheken',exact:true}).click();await page.locator('a.cloud-library-card').click();await page.getByRole('heading',{name:'Private Details',exact:true}).waitFor();await page.locator('#cloudDialog [data-nav=figures]').click();
    await page.clock.setFixedTime(new Date(await page.evaluate(()=>Date.now())+61000));revoked=true;
    await page.evaluate(root=>{void import(root+'cloud.js').then(m=>m.openCloud(null,'cache-library'));},root);
    await page.waitForFunction(()=>document.querySelector('#cloudError').textContent.includes('Zugriff entzogen'));
@@ -254,7 +258,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   await page.waitForFunction(()=>document.querySelector('.cloud-own-availability')?.textContent==='Lokal verfügbar');
   latest='new-state-rev';await page.getByRole('button',{name:'Aktualisieren',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('.cloud-own-availability')?.textContent==='Neuere Cloud-Version verfügbar');
-  await page.getByRole('button',{name:'Bibliotheken',exact:true}).click();await page.getByRole('button',{name:'Öffnen',exact:true}).click();
+  await page.getByRole('button',{name:'Bibliotheken',exact:true}).click();await page.locator('a.cloud-library-card').click();
   await page.waitForFunction(()=>document.querySelector('.cloud-library-availability')?.textContent==='Neuere Cloud-Version verfügbar');
   await page.locator('.cloud-library-summary').click();await page.getByRole('button',{name:'Ältere lokale Figur öffnen',exact:true}).click();
   await page.locator('#editor').waitFor();assert(await page.locator('#figureTitle').inputValue()==='Meine lokale Anpassung','Opening an old copy overwrote local changes');
@@ -341,7 +345,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
    if(action==='poster_get')result={poster:'/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHBwgHBgoICAgLCgoLDhgQDg0NDh0VFhEYIx8lJCIfIiEmKzcvJik0KSEiMEExNDk7Pj4+JS5ESUM8SDc9Pjv/2wBDAQoLCw4NDhwQEBw7KCIoOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozv/wAARCAAMAAwDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwBtFFFYnin/2Q==',kind:'local',can_write:false};
    await route.fulfill({contentType:'application/json',body:JSON.stringify(result)});
   });
-  async function openLibrary(){await page.locator('#cloudButton').click();await page.getByRole('button',{name:'Öffnen',exact:true}).click();}
+  async function openLibrary(){await page.locator('#cloudButton').click();await page.locator('a.cloud-library-card').click();}
   if(scenario==='cloud-single-direct-download'){
    await openLibrary();await page.locator('.cloud-library-summary').first().click();await page.getByRole('button',{name:'In meine Figuren übernehmen',exact:true}).first().click();
    await page.waitForFunction(()=>!document.querySelector('#cloudDialog').open);
@@ -383,13 +387,13 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   assert(!await page.getByLabel('Anmeldelink einfügen',{exact:true}).isVisible(),'Only selected login method should be visible');
   if(native)await page.evaluate(()=>AndroidAppUI.back());else await page.keyboard.press('Escape');
   assert(!await login.isVisible()&&await page.locator('#cloudDialog').isVisible(),'Back from login must only close login');
-  await page.getByRole('button',{name:'Öffnen',exact:true}).click();await page.getByRole('heading',{name:library.title,exact:true}).waitFor();
+  await page.locator('a.cloud-library-card').click();await page.getByRole('heading',{name:library.title,exact:true}).waitFor();
   assert(await trigger.isVisible()&&!await login.isVisible(),'Library details must offer the header login icon');
   assert(await page.locator('.cloud-tabs').count()===0,'Guest library details must not show an account switch');
   if(native)await page.evaluate(()=>AndroidAppUI.back());else await page.keyboard.press('Escape');
   await page.getByRole('heading',{name:'Öffentliche Bibliotheken',exact:true}).waitFor();
   assert(await page.locator('#cloudDialog').isVisible(),'Native Back must return to libraries rather than local figures');
-  await page.getByRole('button',{name:'Öffnen',exact:true}).click();await page.getByRole('button',{name:'< Zurück zu allen Bibliotheken',exact:true}).click();
+  await page.locator('a.cloud-library-card').click();await page.getByRole('button',{name:'< Zurück zu allen Bibliotheken',exact:true}).click();
   await page.getByRole('heading',{name:'Öffentliche Bibliotheken',exact:true}).waitFor();
   return;
  }
