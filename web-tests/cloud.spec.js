@@ -701,3 +701,46 @@ test('available cloud figures share a top-right label, keep expansion without ar
  await expandLibraryFigure(page);const entry=page.locator('.cloud-library-figure').first();await expect(entry.getByRole('checkbox')).toHaveCount(0);await expect(entry.getByRole('button',{name:'Lokale Figur öffnen',exact:true})).toBeVisible();
  await page.screenshot({path:info.outputPath('available-library-row-top-right.png')});
 });
+
+test('shared upload keeps saved success when library attach fails and retries only attachment',async({page})=>{
+ await signIn(page);const calls=await mock(page,true,false,true,{visibility:'private',reflectUpload:true});
+ let fail=true;await page.route(`${host}/functions/v1/cloud`,async route=>{
+  if(route.request().postDataJSON().action==='attach'&&fail)return route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({error:'Zuweisung fehlgeschlagen'})});
+  return route.fallback();
+ });
+ await localUpload(page);await page.getByRole('combobox',{name:'Bibliothek',exact:true}).selectOption('lib-1');
+ await page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true}).tap();
+ await expect(page.locator('#cloudUploadRecovery')).toContainText('Figur gespeichert. Bibliothekszuordnung fehlgeschlagen.');
+ expect(calls.filter(c=>c.action==='commit')).toHaveLength(1);const sent=calls.filter(c=>c.action==='upload').length;
+ fail=false;await page.getByRole('button',{name:'Zuordnung erneut versuchen',exact:true}).tap();
+ await expect(page.locator('#cloudUploadRecovery')).toBeHidden();expect(calls.filter(c=>c.action==='commit')).toHaveLength(1);expect(calls.filter(c=>c.action==='upload')).toHaveLength(sent);
+});
+test('shared upload retains local warning and offers a storage-only retry',async({page})=>{
+ await signIn(page);const calls=await mock(page,true,false,true,{reflectUpload:true});await localUpload(page);
+ await page.evaluate(()=>{const write=Storage.prototype.setItem;window.restoreLinkStorage=()=>Storage.prototype.setItem=write;Storage.prototype.setItem=function(k,v){if(k.includes('salsa-cloud-local:')&&!k.endsWith(':remote'))throw Error('quota');return write.call(this,k,v);};});
+ await page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true}).tap();await expect(page.locator('#cloudUploadRecovery')).toContainText('lokale Cloud-Zuordnung');
+ await page.evaluate(()=>window.restoreLinkStorage());await page.getByRole('button',{name:'Lokale Zuordnung erneut speichern',exact:true}).tap();
+ await expect(page.locator('#cloudUploadRecovery')).toBeHidden();expect(calls.filter(c=>c.action==='commit')).toHaveLength(1);
+});
+test('shared upload checks an unknown commit result before allowing another upload',async({page})=>{
+ await signIn(page);const calls=await mock(page,true,false,true,{reflectUpload:true});let committed=false,check=true;
+ await page.route(`${host}/functions/v1/cloud`,async route=>{
+  const {action}=route.request().postDataJSON();
+  if(action==='commit'){committed=true;return route.abort('failed');}
+  if(action==='upload_status')return route.fulfill({status:check?503:200,contentType:'application/json',body:JSON.stringify(check?{error:'offline'}:{status:'saved',saved:{figure:'figure-upload',revision:'uploaded-revision'}})});
+  return route.fallback();
+ });
+ await localUpload(page);await page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true}).tap();
+ await expect(page.getByRole('button',{name:'Speicherstand erneut prüfen',exact:true})).toBeVisible();expect(committed).toBe(true);
+ await page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true}).tap();await expect(page.locator('#cloudBody [role=alert]')).toContainText('Speicherstand');
+ check=false;await page.getByRole('button',{name:'Speicherstand erneut prüfen',exact:true}).tap();await expect(page.locator('#cloudUploadRecovery')).toBeHidden();
+ await expect(page.locator('#cloudCancelUpload')).toBeHidden();expect(calls.filter(c=>c.action==='reserve')).toHaveLength(1);expect(calls.some(c=>c.action==='abort')).toBe(false);
+});
+test('shared upload disables cancellation while the definitive commit is pending',async({page})=>{
+ await signIn(page);await mock(page,true,false,true,{reflectUpload:true});await localUpload(page);
+ let release;const gate=new Promise(r=>release=r);
+ await page.route(`${host}/functions/v1/cloud`,async route=>{if(route.request().postDataJSON().action==='commit')await gate;return route.fallback();});
+ await page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true}).tap();
+ await expect(page.locator('#cloudStatus')).toHaveText('Figur wird endgültig gespeichert …');await expect(page.locator('#cloudCancelUpload')).toBeDisabled();
+ release();await expect(page.locator('#cloudCancelUpload')).toBeHidden();await expect(page.locator('#cloudUploadRecovery')).toBeHidden();
+});

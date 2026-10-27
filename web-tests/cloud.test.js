@@ -310,3 +310,25 @@ test('library editor cannot add unpublished-to-public or unreadable figures and 
  detail=await api(B,'library',{id});await api(B,'library_commit',{...payload,visibility:'private',expected_version:detail.library.edit_version,order:[],additions:[]});
  assert.equal((await api(B,'library',{id})).entries.length,0);
 });
+
+test('upload outcome: exact receipt survives response loss, repeated commit and account isolation',async()=>{
+ const r=await api(A,'reserve',{videos,variant:true});
+ await root("insert into storage.objects(bucket_id,name,metadata) values ('salsa-cloud',$1,$2)",[r.media[0].path,JSON.stringify({size:3,mimetype:'video/mp4'})]);
+ await root('select cloud_finish_media($1,$2)',[r.media[0].id,A]);
+ const payload={job:r.job,title:'Receipt',description:'',tags:[],videos:[{id:r.media[0].id,name:'Video'}]};
+ const saved=await api(A,'commit',payload);
+ assert.equal(saved.content.title,'Receipt');
+ assert.deepEqual(await api(A,'upload_status',{job:r.job}),{status:'saved',saved});
+ assert.deepEqual(await api(A,'commit',payload),saved);
+ await assert.rejects(api(B,'upload_status',{job:r.job}),/Berechtigung/);
+ await assert.rejects(api(null,'upload_status',{job:r.job}),/anmelden/);
+ await role(A);await assert.rejects(db.query('select * from cloud_private.upload_outcomes'));
+});
+test('upload outcome: a confirmed not-saved result fences delayed commit before cleanup',async()=>{
+ const r=await api(A,'reserve',{videos,variant:true});
+ assert.deepEqual(await api(A,'upload_status',{job:r.job}),{status:'not_saved'});
+ await assert.rejects(api(A,'commit',{job:r.job,title:'Must not save',tags:[],videos:[]}),/erneut/);
+ assert.deepEqual(await api(A,'upload_status',{job:r.job}),{status:'not_saved'});
+ await root('select cloud_release_job($1)',[r.job]);
+ assert.deepEqual(await api(A,'upload_status',{job:r.job}),{status:'not_saved'});
+});

@@ -34,3 +34,6 @@ Die Verfügbarkeit einer Cloud-Version als einzelne vollständige, lesbare lokal
 
 **Cloud-Herkunft**:
 Die Zuordnung einer lokalen Figur zu ihrer Cloud-Figur und der übernommenen oder hochgeladenen Version. Lokale Inhaltsänderungen bleiben erkennbar; Lernstand und Verfügbarkeit sind davon unabhängig.
+
+**Figuren-Upload**:
+Der gemeinsame Ablauf, der Videos einer lokalen Figur prüft und bei Bedarf überträgt, die Cloud-Figur endgültig speichert und erreichte Ergebnisse für getrennte Nacharbeiten erhält. Bibliothekszuordnung und lokale Cloud-Herkunft können nach erfolgreichem Speichern unabhängig wiederholt werden. Ein unbekannter Speicherstand wird anhand des eindeutigen Upload-Vorgangs geklärt.

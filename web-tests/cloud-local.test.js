@@ -141,3 +141,14 @@ test('cloud status ignores transport timestamps and video property ordering',()=
  assert.equal(index.status(figure),'cloud');
  index.observe({...rev,videos:[{...rev.videos[0],name:'Renamed'}]});assert.equal(index.status(figure),'remote');
 });
+
+test('late upload linking preserves the committed content baseline without masking newer cloud edits',()=>{
+ const index=createCloudLocalIndex(fake(),'late');
+ const committed={id:'rev',title:'A',videos:[{id:'cloud-a',name:'Video',size:20,type:'video/mp4'}]};
+ index.observe(committed);
+ index.remember('owner','rev',figure,pairs,'cloud',undefined,committed);
+ assert.equal(index.status(figure),'cloud');
+ index.observe({...committed,title:'Newer cloud edit'});
+ index.remember('owner','rev',figure,pairs,'cloud',undefined,committed);
+ assert.equal(index.status(figure),'remote');
+});
