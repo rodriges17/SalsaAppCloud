@@ -5,15 +5,15 @@ export function mountTagPicker(input, {value = [], suggestions = [], onChange = 
  const make=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;};
  const root=make('div','tag-picker'), chips=make('div','tag-picker-chips'), row=make('div','tag-picker-search');
  const panel=make('div','tag-picker-panel'), list=make('div','tag-picker-options'), create=make('button','tag-picker-create');
- const message=make('p','tag-picker-message'), status=make('p','tag-picker-status'), toggle=make('button','tag-picker-toggle','▾');
+ const message=make('p','tag-picker-message'), status=make('p','tag-picker-status');
  let selected=unique(value), available=unique(suggestions), opened=false;
  const refreshButton=make('button','tag-picker-refresh','↻ Tag-Vorschläge aktualisieren');refreshButton.type='button';refreshButton.hidden=true;refreshButton.setAttribute('aria-label','Tag-Vorschläge aktualisieren');
  const events=new AbortController(), listen=(n,type,fn)=>n.addEventListener(type,fn,{signal:events.signal});
  const id=input.id || (input.id='tags-'+crypto.randomUUID());
- input.before(root);root.append(chips,row,panel,status,refreshButton);row.append(input,toggle);panel.append(list,create,message);
- input.value='';input.placeholder='Tags suchen oder neu anlegen';input.autocomplete='off';
+ input.before(root);root.append(row,panel);row.append(chips,input);panel.append(list,create,message,status,refreshButton);
+ input.value='';input.placeholder='Tag hinzufügen …';input.autocomplete='off';
  input.setAttribute('role','combobox');input.setAttribute('aria-autocomplete','list');input.setAttribute('aria-haspopup','listbox');input.setAttribute('aria-controls',id+'-options');
- toggle.type=create.type='button';toggle.setAttribute('aria-label','Tag-Auswahl öffnen');
+ create.type='button';
  list.id=id+'-options';list.setAttribute('role','listbox');list.setAttribute('aria-label','Verfügbare Tags');list.setAttribute('aria-multiselectable','true');
  chips.setAttribute('role','group');chips.setAttribute('aria-label','Ausgewählte Tags');status.setAttribute('role','status');message.setAttribute('role','status');
  const change=()=>{onChange([...selected]);input.dispatchEvent(new Event('change',{bubbles:true}));};
@@ -34,15 +34,16 @@ export function mountTagPicker(input, {value = [], suggestions = [], onChange = 
   if(candidate.length>160)message.textContent='Ein Tag darf höchstens 160 Zeichen haben.';
   else if(selected.length>=100)message.textContent='Maximal 100 Tags pro Figur.';
   else message.textContent=!matches.length && !candidate ? 'Noch keine Tags vorhanden.' : '';
-  panel.hidden=!opened;input.setAttribute('aria-expanded',String(opened));toggle.setAttribute('aria-expanded',String(opened));
+  opened=opened && Boolean(input.value.trim());panel.hidden=!opened;input.setAttribute('aria-expanded',String(opened));
  }
  function open(value=true){opened=value;render();}
  listen(input,'click',()=>open());listen(input,'input',()=>open());
- listen(toggle,'click',()=>{open(!opened);input.focus({preventScroll:true});});
+ listen(row,'click',event=>{if(event.target===row || event.target===chips)input.focus({preventScroll:true});});
  listen(create,'click',()=>{const tag=input.value.trim();if(!create.disabled && tag){available=unique([...available,tag]);select(tag);input.value='';render();}});
  listen(root,'keydown',event=>{
   if(event.key==='Escape' && opened){event.preventDefault();event.stopPropagation();open(false);input.focus({preventScroll:true});}
   if(['ArrowDown','ArrowUp'].includes(event.key)){
+   if(!input.value.trim())return;
    event.preventDefault();if(!opened)open();
    const options=[...list.children,...(!create.hidden?[create]:[])].filter(b=>!b.disabled);
    const index=options.indexOf(document.activeElement),direction=event.key==='ArrowDown'?1:-1;
