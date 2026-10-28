@@ -98,6 +98,7 @@ export async function runTagLimitsCase(page,{root,seed}){
  await page.getByRole('button',{name:'Tag „Tag 0“ entfernen',exact:true}).click();await input.fill('x'.repeat(161));
  assert(await page.getByRole('button',{name:'Neues Tag „'+'x'.repeat(161)+'“ anlegen',exact:true}).isDisabled(),'Overlong tag can be created');
  await page.getByText('Ein Tag darf höchstens 160 Zeichen haben.',{exact:true}).waitFor();
+ assert(await page.locator('#editor .tag-picker').evaluate(n=>n.scrollWidth<=n.clientWidth+1),'Long tag creation action overflows the mobile field');
  await input.fill('x'.repeat(160));await page.getByRole('button',{name:'Neues Tag „'+'x'.repeat(160)+'“ anlegen',exact:true}).click();
  assert(await page.locator('.tag-picker-chip').count()===100,'Allowed boundary tag not added');
 }
