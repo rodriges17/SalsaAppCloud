@@ -51,7 +51,10 @@ export function mountTagPicker(input, {value = [], suggestions = [], onChange = 
   }
   if(event.key==='Enter' && event.target===input){event.preventDefault();}
  });
- listen(document,'pointerdown',event=>{if(!root.contains(event.target))open(false);});
+ // Close after the outside target has activated, so collapsing the panel
+ // cannot move that target between pointer-down and click. The event path
+ // remains valid even when selection re-renders the clicked option.
+ listen(document,'click',event=>{if(!event.composedPath().includes(root))open(false);});
  // WebKit does not focus clicked buttons: blur during a click must not
  // remove the option before its click handler runs. Pointer exits are handled
  // above; keyboard exits are checked after Tab has moved the focus.
