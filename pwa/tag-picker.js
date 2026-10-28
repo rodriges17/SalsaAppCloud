@@ -52,7 +52,10 @@ export function mountTagPicker(input, {value = [], suggestions = [], onChange = 
   if(event.key==='Enter' && event.target===input){event.preventDefault();}
  });
  listen(document,'pointerdown',event=>{if(!root.contains(event.target))open(false);});
- listen(root,'focusout',event=>{if(event.relatedTarget && !root.contains(event.relatedTarget))open(false);});
+ // WebKit does not focus clicked buttons: blur during a click must not
+ // remove the option before its click handler runs. Pointer exits are handled
+ // above; keyboard exits are checked after Tab has moved the focus.
+ listen(root,'keydown',event=>{if(event.key==='Tab')setTimeout(()=>{if(!root.contains(document.activeElement))open(false);},0);});
  render();
  return {
   get value(){return [...selected];},
