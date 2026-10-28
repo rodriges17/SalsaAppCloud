@@ -220,3 +220,15 @@ test('failed transfer closes its progress dialog and preserves the source',async
  await expect(page.locator('#toast')).toContainText('fehlgeschlagen');await expect(page.locator('#transferProgressDialog')).toBeHidden();
  await expect(page.getByRole('button',{name:'Fehlerfall lernen',exact:true})).toBeVisible();await expect(page.locator('#toast')).not.toHaveText('Übertragung abgeschlossen.');
 });
+
+test('local tag suggestions use registered folder metadata without permission or media reads',async({page,browserName},info)=>{
+ test.skip(browserName!=='chromium');await enablePicker(page,'tag-metadata-'+info.testId.replace(/\W/g,''));await start(page);await choose(page);await seed(page);
+ const result=await page.evaluate(async()=>{
+  let permissions=0,files=0;const query=FileSystemDirectoryHandle.prototype.queryPermission,get=FileSystemFileHandle.prototype.getFile;
+  FileSystemDirectoryHandle.prototype.queryPermission=async()=>{permissions++;return 'denied';};
+  FileSystemFileHandle.prototype.getFile=async()=>{files++;throw Error('Tag suggestions must not read files');};
+  try {return {tags:await(await import('/pwa/storage.js')).listLocalTags(),get permissions(){return permissions;},get files(){return files;}};}
+  finally{FileSystemDirectoryHandle.prototype.queryPermission=query;FileSystemFileHandle.prototype.getFile=get;}
+ });
+ expect(result.tags).toEqual(['Salsa']);expect(result.permissions).toBe(0);expect(result.files).toBe(0);
+});

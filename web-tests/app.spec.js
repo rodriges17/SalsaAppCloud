@@ -15,7 +15,7 @@ async function start(page) {
 async function addFigure(page) {
   await page.locator('#openAddFigure').tap(); await page.locator('#addFigure').click();
   await page.locator('#figureTitle').fill('Ocho'); await page.locator('#figureDescription').fill('Links drehen');
-  await page.locator('#figureTags').fill('Drehung, Anfänger');
+  for (const tag of ['Drehung','Anfänger']) { await page.locator('#figureTags').fill(tag); await page.getByRole('button',{name:`Neues Tag „${tag}“ anlegen`,exact:true}).click(); }
   await page.locator('#videoFiles').setInputFiles([clip, portrait]);
   await expect(page.locator('#saveFigure')).toBeDisabled();
   await page.getByRole('button', { name: 'Alle neuen Videos prüfen' }).click();
