@@ -121,6 +121,12 @@ export async function listFigures() {
   }
   return result;
 }
+// Suggestions use registered metadata only. Do not scan media or request a grant.
+export async function listLocalTags() {
+  const figures = await app.listFigures();
+  for (const folder of await folders()) figures.push(...folder.library.figures);
+  return [...new Set(figures.flatMap(f => f.tags ?? []).filter(t => typeof t === 'string' && t.length))];
+}
 async function folderFor(figure) {
   const folder = await entries(figure.storageFolder); if (!folder) throw new Error('Ordner erneut verbinden.');
   return folder;

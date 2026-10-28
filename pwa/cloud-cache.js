@@ -42,7 +42,7 @@ export async function writeCloudCache(owner, key, value, revision = cloudCacheRe
 }
 export async function clearCloudCache(owner, metadataOnly = false) {
   revisions.set(owner, cloudCacheRevision(owner) + 1);
-  const matches = record => record.owner === owner && (!metadataOnly || record.key === 'state' || record.key.startsWith('library:'));
+  const matches = record => record.owner === owner && (!metadataOnly || record.key === 'state' || record.key === 'tags' || record.key.startsWith('library:'));
   for (const [key, record] of memory) if (matches(record)) memory.delete(key);
   try {
     const db = await database();
@@ -52,4 +52,5 @@ export async function clearCloudCache(owner, metadataOnly = false) {
       tx.oncomplete = resolve; tx.onabort = () => reject(tx.error); tx.onerror = () => {};
     });
   } catch { /* No persistent content exists when IndexedDB is unavailable. */ }
+  globalThis.dispatchEvent?.(new CustomEvent('cloud-cache-cleared',{detail:{owner}}));
 }

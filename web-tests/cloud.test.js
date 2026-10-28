@@ -25,11 +25,11 @@ await root('select cloud_bootstrap($1,$2)', [A,'admin@example.test']);
 await api(A,'admin_person',{id:B,enabled:true,quota:250000000}); await api(A,'admin_person',{id:C,enabled:false,quota:0});
 let library, other, figure, revision, nextRevision;
 const videos = [{type:'video/mp4',size:3}];
-async function uploaded(who, fid, publicAllowed) {
+async function uploaded(who, fid, publicAllowed, tags=['Salsa']) {
  const job = await api(who,'reserve',{figure:fid,videos});
  await root("insert into storage.objects(bucket_id,name,metadata) values ('salsa-cloud',$1,$2)", [job.media[0].path,JSON.stringify({size:3,mimetype:'video/mp4'})]);
  await root('select cloud_finish_media($1,$2)',[job.media[0].id,who]);
- const done = await api(who,'commit',{job:job.job,...(publicAllowed===undefined?{}:{public_allowed:publicAllowed}),title:'Drehung',description:'Test',tags:['Salsa'],videos:[{id:job.media[0].id,name:'Führung'}]}); return done;
+ const done = await api(who,'commit',{job:job.job,...(publicAllowed===undefined?{}:{public_allowed:publicAllowed}),title:'Drehung',description:'Test',tags,videos:[{id:job.media[0].id,name:'Führung'}]}); return done;
 }
 test('cloud: anonymous users cannot bootstrap, change limits or create libraries', async () => {
  await assert.rejects(api(null,'library_save',{title:'Bad',visibility:'public',collaborative:true,moderated:false}));
@@ -331,4 +331,28 @@ test('upload outcome: a confirmed not-saved result fences delayed commit before 
  assert.deepEqual(await api(A,'upload_status',{job:r.job}),{status:'not_saved'});
  await root('select cloud_release_job($1)',[r.job]);
  assert.deepEqual(await api(A,'upload_status',{job:r.job}),{status:'not_saved'});
+});
+
+test('tag suggestions include only readable revisions, preserve case variants and follow permission removal',async()=>{
+ await root('update cloud_settings set total_limit=1000000000');
+ await root('update cloud_people set upload_enabled=true,quota=1000000000 where id in ($1,$2)',[A,B]);
+ const pub=(await api(A,'library_save',{title:'Tags öffentlich',visibility:'public',collaborative:false,moderated:false})).id;
+ const priv=(await api(A,'library_save',{title:'Tags privat',visibility:'private',collaborative:true,moderated:true})).id;
+ await api(A,'member',{library:priv,email:'reader@example.test',role:'reader'});
+ await api(A,'member',{library:priv,email:'writer@example.test',role:'contributor'});
+ const visible=await uploaded(A,null,true,['Pasito','pasito','Tag Öffentlich']);await api(A,'attach',{library:pub,revision:visible.revision});
+ const member=await uploaded(A,null,false,['Tag Mitglied']);await api(A,'attach',{library:priv,revision:member.revision});
+ const pending=await uploaded(B,null,false,['Tag Pending']);await api(B,'attach',{library:priv,revision:pending.revision});
+ await uploaded(A,null,false,['Tag Geheim']);await uploaded(B,null,false,['Tag Eigen']);
+ const removed=await uploaded(A,null,false,['Tag Gelöscht']);await api(A,'delete_figure',{figure:removed.figure});
+ const reader=await api(C,'tags');assert.equal(reader.complete,true);
+ for(const tag of ['Pasito','pasito','Tag Öffentlich','Tag Mitglied'])assert.ok(reader.tags.includes(tag),tag);
+ for(const tag of ['Tag Pending','Tag Geheim','Tag Eigen','Tag Gelöscht'])assert.ok(!reader.tags.includes(tag),tag);
+ const guest=await api(null,'tags');assert.ok(guest.tags.includes('Tag Öffentlich'));assert.ok(!guest.tags.includes('Tag Mitglied'));
+ const own=await api(B,'tags');assert.ok(own.tags.includes('Tag Eigen'));assert.ok(own.tags.includes('Tag Pending'));
+ assert.equal(own.tags.filter(t=>t==='Pasito').length,1);
+ await api(A,'member',{library:priv,email:'reader@example.test',role:'remove'});
+ assert.ok(!(await api(C,'tags')).tags.includes('Tag Mitglied'));
+ await role(C);await assert.rejects(db.query('select * from cloud_revisions'));
+ await assert.rejects(db.query("select cloud_private.cloud_api_before_tags('state','{}')"));
 });

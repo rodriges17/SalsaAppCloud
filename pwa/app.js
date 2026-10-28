@@ -1,6 +1,8 @@
+import { connectTagSuggestions } from './tag-suggestions.js';
+import { mountTagPicker } from './tag-picker.js';
 import { cloudLocalIndex } from './cloud-local.js';
 import { provenanceIcon, provenanceLabel } from './cloud-provenance.js';
-const APP_VERSION = '2026-10-28-library-edit-session-v1';
+const APP_VERSION = '2026-10-28-tag-multiselect-v1';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';
@@ -8,7 +10,7 @@ import { signedIn } from './cloud-api.js';
 import { initCloud, openCloud } from './cloud.js';
 import { importFigure } from './package.js';
 import { checksum } from './package.js';
-import { STATUSES, cleanTags, timeLabel, filterFigures, ABLoop } from './logic.js';
+import { STATUSES, timeLabel, filterFigures, ABLoop } from './logic.js';
 import { listFigures, figureVideos, figureMedia, saveFigure, deleteFigure, storageMessage, cleanupInterruptedImports, folderSupported, storageSettings, chooseFolder, connectFolder, allowFolderAccess, setStorageFolder, transferFigure } from './storage.js';
 
 const $ = id => document.getElementById(id);
@@ -207,7 +209,9 @@ $('tagsButton').onclick = () => {
 };
 $('closeTags').onclick = () => $('tagsDialog').close();
 
-function formValue() { return { title: $('figureTitle').value, description: $('figureDescription').value, status: $('figureStatus').value, tags: cleanTags($('figureTags').value) }; }
+const editorTags = mountTagPicker($('figureTags'));
+let stopEditorTags=null;
+function formValue() { return { title: $('figureTitle').value, description: $('figureDescription').value, status: $('figureStatus').value, tags: editorTags.value }; }
 function draftSignature(drafts) { return JSON.stringify(drafts.map(d => ({ id: d.id, name: d.name, confirmed: d.confirmed }))); }
 function isDirty() { return editor && (JSON.stringify(formValue()) !== editor.initialForm || draftSignature(editor.drafts) !== editor.initialDrafts); }
 async function openEditor(figure = null, imported = null) {
@@ -216,18 +220,19 @@ async function openEditor(figure = null, imported = null) {
   try {
     editor = { id: figure?.id ?? crypto.randomUUID(), revision: figure?.revision ?? null, storageFolder: figure?.storageFolder, drafts: [], busy: false, loading: !!figure && !imported, loadFailed: false, controller: new AbortController(), allowClose: false, replacing: null, reviewAll: false };
     $('figureTitle').value = figure?.title ?? ''; $('figureDescription').value = figure?.description ?? '';
-    $('figureStatus').value = figure?.status ?? 'Neu'; $('figureTags').value = figure?.tags.join(', ') ?? '';
+    $('figureStatus').value = figure?.status ?? 'Neu'; editorTags.setValue(figure?.tags ?? []); editorTags.setSuggestions(figures.flatMap(f=>f.tags));
     editor.initialForm = JSON.stringify(formValue()); editor.initialDrafts = draftSignature(editor.drafts);
     editor.importFingerprint = figure?.importFingerprint ?? null;
     if (imported) {
       editor.importFingerprint = imported.fingerprint;
       editor.drafts = imported.drafts.map(d => ({ ...d, id: crypto.randomUUID() }));
       $('figureTitle').value = imported.title; $('figureDescription').value = imported.description;
-      $('figureTags').value = imported.tags.join(', '); $('figureStatus').value = figure?.status ?? 'Neu';
+      editorTags.setValue(imported.tags); $('figureStatus').value = figure?.status ?? 'Neu';
     }
     $('editorHeading').textContent = figure ? 'Figur bearbeiten' : 'Figur hinzufügen'; setError('editorError', null);
     active = editor;
     renderDrafts(); setBusy(false); setEditorLoading(active.loading); $('editor').showModal(); pushRoute('editor');
+    stopEditorTags?.(); stopEditorTags=connectTagSuggestions(editorTags,figures.flatMap(f=>f.tags));
     opening = false;
     if (!active.loading) { if (!figure) $('figureTitle').focus(); return; }
     $('editorBack').focus();
@@ -318,7 +323,7 @@ $('editorForm').addEventListener('submit', async event => {
     if (editor === active) { active.allowClose = true; setBusy(false); history.back(); toast('Figur lokal gespeichert.'); }
   } catch (error) { if (editor === active) { setBusy(false); setError('editorError', storageMessage(error)); } }
 });
-function cleanupEditor() { editor?.controller.abort(); $('editor').close(); editor = null; $('videoFiles').value = ''; }
+function cleanupEditor() { stopEditorTags?.();stopEditorTags=null;editorTags.close(); editor?.controller.abort(); $('editor').close(); editor = null; $('videoFiles').value = ''; }
 
 const previewVideo = $('previewVideo');
 function openPreview(draft, replacing = null) {

@@ -1,3 +1,5 @@
+import { connectTagSuggestions } from './tag-suggestions.js';
+import { mountTagPicker } from './tag-picker.js';
 import { createFigureUpload } from './cloud-upload.js';
 import { cloudIcon } from './cloud-provenance.js';
 import { createLibrarySession } from './cloud-library-draft.js';
@@ -17,7 +19,7 @@ const node = (tag, text, cls) => { const n = document.createElement(tag); if (te
 const MB = value => `${(Number(value ?? 0) / 1000000).toFixed(1)} MB`;
 const action = (label, work) => { const b = node('button', label, 'secondary'); b.type = 'button'; b.onclick = () => Promise.resolve().then(work).catch(report); return b; };
 let uploadWorkflow = null, uploadRecovery, uploadViewError = null;
-let peopleView, librarySession = null;
+let peopleView, librarySession = null, uploadTagPicker = null, stopUploadTags = null;
 function clearLibrarySession(){if(librarySession?.active)librarySession.discard();librarySession=null;}
 function beginLibrarySession(detail){
  clearLibrarySession();
@@ -97,7 +99,7 @@ async function recoverAccess() {
 }
 const hasOwnArea = value => !!value?.me && (value.me.upload_enabled || value.own_figures?.length > 0);
 const initialArea = value => hasOwnArea(value) ? 'figures' : 'libraries';
-async function close() { if (busy || !await leaveLibraryDraft()) return; clearLibrarySession(); viewEpoch++; renderedView = null; clearTimeout(statusTimer); cancelThumbnails(); dialog.close(); body.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); }); source = null; hooks.closed?.(); }
+async function close() { if (busy || !await leaveLibraryDraft()) return; clearLibrarySession(); disposeUploadTags(); viewEpoch++; renderedView = null; clearTimeout(statusTimer); cancelThumbnails(); dialog.close(); body.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); }); source = null; hooks.closed?.(); }
 async function cloudBack() {
   if (accountDialog?.open) { dismissAccount(); return; }
   if (busy) return;
@@ -208,7 +210,7 @@ async function load(library = current, allowCache = false) {
     }
     cacheStatus(cached ? 'Änderungen werden geladen …' : 'Cloud-Inhalte werden geladen …');
     const { snapshot, detail: freshDetail } = await cloudReadState.refresh(owner, library, { available, force: allowCache === 'refresh', onAccessChanged: () => {
-      if (active()) { clearLibrarySession(); cancelThumbnails(); clearPreviews(body); body.replaceChildren(); renderedView = null; state = null; displayedOwner = null; cached = null; cloudNavigation.replaceChildren(); cloudNavigation.hidden = true; renderAccount(); }
+      if (active()) { clearLibrarySession(); disposeUploadTags(); cancelThumbnails(); clearPreviews(body); body.replaceChildren(); renderedView = null; state = null; displayedOwner = null; cached = null; cloudNavigation.replaceChildren(); cloudNavigation.hidden = true; renderAccount(); }
     } });
     if (!active()) return;
     // Do not interrupt a form, an active download, expanded history or a video preview.
@@ -225,7 +227,7 @@ async function load(library = current, allowCache = false) {
     if (epoch !== viewEpoch || !dialog.open || owner && owner !== cloudIdentity()) return;
     if (error.cacheCleared && owner) {
       if (epoch !== viewEpoch || !dialog.open || owner !== cloudIdentity()) return;
-      clearLibrarySession(); cancelThumbnails(); clearPreviews(body); body.replaceChildren(); state = null; displayedOwner = null; cached = null; cloudNavigation.replaceChildren(); cloudNavigation.hidden = true; renderAccount();
+      clearLibrarySession(); disposeUploadTags(); cancelThumbnails(); clearPreviews(body); body.replaceChildren(); state = null; displayedOwner = null; cached = null; cloudNavigation.replaceChildren(); cloudNavigation.hidden = true; renderAccount();
     }
     if (cached) cacheStatus(`Aktualisierung nicht möglich – letzter geladener Stand wird angezeigt. ${lastStand(cached.updatedAt)}`);
     else { cacheStatus(''); report(error); if (!body.childElementCount) body.append(action('Erneut versuchen', () => load(library, true))); }
@@ -238,7 +240,7 @@ async function renderCloud(library, detail) {
   if (area === 'initial' || area === 'figures' && !source && !hasOwnArea(state)) area = initialArea(state);
   renderedView = { owner: cloudIdentity(), area, library };
   if (!state.me && !['figures', 'libraries'].includes(area)) area = 'libraries';
-  cancelThumbnails(); clearPreviews(body); body.replaceChildren(); body.parentElement.scrollTop = 0;
+  disposeUploadTags(); cancelThumbnails(); clearPreviews(body); body.replaceChildren(); body.parentElement.scrollTop = 0;
   posterView = createPosterView(body, state.me);
   loginTrigger.hidden = !!state.me; if (state.me) dismissLogin();
   const toolbar = node('div', undefined, 'cloud-tabs');
@@ -613,7 +615,7 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
 async function attachForm(revision) {
   if (!await leaveLibraryDraft()) return;
   viewEpoch++; renderedView = null;
-  cancelThumbnails(); clearPreviews(body); body.replaceChildren();
+  disposeUploadTags(); cancelThumbnails(); clearPreviews(body); body.replaceChildren();
   body.append(action('Zurück zu Meine Cloud-Figuren', () => navigate('figures')));
   const box = section(`„${revision.title}“ zuordnen`);
   box.append(node('p', versionLabel(revision)));
@@ -736,16 +738,23 @@ function renderUploadRecovery(afterSaved = uploadRecovery?.afterSaved) {
     if (uploadViewError) { uploadRecovery.append(node('p', uploadViewError)); retry('Ansicht erneut laden', async () => result); }
   }
 }
+function disposeUploadTags(){stopUploadTags?.();stopUploadTags=null;uploadTagPicker?.destroy();uploadTagPicker=null;}
 async function publishForm() {
   const me = state.me;
   if (!me?.upload_enabled) { body.append(node('p', 'Für Cloud-Uploads brauchst du die Freischaltung des Administrators.')); return; }
   if (librarySession?.suspended) body.append(action('Zurück zur Bibliotheksbearbeitung', () => run('Bibliotheksbearbeitung wird geladen …', () => resumeLibraryUpload())));
-  const local = source, records = await figureVideos(local), libs = state.libraries.filter(l => l.contribute);
+  const local = source, account = cloudIdentity(), epoch = viewEpoch;
+  const records = await figureVideos(local);
+  if (!dialog.open || source !== local || account !== cloudIdentity() || epoch !== viewEpoch) return;
+  const libs = state.libraries.filter(l => l.contribute);
   const box = section(`„${local.title}“ hochladen`), selected = [];
   const step = (number, title) => { const group = node('div', undefined, 'upload-step'); group.append(node('h4', `${number} · ${title}`)); box.append(group); return group; };
   const videoStep = step(1, 'Video'), targetStep = step(2, 'Ziel'), optionsStep = step(3, 'Hochladen');
   for (const record of records) selected.push([checkbox(videoStep, `${record.name || 'Video'} · ${MB(record.blob.size)}`, true), record]);
   videoStep.append(node('p', 'Maximal 50 MB pro Video. Identische Videos werden erkannt und nur einmal gespeichert. Bereits zugängliche Videos können ohne erneuten Upload übernommen werden.'));
+  const tagLabel=node('label','Tags');tagLabel.htmlFor='cloudUploadTags';const tagInput=node('input');tagInput.id='cloudUploadTags';targetStep.append(tagLabel,tagInput);
+  const tags=uploadTagPicker=mountTagPicker(tagInput,{value:local.tags,suggestions:local.tags});
+  stopUploadTags=connectTagSuggestions(tags,local.tags);
   const library = select(targetStep, 'Bibliothek', [['', 'Nur in Meine Cloud-Figuren hochladen'], ...(librarySession?.suspended ? [] : libs.map(l => [l.id, l.title]))]);
   // Reservations can create a figure before any revision exists. They are not
   // valid version targets until the first upload has completed.
@@ -819,7 +828,7 @@ async function publishForm() {
       if (workflow.currentAccount) renderUploadRecovery(afterSaved);
     };
     try {
-      const result = await workflow.start({ owner, local, videos, target: targets.find(f => f.id === figure.value), library: libraryId, variant: explicitVariant.checked, allowed: allowed.checked, remoteChanged: localIndex.remoteChanged(local), publicLibrary: state.libraries.find(l => l.id === libraryId)?.visibility === 'public', fileLimit: CLOUD_FILE_LIMIT }, {
+      const result = await workflow.start({ owner, local:{...local,tags:tags.value}, videos, target: targets.find(f => f.id === figure.value), library: libraryId, variant: explicitVariant.checked, allowed: allowed.checked, remoteChanged: localIndex.remoteChanged(local), publicLibrary: state.libraries.find(l => l.id === libraryId)?.visibility === 'public', fileLimit: CLOUD_FILE_LIMIT }, {
         confirm: hooks.confirm,
         progress: value => {
           if (!workflow.currentAccount) return;
@@ -974,7 +983,7 @@ export function initCloud(callbacks) {
   addEventListener('cloud-session-changed', event => {
     uploadWorkflow?.cancel(); uploadRecovery.hidden = true; uploadRecovery.replaceChildren();
     clearLibrarySession(); document.querySelectorAll('.cloud-unsaved-dialog').forEach(prompt => prompt.dispatchEvent(new Event('cancel', { cancelable: true }))); document.querySelectorAll('.cloud-library-picker').forEach(picker => { picker.close(); picker.remove(); }); peopleView.reset(); viewEpoch++; renderedView = null; state = null; displayedOwner = null; localInventoryEpoch++; localFigures = []; localUpdates = [];
-    cancelThumbnails(); clearPreviews(body); body.replaceChildren(); cloudNavigation.replaceChildren(); cloudNavigation.hidden = true; errorBox.hidden = true; cacheStatus('');
+    disposeUploadTags(); cancelThumbnails(); clearPreviews(body); body.replaceChildren(); cloudNavigation.replaceChildren(); cloudNavigation.hidden = true; errorBox.hidden = true; cacheStatus('');
     if (loginTrigger) loginTrigger.hidden = signedIn();
     dismissAccount(); accountTrigger.hidden = true; accountDialog.replaceChildren();
     // Explicit login/logout reload their own destination; token rotation leaves forms intact.
@@ -1006,7 +1015,7 @@ export function initCloud(callbacks) {
 }
 export async function openCloud(local = null, library = null) {
   if (busy || dialog.open) return; if (local && !signedIn()) return; source = local; current = library; area = 'initial';
-  errorBox.hidden = true; if (displayedOwner !== cloudIdentity()) { cloudNavigation.replaceChildren(); cloudNavigation.hidden = true; } if (displayedOwner !== cloudIdentity() || local) { cancelThumbnails(); clearPreviews(body); body.replaceChildren(); }
+  errorBox.hidden = true; if (displayedOwner !== cloudIdentity()) { cloudNavigation.replaceChildren(); cloudNavigation.hidden = true; } if (displayedOwner !== cloudIdentity() || local) { disposeUploadTags(); cancelThumbnails(); clearPreviews(body); body.replaceChildren(); }
   // Do not let dialog focus restoration reopen the search keyboard on return.
   if (document.activeElement?.matches('input, textarea, [contenteditable=true]')) document.activeElement.blur();
   loginTrigger.hidden = signedIn(); accountTrigger.hidden = !state?.me || displayedOwner !== cloudIdentity();

@@ -40,3 +40,6 @@ Der gemeinsame Ablauf, der Videos einer lokalen Figur prüft und bei Bedarf übe
 
 **Bibliotheks-Bearbeitungssitzung**:
 Der im Arbeitsspeicher gehaltene Entwurf einer bestehenden Bibliothek mit Angaben, Figuren und Reihenfolge. Die Sitzung umfasst Bearbeiten, Unterbrechen für einen Figuren-Upload, Fortsetzen, Speichern, Verwerfen sowie Fehler- und Konfliktzustände. Sie ist an die aktuelle Anmeldesitzung gebunden und wird nach einem App-Neustart nicht wiederhergestellt. Bereits hochgeladene Cloud-Figuren bestehen unabhängig vom Bibliotheksentwurf.
+
+**Tag-Auswahl**:
+Das durchsuchbare Mehrfachauswahlfeld mit vorhandenen Vorschlägen und einzeln entfernbaren Zuordnungen. Die Suche ignoriert Groß-/Kleinschreibung, die Tag-Identität nicht.
