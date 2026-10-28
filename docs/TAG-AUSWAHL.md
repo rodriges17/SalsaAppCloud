@@ -2,7 +2,7 @@
 
 Cloud-PWA und Android verwenden beim Erstellen/Bearbeiten einer Figur und im Cloud-Upload dasselbe Mehrfachauswahlfeld. Ausgewählte Tags erscheinen als einzeln entfernbare Chips. Das Dropdown bleibt nach der Auswahl offen; Teilbegriffe werden ohne Beachtung der Groß-/Kleinschreibung gefunden. Pfeiltasten, Enter, Tab und Escape unterstützen die Tastaturbedienung.
 
-Tags behalten ihre exakte Identität: `Pasito` und `pasito` sind unterschiedliche Tags. Neue Tags werden ausschließlich über „Neues Tag … anlegen“ hinzugefügt, sofern die exakte Schreibweise noch nicht vorhanden ist. Die bisherigen Stringarrays in Figuren, Revisionen, ZIPs und Backups bleiben erhalten; es gibt weder eine globale Umbenennung noch eine automatische Zusammenführung. Die Tag-Filter der Übersicht bleiben unverändert. Neue Zuordnungen sind auf 100 Tags pro Figur und 160 Unicode-Zeichen je Tag begrenzt.
+Tags behalten ihre exakte Identität: `Pasito` und `pasito` sind unterschiedliche Tags. Neue Tags werden ausschließlich über „Neues Tag … anlegen“ hinzugefügt, sofern die exakte Schreibweise noch nicht vorhanden ist. Die bisherigen Stringarrays in Figuren, Revisionen, ZIPs und Backups bleiben erhalten; es gibt weder eine globale Umbenennung noch eine automatische Zusammenführung. Die Tag-Filter der Übersicht bleiben unverändert. Neue Zuordnungen sind auf 100 Tags pro Figur und 160 Zeichen gemäß den bestehenden Austauschformaten je Tag begrenzt.
 
 ## Vorschläge und Offline-Betrieb
 

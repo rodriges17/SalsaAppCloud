@@ -30,8 +30,8 @@ export function mountTagPicker(input, {value = [], suggestions = [], onChange = 
   const matches=all.filter(tag=>tag.toLocaleLowerCase('de').includes(query));list.replaceChildren();
   for(const tag of matches){const b=make('button','tag-picker-option',tag);b.type='button';b.setAttribute('role','option');b.setAttribute('aria-label',tag);b.setAttribute('aria-selected',String(selected.includes(tag)));b.onclick=()=>select(tag);list.append(b);}
   const candidate=input.value.trim();create.hidden=!candidate || all.includes(candidate);
-  create.textContent=`Neues Tag „${candidate}“ anlegen`;create.disabled=[...candidate].length>160 || selected.length>=100;
-  if([...candidate].length>160)message.textContent='Ein Tag darf höchstens 160 Zeichen haben.';
+  create.textContent=`Neues Tag „${candidate}“ anlegen`;create.disabled=candidate.length>160 || selected.length>=100;
+  if(candidate.length>160)message.textContent='Ein Tag darf höchstens 160 Zeichen haben.';
   else if(selected.length>=100)message.textContent='Maximal 100 Tags pro Figur.';
   else message.textContent=!matches.length && !candidate ? 'Noch keine Tags vorhanden.' : '';
   panel.hidden=!opened;input.setAttribute('aria-expanded',String(opened));toggle.setAttribute('aria-expanded',String(opened));
