@@ -118,7 +118,8 @@ test('cloud keeps its brand header, settings and back navigation fixed',async({p
  await back.tap();await expect(page.locator('#cloudDialog')).not.toBeVisible();await expect(page.locator('#infoButton')).toBeVisible();
 });
 test('libraries and own cloud figures are separate; creation is explicit and cancellable',async({page})=>{
- await signIn(page);const calls=await mock(page,true,true);await start(page);await page.locator('#cloudButton').tap();
+ // Navigation uses a known server poster instead of depending on video frame extraction.
+ await signIn(page);const calls=await mock(page,true,true,true,{posters:new Map([['rev-1',{poster:POSTER,kind:'frame'}]])});await start(page);await page.locator('#cloudButton').tap();
  await expect(page.getByRole('heading',{name:'Meine Cloud-Figuren',exact:true})).toBeVisible();
  await expect(page.locator('.cloud-thumbnail')).toHaveAttribute('src', /^blob:/);
  await page.getByRole('button',{name:'Bibliotheken',exact:true}).tap();
