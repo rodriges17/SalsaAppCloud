@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   test:
-    runs-on: macos-15
+    runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -30,10 +30,10 @@ jobs:
         with:
           deno-version: v2.x
       - run: deno check --node-modules-dir=manual supabase/functions/cloud/index.ts
-      - run: npx playwright install chromium webkit
+      - run: npx playwright install --with-deps chromium webkit
       - name: Create local synthetic test videos
         run: |
-          command -v ffmpeg >/dev/null || brew install ffmpeg
+          command -v ffmpeg >/dev/null || (sudo apt-get update && sudo apt-get install -y ffmpeg)
           mkdir -p web-tests/fixtures
           ffmpeg -f lavfi -i testsrc2=size=320x180:rate=12 -t 6 -c:v libx264 -pix_fmt yuv420p -movflags +faststart web-tests/fixtures/clip.mp4
           ffmpeg -f lavfi -i testsrc2=size=180x320:rate=12 -t 5 -c:v libx264 -pix_fmt yuv420p -movflags +faststart web-tests/fixtures/portrait.mp4
@@ -68,7 +68,7 @@ jobs:
         uses: actions/deploy-pages@v4
   live-smoke:
     needs: deploy
-    runs-on: macos-15
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -77,7 +77,7 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - run: npx playwright install chromium webkit
+      - run: npx playwright install --with-deps chromium webkit
       - name: Verify touch import on the published PWA
         run: node web-tests/live-check.mjs
       - uses: actions/upload-artifact@v4
