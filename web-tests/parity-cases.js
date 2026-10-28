@@ -1,8 +1,9 @@
+import {runCloudPurCase} from './cloud-pur-case.js';
 import { runTagPickerCase, runTagUploadCase, runTagCatalogCase, runTagLimitsCase } from './tag-picker-case.js';
 import { runNavigationHoverCase } from './navigation-hover-case.js';
 import { runStorageSettingsCase } from './storage-settings-case.js';
 // The same behavior contract runs against the PWA and the bundled Android UI.
-export const PARITY_CASES = ['tag-picker-limits', 'tag-picker-cloud-catalog', 'tag-picker-editor', 'tag-picker-upload', 'navigation-return-hover', 'storage-settings-status', 'library-share-links', 'zip-save-feedback', 'menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change', 'cloud-cache-frame-reuse', 'cloud-guest-public-first', 'cloud-library-download', 'cloud-guest-no-publish', 'cloud-single-direct-download', 'cloud-library-order', 'cloud-local-state', 'cloud-library-edit-session', 'cloud-library-edit-upload', 'cloud-library-edit-duplicate'];
+export const PARITY_CASES = ['cloud-pur-header', 'cloud-pur-figure', 'cloud-pur-manage', 'cloud-pur-manage-readonly', 'cloud-pur-manage-admin', 'tag-picker-limits', 'tag-picker-cloud-catalog', 'tag-picker-editor', 'tag-picker-upload', 'navigation-return-hover', 'storage-settings-status', 'library-share-links', 'zip-save-feedback', 'menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change', 'cloud-cache-frame-reuse', 'cloud-guest-public-first', 'cloud-library-download', 'cloud-guest-no-publish', 'cloud-single-direct-download', 'cloud-library-order', 'cloud-local-state', 'cloud-library-edit-session', 'cloud-library-edit-upload', 'cloud-library-edit-duplicate'];
 export async function runParityCase(page, { root, fixture, native = false, scenario, consoleErrors = [], browserName = 'chromium' }) {
  const assert = (value, message) => { if (!value) throw new Error(message); };
  const frame = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -17,6 +18,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   },{root,fixture,count,fingerprint});
   await page.waitForFunction(count=>document.querySelectorAll('.figure-card').length===count,count);
  };
+ if(scenario.startsWith('cloud-pur-'))return runCloudPurCase(page,{root,fixture,scenario});
  if(scenario==='tag-picker-limits')return runTagLimitsCase(page,{root,seed});
  if(scenario==='tag-picker-cloud-catalog')return runTagCatalogCase(page,{root,seed});
  if(scenario==='tag-picker-upload')return runTagUploadCase(page,{root,fixture,seed});
@@ -292,12 +294,12 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   await page.locator('.cloud-own-figure summary').first().click();
   if(scenario==='cloud-repair-missing'){
    await page.locator('.cloud-local-status').filter({hasText:'Lokale Dateien fehlen'}).waitFor();
-   assert(await page.getByRole('button',{name:'Lokale Figur öffnen',exact:true}).count()===0,'Unreadable files count as locally available');
+   assert(await page.getByRole('button',{name:'Lokal öffnen',exact:true}).count()===0,'Unreadable files count as locally available');
    await page.getByRole('button',{name:'Lokal übernehmen',exact:true}).click();
    await page.locator('#cloudImportConflict').getByRole('button',{name:'Vorhandene Figur ersetzen',exact:true}).click();
    await page.waitForFunction(()=>!document.querySelector('#cloudDialog').open);
   }else{
-   const open=page.getByRole('button',{name:'Lokale Figur öffnen',exact:true});await open.waitFor();await open.click();
+   const open=page.getByRole('button',{name:'Lokal öffnen',exact:true});await open.waitFor();await open.click();
    await page.locator('#editor').waitFor();
   }
   const saved=await page.evaluate(async root=>(await(await import(root+'storage.js')).listFigures()),root);
@@ -454,6 +456,8 @@ async function runLibrarySessionCase(page,{root,fixture,scenario,seed}){
  await page.locator('[data-library-figure="entry-1"]').getByRole('button',{name:'Nach oben',exact:true}).click();
  await page.getByRole('tab',{name:'Einstellungen',exact:true}).click();await page.getByLabel('Name',{exact:true}).fill('Mein Entwurf');await page.locator('#cloudBody').getByLabel('Beschreibung',{exact:true}).fill('Ungespeicherter Text');
  if(scenario==='cloud-library-edit-session'){
+  await page.locator('#cloudSettings').click();await page.locator('#infoDialog [data-nav=figures]').click();await page.locator('.cloud-unsaved-dialog').getByRole('button',{name:'Weiter bearbeiten',exact:true}).click();await page.locator('#closeInfoTop').click();
+  assert(await page.getByLabel('Name',{exact:true}).inputValue()==='Mein Entwurf','Settings navigation lost the unsaved library draft');
   conflict=true;await page.locator('#cloudBack').click();await page.locator('.cloud-unsaved-dialog').getByRole('button',{name:'Speichern',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.cloud-library-conflict')?.hidden===false);
   assert(await page.getByLabel('Name',{exact:true}).inputValue()==='Mein Entwurf','Failed leave lost title');
   await page.getByRole('button',{name:'Aktuellen Stand neu laden',exact:true}).click();await page.locator('#confirmCancel').click();assert(await page.locator('#cloudBody').getByLabel('Beschreibung',{exact:true}).inputValue()==='Ungespeicherter Text','Declining reload lost description');
