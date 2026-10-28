@@ -18,6 +18,19 @@ import { createPosterView, posterPayload } from './cloud-posters.js';
 const node = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
 const MB = value => `${(Number(value ?? 0) / 1000000).toFixed(1)} MB`;
 const action = (label, work) => { const b = node('button', label, 'secondary'); b.type = 'button'; b.onclick = () => Promise.resolve().then(work).catch(report); return b; };
+// Lucide icon shapes (ISC), kept local so Cloud UI also works offline.
+const UI_ICONS = {"play":[["path",{"d":"M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"}]],"tag":[["path",{"d":"M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"}],["circle",{"cx":"7.5","cy":"7.5","r":".5","fill":"currentColor"}]],"settings":[["path",{"d":"M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"}],["circle",{"cx":"12","cy":"12","r":"3"}]],"refresh-cw":[["path",{"d":"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"}],["path",{"d":"M21 3v5h-5"}],["path",{"d":"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"}],["path",{"d":"M8 16H3v5"}]],"user-round":[["circle",{"cx":"12","cy":"8","r":"5"}],["path",{"d":"M20 21a8 8 0 0 0-16 0"}]],"library":[["path",{"d":"m16 6 4 14"}],["path",{"d":"M12 6v14"}],["path",{"d":"M8 8v12"}],["path",{"d":"M4 4v16"}]],"copy-plus":[["line",{"x1":"15","x2":"15","y1":"12","y2":"18"}],["line",{"x1":"12","x2":"18","y1":"15","y2":"15"}],["rect",{"width":"14","height":"14","x":"8","y":"8","rx":"2","ry":"2"}],["path",{"d":"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"}]],"shield-check":[["path",{"d":"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"}],["path",{"d":"m9 12 2 2 4-4"}]],"shield-off":[["path",{"d":"m2 2 20 20"}],["path",{"d":"M5 5a1 1 0 0 0-1 1v7c0 5 3.5 7.5 7.67 8.94a1 1 0 0 0 .67.01c2.35-.82 4.48-1.97 5.9-3.71"}],["path",{"d":"M9.309 3.652A12.252 12.252 0 0 0 11.24 2.28a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1v7a9.784 9.784 0 0 1-.08 1.264"}]],"trash-2":[["path",{"d":"M10 11v6"}],["path",{"d":"M14 11v6"}],["path",{"d":"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"}],["path",{"d":"M3 6h18"}],["path",{"d":"M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"}]]};
+function uiIcon(name) {
+ const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');
+ for(const [key,value] of Object.entries({viewBox:'0 0 24 24',fill:'none',stroke:'currentColor','stroke-width':1.7,'stroke-linecap':'round','stroke-linejoin':'round','aria-hidden':'true',focusable:'false'}))svg.setAttribute(key,value);
+ for(const [tag,attrs] of UI_ICONS[name]){const shape=document.createElementNS(ns,tag);for(const [key,value] of Object.entries(attrs))shape.setAttribute(key,value);svg.append(shape);}
+ return svg;
+}
+function tagPills(tags=[]) {
+ const list=node('ul',undefined,'cloud-tag-pills');list.setAttribute('aria-label','Tags');list.setAttribute('role','list');
+ for(const tag of tags){const item=node('li',undefined,'cloud-tag-pill');item.append(uiIcon('tag'),node('span',tag));list.append(item);}
+ return list;
+}
 let uploadWorkflow = null, uploadRecovery, uploadViewError = null;
 let peopleView, librarySession = null, uploadTagPicker = null, stopUploadTags = null;
 function clearLibrarySession(){if(librarySession?.active)librarySession.discard();librarySession=null;}
@@ -80,9 +93,9 @@ function libraryCard(library, parent = body) {
 }
 async function run(message, work, errorTarget = errorBox, retainStatus = false) {
   if (busy) return; busy = true; statusBox.closest('footer').setAttribute('aria-busy', 'true'); errorBox.hidden = true; errorTarget.hidden = true; statusBox.textContent = message;
-  body.inert = true; if (loginDialog) loginDialog.inert = true; document.getElementById('cloudBack').disabled = true; dialog.querySelectorAll('[data-nav], #cloudNavigation button, .cloud-refresh-trigger, #cloudAccountOpen').forEach(button => { button.disabled = true; });
+  body.inert = true; if (loginDialog) loginDialog.inert = true; document.getElementById('cloudBack').disabled = true; dialog.querySelectorAll('[data-nav], #cloudNavigation button, .cloud-refresh-trigger, #cloudAccountOpen, #cloudSettings').forEach(button => { button.disabled = true; });
   try { return await work(); } catch (error) { if (error.accessChanged) { clearLibrarySession(); await recoverAccess(); } if (retainStatus) statusBox.textContent = error?.message ?? 'Download fehlgeschlagen.'; report(error, errorTarget.isConnected ? errorTarget : errorBox); }
-  finally { busy = false; statusBox.closest('footer').setAttribute('aria-busy', 'false'); body.inert = false; if (loginDialog) loginDialog.inert = false; document.getElementById('cloudBack').disabled = false; dialog.querySelectorAll('[data-nav], #cloudNavigation button, .cloud-refresh-trigger, #cloudAccountOpen').forEach(button => { button.disabled = false; }); if (!retainStatus) statusBox.textContent = ''; if (authReloadPending && dialog.open) { authReloadPending = false; source = null; area = 'initial'; void load(null, true); } }
+  finally { busy = false; statusBox.closest('footer').setAttribute('aria-busy', 'false'); body.inert = false; if (loginDialog) loginDialog.inert = false; document.getElementById('cloudBack').disabled = false; dialog.querySelectorAll('[data-nav], #cloudNavigation button, .cloud-refresh-trigger, #cloudAccountOpen, #cloudSettings').forEach(button => { button.disabled = false; }); if (!retainStatus) statusBox.textContent = ''; if (authReloadPending && dialog.open) { authReloadPending = false; source = null; area = 'initial'; void load(null, true); } }
 }
 async function recoverAccess() {
   const owner = cloudIdentity(), epoch = viewEpoch;
@@ -520,21 +533,25 @@ function revisionCard(parent, rev, label, parentTitle = parent.querySelector('h3
   box.append(heading);
   if (rev.title !== parentTitle) box.append(node('p', rev.title, 'revision-title'));
   parent.append(box);
-  box.append(node('p', rev.description), node('p', rev.tags.join(' · ')));
+  box.append(node('p', rev.description)); if(rev.tags?.length)box.append(tagPills(rev.tags));
   downloadControls(box, rev);
 }
+const videoSize=value=>Number.isFinite(Number(value)) && Number(value)>0?MB(value):'Größe unbekannt';
 function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}) {
   if (!rev.videos.length) return;
-  const chosen = [], localLabels = [], multiple = rev.videos.length > 1;
+  const chosen = [], multiple = rev.videos.length > 1;
   const localStatus = node('p', '', 'cloud-local-status'); localStatus.hidden = true; localStatus.setAttribute('role', 'status');
-  box.firstElementChild?.after(localStatus);
+  if(box.firstElementChild)box.firstElementChild.after(localStatus);else box.append(localStatus);
   const choiceHeading = multiple ? node('h4', 'Videos zum Herunterladen auswählen') : null; if (choiceHeading) box.append(choiceHeading);
   for (const v of rev.videos) {
-    const label = `${v.name || 'Video'} · ${MB(v.size)}`;
-    const check = multiple ? checkbox(box, label, true) : null;
-    const localLabel = node('p', label); box.append(localLabel); localLabel.hidden = multiple; localLabels.push(localLabel);
+    const row=node('div',undefined,'cloud-video-row');box.append(row);
+    const check = multiple ? checkbox(row, `Video „${v.name || 'Ohne Namen'}“ lokal übernehmen`, true) : null;
+    if(check)check.parentElement.querySelector('span').className='sr-only';
     chosen.push([check, v]);
-    box.append(action(`Video: ${v.name || 'Ohne Namen'}`, () => previewVideo(box, rev, v)));
+    const play=action('',()=>previewVideo(box,rev,v));play.className='cloud-video-play';
+    play.setAttribute('aria-label',`Video „${v.name || 'Ohne Namen'}“ abspielen`);play.setAttribute('aria-description',videoSize(v.size));
+    const copy=node('span',undefined,'cloud-video-copy');copy.append(node('span',v.name || 'Ohne Namen','cloud-video-name'),node('small',videoSize(v.size),'cloud-video-size'));
+    play.append(uiIcon('play'),copy);row.append(play);
   }
   const fingerprint = selected => `cloud:${rev.id}:${selected.map(v => v.id).join(',')}`;
   const label = own ? 'Lokal übernehmen' : multiple ? 'Ausgewählte Videos in meine Figuren übernehmen' : 'In meine Figuren übernehmen';
@@ -599,11 +616,10 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
     cloudStatusLabel(localStatus, local.label, local.modified);
     localStatus.dataset.modified = String(local.modified); localStatus.title = local.detail;
     if (choiceHeading) choiceHeading.hidden = local.available;
-    chosen.forEach(([check], index) => {
+    chosen.forEach(([check]) => {
       if (check) check.parentElement.hidden = local.available;
-      localLabels[index].hidden = multiple && !local.available;
     });
-    take.textContent = local.available ? 'Lokale Figur öffnen' : label;
+    take.textContent = local.available ? 'Lokal öffnen' : label;
     take.disabled = accessRequired;
     repair.hidden = !local.modified;
     take.title = local.available ? 'Die zugehörige lokale Figur öffnen.' : '';
@@ -629,10 +645,14 @@ let posterView;
 let localFigures = [];
 function cancelThumbnails() { posterView?.dispose(); posterView = null; }
 function thumbnail(heading, revision) { posterView?.add(heading, revision); }
+function managementAction(label,icon,work,destructive=false){
+ const button=action('',work);button.className='cloud-manage-action'+(destructive?' destructive':'');
+ button.append(uiIcon(icon),node('span',label));return button;
+}
 function variantButton(box, revision) {
-  box.append(action('Eigene Variante erstellen', async () => {
+  box.append(managementAction('Variante erstellen','copy-plus', async () => {
     if (!await leaveLibraryDraft()) return;
-    if (!await hooks.confirm({ title: 'Eigene Variante erstellen?', message: 'Die Variante ist unabhängig bearbeitbar. Vorhandene Videos und Bilder werden ohne zusätzliche Dateikopie referenziert.', ok: 'Variante erstellen' })) return;
+    if (!await hooks.confirm({ title: 'Variante erstellen?', message: 'Die Variante ist unabhängig bearbeitbar. Vorhandene Videos und Bilder werden ohne zusätzliche Dateikopie referenziert.', ok: 'Variante erstellen' })) return;
     await run('Variante erstellen …', async () => { await cloudCall('variant', { revision: revision.id }); area = 'figures'; await load(null); });
   }));
 }
@@ -662,7 +682,7 @@ function ownFigures() {
       if (mounted) return; mounted = true;
       const tabs = node('div', undefined, 'cloud-library-editor-tabs cloud-own-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', `Optionen für ${latest?.title ?? 'Cloud-Figur'}`);
       const videos = node('div', undefined, 'cloud-own-panel'), box = node('div', undefined, 'cloud-own-panel');
-      const videoTab = action('Videos & lokal', () => chooseTab('videos')), manageTab = action('Verwalten', () => chooseTab('manage'));
+      const videoTab = action('Figur', () => chooseTab('videos')), manageTab = action('Verwalten', () => chooseTab('manage'));
       const key = `cloud-own-${f.id}`;
       for (const [tab, panel, suffix] of [[videoTab, videos, 'videos'], [manageTab, box, 'manage']]) {
         tab.id = `${key}-${suffix}-tab`; tab.setAttribute('role', 'tab'); tab.setAttribute('aria-controls', `${key}-${suffix}`);
@@ -681,28 +701,29 @@ function ownFigures() {
       }
       tabs.append(videoTab, manageTab); content.append(tabs, videos, box);
       if (latest) {
-        videos.append(node('h4', 'Videos und lokale Kopie'));
         if (latest.description) videos.append(node('p', latest.description));
-        if (latest.tags?.length) videos.append(node('p', latest.tags.join(' · ')));
+        if (latest.tags?.length) videos.append(tagPills(latest.tags));
         downloadControls(videos, { ...latest, figure_id: f.id }, { own: true, revisionIds: revisions.map(r => r.id) });
       } else videos.append(node('p', 'Der Upload dieser Figur ist noch nicht abgeschlossen.'));
-    box.append(node('p', `Öffentliche Veröffentlichung: ${f.public_allowed ? 'Erlaubt' : 'Nicht erlaubt'}`));
-    if (f.owner_id === state.me?.id) box.append(action(f.public_allowed ? 'Öffentliche Veröffentlichung widerrufen' : 'Öffentliche Veröffentlichung erlauben', () => run('Freigabe ändern …', async () => {
-      if (f.public_allowed && !await hooks.confirm({ title: 'Öffentliche Freigabe widerrufen?', message: 'Alle Zuordnungen zu öffentlichen Bibliotheken werden entfernt. Private Zuordnungen bleiben bestehen.', ok: 'Freigabe widerrufen' })) return;
-      await cloudCall('public_permission', { figure: f.id, allowed: !f.public_allowed }); await load(null);
-    })));
-    box.append(node('p', 'Die Freigabe gilt für diese Figur und alle öffentlichen Bibliotheken, denen sie zugeordnet ist. Beim Widerrufen werden öffentliche Zuordnungen entfernt. Private Bibliotheken bleiben unverändert.'));
-    if (latest) {
-      if (state.me.upload_enabled) variantButton(box, latest);
-
-      const assign = action('Einer Bibliothek zuordnen', () => attachForm(latest)); assign.className = 'secondary'; if (state.me.upload_enabled) box.append(assign);
-
-    }
-    if (f.owner_id === state.me?.id || state.me?.is_admin) box.append(action('Cloud-Figur samt Videos löschen', async () => {
-      const affected = await cloudCall('delete_preview', { figure: f.id });
-      if (!await hooks.confirm({ title: 'Cloud-Figur löschen?', message: `Die Cloudfigur wird gelöscht und aus folgenden Bibliotheken entfernt: ${affected.libraries.join(', ') || 'keinen'}. Lokale Kopien bleiben erhalten.`, ok: 'Cloud-Figur löschen' })) return;
-      await run('Cloud-Figur löschen …', async () => { await cloudCall('delete_figure', { figure: f.id, expected_token: f.content_token }); await load(null); });
-    }));
+      const permission=f.public_allowed?'Erlaubt':'Nicht erlaubt';
+      const consent=node('div',undefined,'cloud-consent');consent.dataset.allowed=String(f.public_allowed);
+      consent.setAttribute('role','status');consent.setAttribute('aria-label',`Öffentliche Freigabe: ${permission}`);
+      const consentCopy=node('span');consentCopy.append(node('span','Öffentliche Freigabe'),node('strong',permission));
+      consent.append(uiIcon(f.public_allowed?'shield-check':'shield-off'),consentCopy);box.append(consent);
+      const actions=node('div',undefined,'cloud-manage-actions');box.append(actions);
+      if(latest && state.me?.upload_enabled){
+        actions.append(managementAction('Bibliothek zuordnen','library',()=>attachForm(latest)));
+        variantButton(actions,latest);
+      }
+      if(f.owner_id===state.me?.id)actions.append(managementAction(f.public_allowed?'Freigabe widerrufen':'Freigabe erlauben',f.public_allowed?'shield-off':'shield-check',()=>run('Freigabe ändern …',async()=>{
+        if(f.public_allowed && !await hooks.confirm({title:'Öffentliche Freigabe widerrufen?',message:'Alle Zuordnungen zu öffentlichen Bibliotheken werden entfernt. Private Zuordnungen bleiben bestehen.',ok:'Freigabe widerrufen'}))return;
+        await cloudCall('public_permission',{figure:f.id,allowed:!f.public_allowed});await load(null);
+      })));
+      if(f.owner_id===state.me?.id || state.me?.is_admin)actions.append(managementAction('Cloud-Figur löschen','trash-2',async()=>{
+        const affected=await cloudCall('delete_preview',{figure:f.id});
+        if(!await hooks.confirm({title:'Cloud-Figur löschen?',message:`Die Cloud-Figur und ihre Videos werden gelöscht und aus folgenden Bibliotheken entfernt: ${affected.libraries.join(', ') || 'keinen'}. Lokale Kopien bleiben erhalten.`,ok:'Cloud-Figur löschen',destructive:true}))return;
+        await run('Cloud-Figur löschen …',async()=>{await cloudCall('delete_figure',{figure:f.id,expected_token:f.content_token});await load(null);});
+      },true));
       chooseTab(ownFigureSelection.id === f.id ? ownFigureSelection.tab : 'videos');
     };
     card.ontoggle = () => {
@@ -978,7 +999,9 @@ export function initCloud(callbacks) {
   dialog = document.getElementById('cloudDialog'); body = document.getElementById('cloudBody'); errorBox = document.getElementById('cloudError'); statusBox = document.getElementById('cloudStatus');
   const downloadProgress = node('progress'); downloadProgress.id = 'cloudDownloadProgress'; downloadProgress.setAttribute('aria-label', 'Bibliothek lokal verfügbar machen'); downloadProgress.hidden = true; statusBox.after(downloadProgress);
   cloudNavigation = node('div', undefined, 'cloud-navigation'); cloudNavigation.id = 'cloudNavigation'; cloudNavigation.hidden = true; dialog.querySelector('.screen-header').after(cloudNavigation);
-  const refreshTrigger = action('Aktualisieren', () => { if (!busy) return load(current, 'refresh'); }); refreshTrigger.className = 'cloud-refresh-trigger'; refreshTrigger.setAttribute('aria-label', 'Aktualisieren'); refreshTrigger.title = 'Aktualisieren'; refreshTrigger.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 7a7 7 0 0 1 12-1l2 6M4 12l2 6a7 7 0 0 0 12-1"/></svg>'; dialog.querySelector('.screen-header').append(refreshTrigger);
+  const settingsTrigger = document.getElementById('infoButton').cloneNode(true); settingsTrigger.id = 'cloudSettings'; settingsTrigger.onclick = () => { if (!busy) hooks.settings?.(); }; settingsTrigger.replaceChildren(uiIcon('settings')); dialog.querySelector('.cloud-brand-header').append(settingsTrigger);
+  document.getElementById('infoButton').replaceChildren(uiIcon('settings'));
+  const refreshTrigger = action('Aktualisieren', () => { if (!busy) return load(current, 'refresh'); }); refreshTrigger.className = 'cloud-refresh-trigger'; refreshTrigger.setAttribute('aria-label', 'Aktualisieren'); refreshTrigger.title = 'Aktualisieren'; refreshTrigger.replaceChildren(uiIcon('refresh-cw')); dialog.querySelector('.screen-header').append(refreshTrigger);
   uploadRecovery = node('section', undefined, 'cloud-card'); uploadRecovery.id = 'cloudUploadRecovery'; uploadRecovery.setAttribute('role', 'status'); uploadRecovery.hidden = true; body.before(uploadRecovery);
   addEventListener('cloud-session-changed', event => {
     uploadWorkflow?.cancel(); uploadRecovery.hidden = true; uploadRecovery.replaceChildren();
@@ -1004,7 +1027,7 @@ export function initCloud(callbacks) {
   accountDialog.addEventListener('close', () => accountTrigger.setAttribute('aria-expanded', 'false'));
   accountTrigger = action('', () => { if (busy) return; renderAccount(); if (state?.me) { accountDialog.showModal(); accountTrigger.setAttribute('aria-expanded', 'true'); } });
   accountTrigger.id = 'cloudAccountOpen'; accountTrigger.className = 'cloud-login-trigger'; accountTrigger.hidden = true; accountTrigger.title = 'Mein Konto'; accountTrigger.setAttribute('aria-label', 'Kontomenü öffnen'); accountTrigger.setAttribute('aria-haspopup', 'dialog'); accountTrigger.setAttribute('aria-controls', accountDialog.id); accountTrigger.setAttribute('aria-expanded', 'false');
-  accountTrigger.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 22v-3a8 8 0 0 1 16 0v3"/></svg>'; dialog.querySelector('.screen-header').append(accountTrigger);
+  accountTrigger.replaceChildren(uiIcon('user-round')); dialog.querySelector('.screen-header').append(accountTrigger);
   document.getElementById('cloudBack').onclick = cloudBack;
   dialog.querySelector('[data-nav=figures]').onclick = close;
   dialog.querySelector('[data-nav=cloud]').onclick = () => { if (!busy) navigate('initial'); };
@@ -1022,3 +1045,5 @@ export async function openCloud(local = null, library = null) {
   dialog.showModal();
   if (local) await run('Cloud-Inhalte werden geladen …', () => load(library)); else await load(library, true);
 }
+
+export { close as closeCloud };

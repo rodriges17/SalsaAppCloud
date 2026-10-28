@@ -48,7 +48,7 @@ async function mock(page,admin=false, own=false, contribute=true, options={}){
 async function expandOwnFigure(page, manage = false) {
  const card = page.locator('.cloud-own-figure').first(); await expect(card).toBeVisible();
  if (!await card.evaluate(el => el.open)) await card.locator('summary').tap();
- await card.getByRole('tab', {name:manage ? 'Verwalten' : 'Videos & lokal', exact:true}).tap();
+ await card.getByRole('tab', {name:manage ? 'Verwalten' : 'Figur', exact:true}).tap();
 }
 
 async function start(page){await page.goto('/pwa/');await expect(page.getByRole('heading',{name:'Step by Step',exact:true})).toBeVisible();}
@@ -103,11 +103,11 @@ test('manual sign-in link is redeemed inside the current app without navigating 
 async function signIn(page) {
  await page.addInitScript(()=>localStorage.setItem('salsa-cloud-session:/pwa/:v1',JSON.stringify({access_token:'test-user-jwt',refresh_token:'test-refresh',expires_at:Date.now()+3600000})));
 }
-test('cloud keeps its brand header and back navigation fixed without a settings button',async({page},info)=>{
+test('cloud keeps its brand header, settings and back navigation fixed',async({page},info)=>{
  await mock(page);await start(page);await page.locator('#cloudButton').tap();
  const header=page.locator('#cloudDialog > .cloud-brand-header');
  await expect(header.getByRole('heading',{name:'Step by Step',exact:true})).toBeVisible();
- await expect(header.locator('.brand-mark')).toBeVisible();await expect(header.getByRole('button')).toHaveCount(0);
+ await expect(header.locator('.brand-mark')).toBeVisible();await expect(header.getByRole('button',{name:'Einstellungen',exact:true})).toBeVisible();
  await page.screenshot({path:info.outputPath('cloud-brand-header-top.png')});
  await page.locator('#cloudBody').evaluate(n=>n.style.minHeight='1800px');
  const before=await header.boundingBox();await page.locator('.cloud-scroll').evaluate(n=>n.scrollTop=600);
@@ -123,7 +123,7 @@ test('libraries and own cloud figures are separate; creation is explicit and can
  await expect(page.locator('.cloud-thumbnail')).toHaveAttribute('src', /^blob:/);
  await page.getByRole('button',{name:'Bibliotheken',exact:true}).tap();
  await expect(page.getByLabel('Name',{exact:true})).toHaveCount(0);
- await expect(page.getByRole('button',{name:'Einer Bibliothek zuordnen',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Bibliothek zuordnen',exact:true})).toHaveCount(0);
  await expect(page.getByLabel('Person: E-Mail-Adresse',{exact:true})).toHaveCount(0);
  await page.getByRole('button',{name:'Bibliothek erstellen',exact:true}).tap();
  await expect(page.getByLabel('Name',{exact:true})).toBeVisible();
@@ -135,25 +135,25 @@ test('libraries and own cloud figures are separate; creation is explicit and can
  await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();
  expect(calls.find(c=>c.action==='library_save').payload).toMatchObject({title:'Mein Kurs',visibility:'private',collaborative:false,moderated:true});
  await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).tap();
- await expandOwnFigure(page,true);await expect(page.getByRole('button',{name:'Einer Bibliothek zuordnen',exact:true})).toBeVisible();
+ await expandOwnFigure(page,true);await expect(page.getByRole('button',{name:'Bibliothek zuordnen',exact:true})).toBeVisible();
  await expect(page.locator('a.cloud-library-card')).toHaveCount(0);
  await expect(page.getByLabel('Name',{exact:true})).toHaveCount(0);
 });
 test('assigning a cloud revision opens a visible focused view and attaches to the chosen library',async({page})=>{
  await signIn(page);const calls=await mock(page,true,true);await start(page);await page.locator('#cloudButton').tap();
  await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).tap();
- await expandOwnFigure(page,true);await page.getByRole('button',{name:'Einer Bibliothek zuordnen',exact:true}).tap();
+ await expandOwnFigure(page,true);await page.getByRole('button',{name:'Bibliothek zuordnen',exact:true}).tap();
  await expect(page.getByRole('combobox',{name:'Zielbibliothek',exact:true})).toBeInViewport();
  await expect(page.locator('#cloudBody .cloud-card')).toBeFocused();
  await page.getByRole('button',{name:'Zurück zu Meine Cloud-Figuren',exact:true}).tap();
- await expandOwnFigure(page,true);await page.getByRole('button',{name:'Einer Bibliothek zuordnen',exact:true}).tap();
+ await expandOwnFigure(page,true);await page.getByRole('button',{name:'Bibliothek zuordnen',exact:true}).tap();
  await page.getByRole('button',{name:'Figur zuordnen',exact:true}).tap();
  await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();
  expect(calls.find(c=>c.action==='attach').payload).toEqual({library:'lib-1',revision:'rev-1'});
 });
 test('assignment without a permitted target explains how to proceed',async({page})=>{
  await signIn(page);await mock(page,true,true,false);await start(page);await page.locator('#cloudButton').tap();
- await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).tap();await expandOwnFigure(page,true);await page.getByRole('button',{name:'Einer Bibliothek zuordnen',exact:true}).tap();
+ await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).tap();await expandOwnFigure(page,true);await page.getByRole('button',{name:'Bibliothek zuordnen',exact:true}).tap();
  await expect(page.getByText('Keine Bibliothek mit Beitragsberechtigung.',{exact:false})).toBeInViewport();
  await expect(page.getByRole('button',{name:'Figur zuordnen',exact:true})).toHaveCount(0);
  await page.getByRole('button',{name:'Bibliothek erstellen',exact:true}).tap();await expect(page.getByLabel('Name',{exact:true})).toBeVisible();
@@ -240,18 +240,18 @@ test('only the current cloud content is shown without history or editor grants',
  await start(page);await page.locator('#cloudButton').tap();
  await expect(page.locator('.cloud-history')).toHaveCount(0);
  await expect(page.getByText('Bearbeiter verwalten',{exact:true})).toHaveCount(0);
- await expandOwnFigure(page,true);await expect(page.getByRole('button',{name:'Einer Bibliothek zuordnen',exact:true})).toHaveCount(1);
+ await expandOwnFigure(page,true);await expect(page.getByRole('button',{name:'Bibliothek zuordnen',exact:true})).toHaveCount(1);
  expect(calls.some(c=>c.action==='editor')).toBe(false);
 });
 
 test('direct public permission actions preserve state on failure and toggle only after saving',async({page})=>{
  await signIn(page);const options={publicAllowed:false,failPermission:true},calls=await mock(page,true,true,true,options);await start(page);await page.locator('#cloudButton').tap();await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).tap();
  await expect(page.getByRole('button',{name:'Sichtbarkeit speichern',exact:true})).toHaveCount(0);await expect(page.locator('#cloudBody input[type=checkbox]')).toHaveCount(0);
- await expandOwnFigure(page,true);const allow=page.getByRole('button',{name:'Öffentliche Veröffentlichung erlauben',exact:true});await allow.tap();await expect(page.locator('#cloudError')).toContainText('Freigabe konnte nicht gespeichert werden');await expect(allow).toBeEnabled();await expect(page.locator('#cloudBody')).toContainText('Öffentliche Veröffentlichung: Nicht erlaubt');
- options.failPermission=false;await allow.tap();await expect(page.getByRole('button',{name:'Öffentliche Veröffentlichung widerrufen',exact:true})).toBeVisible();await expect(page.locator('#cloudBody')).toContainText('Öffentliche Veröffentlichung: Erlaubt');
- await page.getByRole('button',{name:'Öffentliche Veröffentlichung widerrufen',exact:true}).tap();await page.locator('#confirmOK').tap();await expect(allow).toBeVisible();await expect(page.locator('#cloudBody')).toContainText('Öffentliche Veröffentlichung: Nicht erlaubt');
+ await expandOwnFigure(page,true);const allow=page.getByRole('button',{name:'Freigabe erlauben',exact:true});await allow.tap();await expect(page.locator('#cloudError')).toContainText('Freigabe konnte nicht gespeichert werden');await expect(allow).toBeEnabled();await expect(page.getByRole('status',{name:'Öffentliche Freigabe: Nicht erlaubt',exact:true})).toBeVisible();
+ options.failPermission=false;await allow.tap();await expect(page.getByRole('button',{name:'Freigabe widerrufen',exact:true})).toBeVisible();await expect(page.getByRole('status',{name:'Öffentliche Freigabe: Erlaubt',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Freigabe widerrufen',exact:true}).tap();await page.locator('#confirmOK').tap();await expect(allow).toBeVisible();await expect(page.getByRole('status',{name:'Öffentliche Freigabe: Nicht erlaubt',exact:true})).toBeVisible();
  expect(calls.filter(c=>c.action==='public_permission').map(c=>c.payload)).toEqual([{figure:'figure-1',allowed:true},{figure:'figure-1',allowed:true},{figure:'figure-1',allowed:false}]);
- await expect(page.locator('#cloudBody')).toContainText('Private Bibliotheken bleiben unverändert.');
+ await expect(page.getByText('Private Bibliotheken bleiben unverändert.',{exact:true})).toHaveCount(0);
 });
 
 test('cloud poster stays identical on a new anonymous device and after local removal',async({page,browser},info)=>{
@@ -333,7 +333,7 @@ test('a downloaded cloud figure opens its local copy without importing again',as
  await expect(page.locator('[data-cloud-status=cloud]')).toHaveCount(1);
  await page.locator('#cloudButton').tap();
  await expandOwnFigure(page);await expect(page.locator('.cloud-local-status').first()).toHaveText('Lokal verfügbar');
- await page.getByRole('button',{name:'Lokale Figur öffnen',exact:true}).tap();
+ await page.getByRole('button',{name:'Lokal öffnen',exact:true}).tap();
  await expect(page.locator('#editor')).toBeVisible();expect(await localCloudFigures(page)).toHaveLength(1);
 });
 
@@ -367,13 +367,13 @@ for(const folder of [false,true])test(`uploaded ${folder?'folder':'app'} origina
  test.skip(folder&&browserName!=='chromium','Native folders exercised in Chromium.');
  await signIn(page);const calls=await mock(page,true,false,true,{reflectUpload:true,noLibraries:true,posters:new Map([['uploaded-revision',{poster:POSTER,kind:'local'}]])});await localUpload(page,folder);
  await page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true}).tap();
- await expandOwnFigure(page);await expect(page.getByRole('button',{name:'Lokale Figur öffnen',exact:true})).toBeEnabled();
+ await expandOwnFigure(page);await expect(page.getByRole('button',{name:'Lokal öffnen',exact:true})).toBeEnabled();
  await expandOwnFigure(page);await expect(page.locator('.cloud-local-status').first()).toHaveText('Lokal verfügbar');
  // With service workers blocked, WebKit's media cache is page-scoped.
  // Real reload persistence is exercised below with the installed PWA.
  if(browserName==='webkit')await page.locator('#cloudBack').tap();else await page.reload();
  await page.locator('#cloudButton').tap();
- await expandOwnFigure(page);await expect(page.getByRole('button',{name:'Lokale Figur öffnen',exact:true})).toBeEnabled();
+ await expandOwnFigure(page);await expect(page.getByRole('button',{name:'Lokal öffnen',exact:true})).toBeEnabled();
  expect(await localCloudFigures(page)).toHaveLength(1);expect(calls.filter(c=>c.action==='media_url')).toHaveLength(0);
  if(folder){
   await page.locator('#cloudBack').tap();
@@ -414,7 +414,7 @@ test('partial creation retries membership only and never recreates the account',
 for(const mode of ['reader','revoked','owner'])test(`role-aware navigation: ${mode}`,async({page})=>{
  await signIn(page);const me={id:'viewer',email:'viewer@example.test',is_admin:false,upload_enabled:false,used:mode==='revoked'?3:0,quota:250000000};await mock(page,false,mode==='revoked',false,{me,manage:mode==='owner',owner:mode==='owner'?'viewer':'owner'});await start(page);await page.locator('#cloudButton').tap();
  await expect(page.getByRole('button',{name:'Plattformverwaltung',exact:true})).toHaveCount(0);
- if(mode==='revoked'){await expect(page.getByRole('heading',{name:'Meine Cloud-Figuren',exact:true})).toBeVisible();await expect(page.locator('#cloudBody')).toContainText('Uploads sind für dein Konto deaktiviert.');await expandOwnFigure(page);await expect(page.getByRole('button',{name:'Lokal übernehmen',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Einer Bibliothek zuordnen',exact:true})).toHaveCount(0);}else{await expect(page.locator('.cloud-tabs button')).toHaveText(['Bibliotheken']);}
+ if(mode==='revoked'){await expect(page.getByRole('heading',{name:'Meine Cloud-Figuren',exact:true})).toBeVisible();await expect(page.locator('#cloudBody')).toContainText('Uploads sind für dein Konto deaktiviert.');await expandOwnFigure(page);await expect(page.getByRole('button',{name:'Lokal übernehmen',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Bibliothek zuordnen',exact:true})).toHaveCount(0);}else{await expect(page.locator('.cloud-tabs button')).toHaveText(['Bibliotheken']);}
  if(mode==='owner'){await expect(page.getByText('Besitzer · Bibliothek verwalten',{exact:true})).toBeVisible();await page.locator('a.cloud-library-card').tap();await expandLibraryFigure(page);await editSettings(page);await expect(page.getByRole('heading',{name:'Mitglieder & Zugriff',exact:true})).toBeVisible();await expect(page.getByLabel('Vollständige E-Mail-Adresse',{exact:true})).toHaveCount(0);await page.getByRole('button',{name:'Mitglied hinzufügen',exact:true}).tap();await expect(page.getByLabel('Vollständige E-Mail-Adresse',{exact:true})).toBeVisible();await expect(page.getByLabel('Personen suchen',{exact:true})).toHaveCount(0);}
 });
 
@@ -639,16 +639,17 @@ test('own cloud cards reveal tabbed options on click and keep only one expanded'
  const own=[1,2].map(i=>({id:'figure-'+i,owner_id:'admin',public_allowed:true,revisions:[{id:'rev-'+i,figure_id:'figure-'+i,title:'Meine Figur '+i,description:'Beschreibung '+i,tags:['Salsa'],created_at:'2026-10-26T00:00:00Z',videos:[{id:'video-'+i,name:'Führung',type:'video/mp4',size:2048}]}]}));
  const calls=await mock(page,true,own);await start(page);await page.locator('#cloudButton').tap();
  const cards=page.locator('.cloud-own-figure');await expect(cards).toHaveCount(2);await expect(page.locator('.cloud-own-figure[open]')).toHaveCount(0);
- await expect(page.getByRole('button',{name:'Einer Bibliothek zuordnen',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Bibliothek zuordnen',exact:true})).toHaveCount(0);
  await expect(page.getByRole('tab',{name:'Verwalten',exact:true})).toHaveCount(0);
  await cards.first().locator('summary').tap();
  await expect(cards.first().getByRole('button',{name:'Lokal übernehmen',exact:true})).toBeVisible();
- await expect(cards.first().getByRole('button',{name:'Cloud-Figur samt Videos löschen',exact:true})).toBeHidden();
+ await expect(cards.first().getByRole('button',{name:'Cloud-Figur löschen',exact:true})).toBeHidden();
  await cards.first().getByRole('tab',{name:'Verwalten',exact:true}).tap();
- await expect(cards.first().getByRole('button',{name:'Einer Bibliothek zuordnen',exact:true})).toBeVisible();
+ await expect(cards.first().getByRole('button',{name:'Bibliothek zuordnen',exact:true})).toBeVisible();
  await expect(cards.first().getByRole('button',{name:'Lokal übernehmen',exact:true})).toBeHidden();
+ for(const theme of ['light','dark']){await page.evaluate(t=>window.stepAppearance.set(t),theme);await page.screenshot({path:info.outputPath(theme+'-pur-management.png')});}
  await cards.first().getByRole('tab',{name:'Verwalten',exact:true}).press('ArrowLeft');
- await expect(cards.first().getByRole('tab',{name:'Videos & lokal',exact:true})).toBeFocused();
+ await expect(cards.first().getByRole('tab',{name:'Figur',exact:true})).toBeFocused();
  await expect(cards.first().getByRole('button',{name:'Lokal übernehmen',exact:true})).toBeVisible();
  await cards.last().locator('summary').tap();await expect(page.locator('.cloud-own-figure[open]')).toHaveCount(1);await expect(cards.first()).not.toHaveAttribute('open','');
  for(const theme of ['light','dark']){await page.evaluate(t=>window.stepAppearance.set(t),theme);await page.screenshot({path:info.outputPath(theme+'-own-cloud-cards-c.png')});}
@@ -692,13 +693,13 @@ test('available cloud figures share a top-right label, keep expansion without ar
  await page.locator('#cloudButton').tap();const own=page.locator('.cloud-own-figure').first();
  await expect(own.locator('.cloud-own-availability')).toHaveText('Lokal verfügbar');await expect(own.locator('.cloud-library-chevron')).toHaveCount(0);
  await expandOwnFigure(page);await expect(own.getByRole('checkbox')).toHaveCount(0);await expect(own.locator('.cloud-local-status')).toBeHidden();await expect(own.getByRole('heading',{name:'Videos zum Herunterladen auswählen',exact:true})).toBeHidden();
- await expect(own.getByRole('button',{name:'Video: Führung',exact:true})).toBeVisible();await expect(own.getByRole('button',{name:'Video: Folgen',exact:true})).toBeVisible();await expect(own.getByRole('button',{name:'Lokale Figur öffnen',exact:true})).toBeVisible();
+ await expect(own.getByRole('button',{name:'Video „Führung“ abspielen',exact:true})).toBeVisible();await expect(own.getByRole('button',{name:'Video „Folgen“ abspielen',exact:true})).toBeVisible();await expect(own.getByRole('button',{name:'Lokal öffnen',exact:true})).toBeVisible();
  await page.screenshot({path:info.outputPath('available-own-cloud-no-download-checkboxes.png')});
  await page.getByRole('button',{name:'Bibliotheken',exact:true}).tap();await page.locator('a.cloud-library-card').tap();
  await expect(page.getByRole('button',{name:'< Zurück zu allen Bibliotheken',exact:true})).toBeVisible();const summary=page.locator('.cloud-library-summary').first();
  await expect(summary.locator('.cloud-library-availability')).toHaveText('Lokal verfügbar');await expect(summary.locator('.cloud-library-chevron')).toHaveCount(0);
  expect(await summary.evaluate(row=>{const a=row.querySelector('.cloud-library-availability').getBoundingClientRect(),title=row.querySelector('h3').getBoundingClientRect(),r=row.getBoundingClientRect();return Math.abs(a.top-title.top)<2&&Math.abs(a.right-r.right)<2;})).toBe(true);
- await expandLibraryFigure(page);const entry=page.locator('.cloud-library-figure').first();await expect(entry.getByRole('checkbox')).toHaveCount(0);await expect(entry.getByRole('button',{name:'Lokale Figur öffnen',exact:true})).toBeVisible();
+ await expandLibraryFigure(page);const entry=page.locator('.cloud-library-figure').first();await expect(entry.getByRole('checkbox')).toHaveCount(0);await expect(entry.getByRole('button',{name:'Lokal öffnen',exact:true})).toBeVisible();
  await page.screenshot({path:info.outputPath('available-library-row-top-right.png')});
 });
 

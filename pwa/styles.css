@@ -447,3 +447,39 @@ a.cloud-library-card:active{background:var(--selection)}
 
 /* Shared, touch-sized multi-select. The panel scrolls inside the editor. */
 .tag-picker{min-width:0;display:grid;gap:8px}.tag-picker-chips{display:contents}.tag-picker-search{display:flex;align-items:center;flex-wrap:wrap;gap:6px;border:1px solid var(--border);border-radius:10px;background:var(--bg);padding:8px;min-width:0}.tag-picker-search:focus-within{outline:2px solid var(--lavender);outline-offset:2px}.tag-picker-chip{background:var(--selection);border-radius:7px;max-width:100%;overflow-wrap:anywhere;font-size:14px;text-align:left;padding:8px 10px;min-height:40px}.tag-picker-search input:not([type=range]){width:100px;min-width:100px;flex:1 1 100px;border:0;border-radius:0;background:transparent;padding:9px 3px;min-height:40px;outline:none;box-shadow:none}.tag-picker-panel{border:1px solid var(--border);border-radius:10px;background:var(--surface);padding:6px;display:grid;gap:6px}.tag-picker-panel[hidden]{display:none}.tag-picker-options{max-height:220px;max-height:min(220px,30dvh);overflow-y:auto;overscroll-behavior:contain;display:grid;gap:4px}.tag-picker-option{text-align:left;font-weight:400;overflow-wrap:anywhere}.tag-picker-option[aria-selected=true]{background:var(--selection);border-color:var(--lavender)}.tag-picker-option[aria-selected=true]::before{content:'✓ ';color:var(--lavender)}.tag-picker-create{text-align:left;color:var(--lavender);overflow-wrap:anywhere;min-width:0}.tag-picker-message,.tag-picker-status{font-size:13px;color:var(--muted);overflow-wrap:anywhere}.tag-picker-message:empty{display:none}
+
+/* Pur Cloud header: shared centers and generous, unframed touch targets. */
+#cloudDialog>.screen-header{align-items:center;gap:4px}
+#cloudDialog>.screen-header h2{margin:0}
+#cloudDialog>.screen-header .back,.cloud-login-trigger,.cloud-refresh-trigger{display:grid;place-items:center;width:44px;height:44px;min-width:44px;min-height:44px;flex:0 0 44px;padding:10px;border:0;background:transparent;margin:0}
+#cloudDialog>.screen-header svg{display:block;width:24px;height:24px}
+@media(max-width:360px){#cloudDialog>.screen-header{padding-left:4px;padding-right:8px;gap:0}#cloudDialog>.screen-header h2{font-size:19px}}
+
+/* Figure content keeps metadata and playback together. */
+.cloud-own-panel{display:grid;gap:14px;align-items:stretch;min-width:0}
+.cloud-tag-pills{display:flex;flex-wrap:wrap;gap:6px;list-style:none;margin:0;padding:0;min-width:0}
+.cloud-tag-pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;background:var(--selection);color:var(--lavender);padding:5px 9px;font-size:12px;max-width:100%;min-width:0;overflow-wrap:anywhere}
+.cloud-tag-pill svg{width:14px;height:14px;flex:none}
+.cloud-tag-pill span{min-width:0}
+.cloud-video-row{display:flex;align-items:center;gap:8px;min-width:0;width:100%}
+.cloud-video-row .cloud-check{flex:none;margin:0;min-width:28px;min-height:44px;display:flex;align-items:center;justify-content:center}
+.cloud-video-play{flex:1;min-width:0;display:flex;align-items:center;gap:12px;text-align:left;padding:12px;border:1px solid var(--border);background:var(--bg);border-radius:10px;min-height:66px;font-weight:400}
+.cloud-video-play>svg{width:22px;height:22px;flex:none;color:var(--lavender)}
+.cloud-video-copy{display:grid;gap:4px;min-width:0;overflow-wrap:anywhere}
+.cloud-video-name{font-size:14px}.cloud-video-size{font-size:12px;color:var(--muted)}
+.cloud-own-panel video{display:block;width:100%;max-height:55dvh;border-radius:10px}
+
+/* Consent is a status, followed by one uninterrupted action list. */
+.cloud-consent{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--muted);font-size:12px}
+.cloud-consent[data-allowed=true]{color:var(--success);background:color-mix(in srgb,var(--success) 12%,var(--bg));border-color:color-mix(in srgb,var(--success) 40%,var(--border))}
+.cloud-consent>svg{width:24px;height:24px;flex:none}.cloud-consent>span{display:grid;gap:4px}.cloud-consent strong{font-size:15px;font-weight:600}
+.cloud-manage-actions{display:grid;min-width:0}
+.cloud-manage-actions .cloud-manage-action{display:flex;align-items:center;gap:12px;text-align:left;width:100%;min-height:52px;font-size:14px;font-weight:400;padding:14px 0;border:0;border-bottom:1px solid var(--border);border-radius:0;background:transparent;overflow-wrap:anywhere}
+.cloud-manage-action>svg{width:20px;height:20px;flex:none;color:var(--lavender)}.cloud-manage-action>span{min-width:0}
+.cloud-manage-actions .destructive,.cloud-manage-actions .destructive>svg{color:var(--danger)}
+
+.cloud-own-panel>p{font-size:14px;line-height:1.6}
+
+.cloud-own-tabs{display:flex;gap:18px;border-bottom:1px solid var(--border);padding:0;margin-bottom:14px}
+.cloud-own-tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;padding:10px 2px;min-height:44px;font-size:14px}
+.cloud-own-tabs button[aria-selected=true]{background:transparent;border-bottom-color:var(--lavender);color:var(--lavender)}
