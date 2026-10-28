@@ -6,7 +6,7 @@ const currentVersion = readFileSync('pwa/app.js', 'utf8').match(/const APP_VERSI
 const clip = path.resolve('web-tests/fixtures/clip.mp4');
 const portrait = path.resolve('web-tests/fixtures/portrait.mp4');
 // Ordinary download tests exercise the fallback; picker behavior is tested separately.
-test.beforeEach(async ({page}) => { await page.route('**/functions/v1/cloud',r=>r.fulfill({contentType:'application/json',body:JSON.stringify({tags:[],complete:true})})); await page.addInitScript(() => Object.defineProperty(window, 'showSaveFilePicker', {value:undefined, configurable:true})); });
+test.beforeEach(async ({page}) => { await page.addInitScript(() => Object.defineProperty(window, 'showSaveFilePicker', {value:undefined, configurable:true})); });
 async function start(page) {
   await page.goto('/pwa/'); await expect(page.getByRole('heading', { name: 'Step by Step' })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-offline-status','ready', { timeout: 30000 });
