@@ -10,6 +10,10 @@ export async function runTagPickerCase(page, {root, fixture, scenario, seed}) {
  await page.getByRole('button',{name:'Bearbeiten',exact:true}).click();
  const input=page.locator('#figureTags');
  assert(await input.getAttribute('role')==='combobox','Editor needs a searchable tag combobox');
+ await input.click();assert(await input.getAttribute('aria-expanded')==='false','An empty field must not show suggestions on focus');
+ await input.press('ArrowDown');assert(await input.getAttribute('aria-expanded')==='false','An empty field must not show suggestions on ArrowDown');
+ await input.fill('   ');assert(await input.getAttribute('aria-expanded')==='false','Whitespace must not show suggestions');
+ await input.fill('PAS');await input.fill('');assert(await input.getAttribute('aria-expanded')==='false','Clearing the search must hide suggestions');
  await input.fill('PASITO');await page.getByRole('option',{name:'Pasito',exact:true}).click();
  assert(await input.getAttribute('aria-expanded')==='true','Multiselect closed after selection');
  await input.fill('pasito');await page.getByRole('button',{name:'Neues Tag „pasito“ anlegen',exact:true}).click();
