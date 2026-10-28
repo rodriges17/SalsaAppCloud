@@ -1,6 +1,6 @@
 import { cloudLocalIndex } from './cloud-local.js';
 import { provenanceIcon, provenanceLabel } from './cloud-provenance.js';
-const APP_VERSION = '2026-10-28-cloud-navigation-v1';
+const APP_VERSION = '2026-10-28-library-edit-session-v1';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';

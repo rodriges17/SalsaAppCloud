@@ -1,7 +1,7 @@
 import { runNavigationHoverCase } from './navigation-hover-case.js';
 import { runStorageSettingsCase } from './storage-settings-case.js';
 // The same behavior contract runs against the PWA and the bundled Android UI.
-export const PARITY_CASES = ['navigation-return-hover', 'storage-settings-status', 'library-share-links', 'zip-save-feedback', 'menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change', 'cloud-cache-frame-reuse', 'cloud-guest-public-first', 'cloud-library-download', 'cloud-guest-no-publish', 'cloud-single-direct-download', 'cloud-library-order', 'cloud-local-state'];
+export const PARITY_CASES = ['navigation-return-hover', 'storage-settings-status', 'library-share-links', 'zip-save-feedback', 'menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change', 'cloud-cache-frame-reuse', 'cloud-guest-public-first', 'cloud-library-download', 'cloud-guest-no-publish', 'cloud-single-direct-download', 'cloud-library-order', 'cloud-local-state', 'cloud-library-edit-session', 'cloud-library-edit-upload', 'cloud-library-edit-duplicate'];
 export async function runParityCase(page, { root, fixture, native = false, scenario, consoleErrors = [], browserName = 'chromium' }) {
  const assert = (value, message) => { if (!value) throw new Error(message); };
  const frame = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -16,6 +16,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   },{root,fixture,count,fingerprint});
   await page.waitForFunction(count=>document.querySelectorAll('.figure-card').length===count,count);
  };
+ if(['cloud-library-edit-session','cloud-library-edit-upload','cloud-library-edit-duplicate'].includes(scenario)) return runLibrarySessionCase(page,{root,fixture,scenario,seed});
  if(scenario==='cloud-library-order'){
   const scope=new URL(root,page.url()).pathname;
   await page.evaluate(scope=>localStorage.setItem(`salsa-cloud-session:${scope}:v1`,JSON.stringify({access_token:'test-order-token',refresh_token:'unused',expires_at:Date.now()+3600000})),scope);
@@ -408,5 +409,67 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   assert(!consoleErrors.length||knownWebKit,'CSP console errors: '+consoleErrors.join('\n'));
   assert(await page.locator('#saveIndicator').getAttribute('style')===null&&await page.locator('#backupStatus').getAttribute('style')===null,'Static inline styles conflict with CSP');
   assert(await page.locator('#backupStatus').evaluate(n=>getComputedStyle(n).whiteSpace==='pre-wrap'),'Backup status loses line breaks');
+ }
+}
+
+async function runLibrarySessionCase(page,{root,fixture,scenario,seed}){
+ const assert=(value,message)=>{if(!value)throw new Error(message);};
+ const scope=new URL(root,page.url()).pathname;
+ await page.evaluate(scope=>localStorage.setItem(`salsa-cloud-session:${scope}:v1`,JSON.stringify({access_token:'edit-token',refresh_token:'unused',expires_at:Date.now()+3600000})),scope);
+ const library={id:'edit-library',owner_id:'editor',title:'Bibliothek',description:'Gespeichert',visibility:'private',collaborative:false,moderated:true,edit_version:'v1'};
+ let entries=['Erste','Zweite'].map((title,i)=>({figure_id:'entry-'+i,published:{id:'rev-'+i,title,videos:[]}})),own=[],conflict=false,failRead=false,failReturn=false;
+ const commits=[],writes=[];
+ await page.route('**/storage/v1/**',route=>{writes.push(route.request().method());return route.fulfill({contentType:'application/json',body:'{}'});});
+ await page.route('**/functions/v1/cloud',async route=>{
+  const {action,payload}=route.request().postDataJSON();let value={ok:true};
+  if(action==='state'){
+   if(failReturn)return route.fulfill({status:503,contentType:'application/json',body:'{"error":"Rückkehr vorübergehend nicht möglich"}'});
+   value={me:{id:'editor',email:'editor@example.test',is_admin:false,upload_enabled:true,used:0,quota:500000000},libraries:[{...library,manage:true}],own_figures:own};
+  }
+  if(action==='library'){
+   if(failRead)return route.fulfill({status:503,contentType:'application/json',body:'{"error":"Bibliothek vorübergehend nicht ladbar"}'});
+   value={library,entries,manage:true,contribute:false,members:[]};
+  }
+  if(action==='library_commit'){
+   commits.push(payload);
+   if(conflict)return route.fulfill({status:409,contentType:'application/json',body:'{"error":"Bibliothek wurde inzwischen geändert. Bitte neu laden."}'});
+   Object.assign(library,{...payload,edit_version:'v3'});entries=payload.order.map(id=>entries.find(e=>e.figure_id===id)??{figure_id:id,published:own.find(f=>f.id===id).revisions[0]});value={id:library.id};
+  }
+  if(action==='duplicates')value={matches:scenario==='cloud-library-edit-duplicate'?[{figure:'shared-figure',revision:'shared-revision',title:'Zugängliche Figur',media:'shared-media',hash:payload.hashes[0]}]:[]};
+  if(action==='reserve')value={job:'job',media:payload.videos.map((v,i)=>({id:'new-video-'+i,path:'test/'+i+'.mp4'}))};
+  if(action==='commit'){
+   own=[{id:'new-figure',owner_id:'editor',public_allowed:true,revisions:[{id:'new-revision',figure_id:'new-figure',title:payload.title,description:payload.description,tags:payload.tags,videos:payload.videos}]}];
+   failReturn=true;value={figure:'new-figure',revision:'new-revision'};
+  }
+  if(action==='poster_get')value={poster:null,can_write:false};
+  await route.fulfill({contentType:'application/json',body:JSON.stringify(value)});
+ });
+ if(scenario!=='cloud-library-edit-session')await seed();
+ await page.locator('#cloudButton').click();await page.getByRole('button',{name:'Bibliotheken',exact:true}).click();await page.locator('a.cloud-library-card').click();await page.getByRole('button',{name:'Bibliothek bearbeiten',exact:true}).click();
+ await page.locator('[data-library-figure="entry-1"]').getByRole('button',{name:'Nach oben',exact:true}).click();
+ await page.getByRole('tab',{name:'Einstellungen',exact:true}).click();await page.getByLabel('Name',{exact:true}).fill('Mein Entwurf');await page.locator('#cloudBody').getByLabel('Beschreibung',{exact:true}).fill('Ungespeicherter Text');
+ if(scenario==='cloud-library-edit-session'){
+  conflict=true;await page.locator('#cloudBack').click();await page.locator('.cloud-unsaved-dialog').getByRole('button',{name:'Speichern',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.cloud-library-conflict')?.hidden===false);
+  assert(await page.getByLabel('Name',{exact:true}).inputValue()==='Mein Entwurf','Failed leave lost title');
+  await page.getByRole('button',{name:'Aktuellen Stand neu laden',exact:true}).click();await page.locator('#confirmCancel').click();assert(await page.locator('#cloudBody').getByLabel('Beschreibung',{exact:true}).inputValue()==='Ungespeicherter Text','Declining reload lost description');
+  failRead=true;await page.getByRole('button',{name:'Aktuellen Stand neu laden',exact:true}).click();await page.locator('#confirmOK').click();await page.waitForFunction(()=>document.querySelector('#cloudError').textContent.includes('nicht ladbar'));
+  assert(await page.getByLabel('Name',{exact:true}).inputValue()==='Mein Entwurf','Failed reload lost title');await page.getByRole('tab',{name:'Figuren (2)',exact:true}).click();assert((await page.locator('[data-library-figure]').evaluateAll(ns=>ns.map(n=>n.dataset.libraryFigure))).join(',')==='entry-1,entry-0','Failed reload lost order');
+  await page.getByRole('button',{name:'Bibliothek speichern',exact:true}).click();await page.waitForFunction(()=>!document.querySelector('#cloudBody').inert);assert(commits.length===2&&commits.every(p=>p.expected_version==='v1'),'Conflict retry bypassed version check');
+  failRead=false;conflict=false;library.title='Neuer Cloud-Stand';library.edit_version='v2';await page.getByRole('button',{name:'Aktuellen Stand neu laden',exact:true}).click();await page.locator('#confirmOK').click();await page.waitForFunction(()=>document.querySelector('.cloud-library-conflict')?.hidden===true);await page.getByRole('tab',{name:'Einstellungen',exact:true}).click();assert(await page.getByLabel('Name',{exact:true}).inputValue()==='Neuer Cloud-Stand','Confirmed reload failed');
+  await page.getByLabel('Name',{exact:true}).fill('Nach Neuladen gespeichert');await page.getByRole('button',{name:'Abbrechen',exact:true}).click();await page.locator('.cloud-unsaved-dialog').getByRole('button',{name:'Speichern',exact:true}).click();await page.getByRole('heading',{name:'Nach Neuladen gespeichert',exact:true}).waitFor();assert(commits.at(-1).expected_version==='v2','Reload failed to update baseline');
+ }else{
+  await page.getByRole('tab',{name:'Figuren (2)',exact:true}).click();await page.getByRole('button',{name:'Figuren hinzufügen',exact:true}).click();await page.getByRole('button',{name:'Neue Figur hochladen',exact:true}).click();await page.getByRole('button',{name:'Cloud Drehung',exact:true}).click();await page.getByLabel('Öffentliche Veröffentlichung dieser Figur erlauben',{exact:true}).check();await page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true}).click();
+  if(scenario==='cloud-library-edit-duplicate'){
+   await page.getByRole('button',{name:'Bestehende Figur verwenden',exact:true}).click();await page.locator('[data-library-figure="shared-figure"]').waitFor();
+   assert(own.length===0&&writes.length===0&&commits.length===0,'Duplicate choice created or transferred content');
+   await page.getByRole('tab',{name:'Einstellungen',exact:true}).click();assert(await page.getByLabel('Name',{exact:true}).inputValue()==='Mein Entwurf','Duplicate return lost draft');
+   await page.getByRole('button',{name:'Abbrechen',exact:true}).click();await page.getByRole('button',{name:'Verwerfen',exact:true}).click();await page.getByRole('button',{name:'Bibliothek bearbeiten',exact:true}).waitFor();
+   assert(entries.length===2,'Discard saved duplicate membership');return;
+  }
+  await page.getByRole('button',{name:'Ansicht erneut laden',exact:true}).waitFor();assert(own.length===1,'Upload not saved before return failure');const transfers=writes.length;
+  failReturn=false;await page.getByRole('button',{name:'Zurück zur Bibliotheksbearbeitung',exact:true}).click();await page.locator('[data-library-figure="new-figure"]').waitFor();
+  assert((await page.locator('[data-library-figure]').evaluateAll(ns=>ns.map(n=>n.dataset.libraryFigure))).join(',')==='entry-1,entry-0,new-figure','Upload return lost order or confirmed figure');
+  await page.getByRole('tab',{name:'Einstellungen',exact:true}).click();assert(await page.getByLabel('Name',{exact:true}).inputValue()==='Mein Entwurf','Return lost title');assert(await page.locator('#cloudBody').getByLabel('Beschreibung',{exact:true}).inputValue()==='Ungespeicherter Text','Return lost description');assert(commits.length===0&&writes.length===transfers,'Return saved library or transferred videos again');
+  await page.getByRole('button',{name:'Abbrechen',exact:true}).click();await page.getByRole('button',{name:'Verwerfen',exact:true}).click();await page.getByRole('button',{name:'Bibliothek bearbeiten',exact:true}).waitFor();assert(own.length===1&&entries.length===2,'Discard removed uploaded figure or saved its membership');
  }
 }
