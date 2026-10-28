@@ -18,7 +18,7 @@
 #tag-field-prototype .field:focus-within{outline:2px solid var(--accent);outline-offset:2px}
 #tag-field-prototype .chips{display:contents}
 #tag-field-prototype .chip{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:7px;padding:8px 10px;background:var(--chip);color:var(--ink);font:inherit;font-size:14px;overflow-wrap:anywhere;max-width:100%}
-#tag-field-prototype .search{border:0;background:transparent;color:var(--ink);font:inherit;font-size:16px;min-width:100px;width:100px;flex:1;padding:9px 3px;box-sizing:border-box}
+#tag-field-prototype .search{border:0;background:transparent;color:var(--ink);font:inherit;font-size:16px;min-width:44px;width:44px;flex:1 0 44px;text-overflow:ellipsis;padding:9px 3px;box-sizing:border-box}
 #tag-field-prototype .search:focus{outline:none}
 #tag-field-prototype .search::placeholder{color:var(--sub)}
 #tag-field-prototype .two .chips{display:flex;flex-wrap:wrap;gap:7px;width:100%}
@@ -44,6 +44,7 @@ root.querySelectorAll('section').forEach((section,i)=>{
 section.innerHTML=`<div class="phone"><div class="head"><span aria-hidden="true">‹</span> Figur bearbeiten</div><div class="content"><label>Name<input class="basic" value="Caracol"></label><label>Lernstand<select class="basic"><option>Neu</option><option>In Übung</option></select></label><div><label>Tags</label><div class="tag-wrap"><div class="field ${['inline','two','list'][i]}"><div class="chips"></div><input class="search" aria-label="Tags suchen oder anlegen" placeholder="Tag hinzufügen …" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="tag-options-${i}"></div><div class="suggestions" id="tag-options-${i}" role="listbox" aria-label="Tag-Vorschläge" hidden></div></div><p class="quiet">Zum Suchen oder Anlegen tippen</p></div><div><p>Videos · 1</p><div class="video"><span>Caracol</span><small>Bestätigt · Erstes Video = Vorschaubild</small></div></div><button type="button" class="save">Figur speichern</button></div><div class="state" aria-live="polite"></div></div>`;
 const input=section.querySelector('.search'),chips=section.querySelector('.chips'),menu=section.querySelector('.suggestions'),state=section.querySelector('.state');
 let selected=['Salsa','Figur'];
+new ResizeObserver(()=>{const w=input.getBoundingClientRect().width;input.placeholder=w<75?'…':w<165?'Tag …':'Tag hinzufügen …';}).observe(input);
 function showState(message=''){state.textContent=(message?message+' · ':'')+'Auswahl: '+(selected.join(', ')||'keine')+' · Suche: '+(input.value||'leer');}
 function drawChips(){chips.replaceChildren();selected.forEach(tag=>{const b=document.createElement('button');b.className='chip';b.type='button';b.textContent=tag+' ×';b.setAttribute('aria-label','Tag „'+tag+'“ entfernen');b.onclick=()=>{selected=selected.filter(x=>x!==tag);drawChips();drawMenu();};chips.append(b);});showState();}
 function drawMenu(){const q=input.value.trim();menu.replaceChildren();menu.hidden=!q;input.setAttribute('aria-expanded',String(Boolean(q)));if(!q){showState();return;}
