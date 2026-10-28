@@ -38,7 +38,9 @@ for (const [name, engine, options] of [
     await page.locator('.card-options').tap();await page.getByRole('button',{name:'Figur teilen',exact:true}).tap();
     await page.locator('#preparePackage').tap();await page.locator('#downloadPackage').waitFor();
     const zipDownload=page.waitForEvent('download');await page.locator('#downloadPackage').tap();
-    const zip=await zipDownload;assert.equal(await zip.failure(),null);assert.equal(zip.suggestedFilename().normalize('NFC'),'ZIP Liveprüfung.zip');
+    const zip=await zipDownload;assert.equal(await zip.failure(),null);// Linux WebKit replaces download-name spaces with underscores.
+    const expectedName=name==='webkit' && process.platform==='linux'?'ZIP_Liveprüfung.zip':'ZIP Liveprüfung.zip';
+    assert.equal(zip.suggestedFilename().normalize('NFC'),expectedName);
     await page.waitForFunction(()=>!document.querySelector('#downloadPackage').disabled);
     assert.match(await page.locator('#shareProgress').textContent(),/Download angefordert/);
     await page.screenshot({path:`test-results/live/${name}-zip-save.png`});
