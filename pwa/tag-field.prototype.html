@@ -1,0 +1,69 @@
+<!doctype html><html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tag-Feld · Prototyp</title><style>body{margin:0;background:#171220;padding-bottom:70px}button{cursor:pointer}</style></head><body><!-- Wegwerfprototyp: Tags innerhalb des Felds; Vorschläge erst bei Suchtext. Drei Varianten des Figureneditors. -->
+<div id="tag-field-prototype" class="viz-carousel viz-dotted-background" aria-label="Tag-Feld Entwürfe" data-previous-label="Zurück" data-next-label="Weiter">
+  <section data-variant="Kompakt" aria-label="Kompaktes Tag-Feld"></section>
+  <section data-variant="Zwei Zeilen" aria-label="Tag-Feld mit eigener Suchzeile" hidden></section>
+  <section data-variant="Liste im Feld" aria-label="Tag-Feld mit ausgewählten Zeilen" hidden></section>
+</div>
+<style>
+#tag-field-prototype{color-scheme:light dark}
+#tag-field-prototype section{min-height:640px;padding:16px 8px;box-sizing:border-box}
+#tag-field-prototype .phone{--page:light-dark(#faf7ff,#171220);--ink:light-dark(#23172e,#eee8f4);--sub:light-dark(#685777,#bdb0ca);--line:light-dark(#cbbdd6,#51425e);--chip:light-dark(#e9ddf3,#483450);--accent:light-dark(#6f4592,#d1b3f6);--onaccent:light-dark(#fff,#29173b);--panel:light-dark(#f0e8f7,#292132);font-family:Arial,sans-serif;background:var(--page);color:var(--ink);max-width:410px;margin:auto;border:1px solid var(--line);border-radius:20px;overflow:hidden;min-height:600px}
+#tag-field-prototype .head{padding:20px;display:flex;align-items:center;gap:16px;border-bottom:1px solid var(--line);font-size:20px;font-weight:600}
+#tag-field-prototype .head span{color:var(--accent)}
+#tag-field-prototype .content{padding:20px;display:grid;gap:20px}
+#tag-field-prototype label{display:grid;gap:8px;color:var(--sub);font-size:15px}
+#tag-field-prototype .basic{box-sizing:border-box;border:1px solid var(--line);border-radius:9px;background:var(--page);color:var(--ink);padding:13px;font:inherit;width:100%}
+#tag-field-prototype .tag-wrap{position:relative}
+#tag-field-prototype .field{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:9px;border:1px solid var(--line);border-radius:10px;background:var(--page);min-height:48px;box-sizing:border-box}
+#tag-field-prototype .field:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+#tag-field-prototype .chips{display:contents}
+#tag-field-prototype .chip{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:7px;padding:8px 10px;background:var(--chip);color:var(--ink);font:inherit;font-size:14px;overflow-wrap:anywhere;max-width:100%}
+#tag-field-prototype .search{border:0;background:transparent;color:var(--ink);font:inherit;font-size:16px;min-width:100px;width:100px;flex:1;padding:9px 3px;box-sizing:border-box}
+#tag-field-prototype .search:focus{outline:none}
+#tag-field-prototype .search::placeholder{color:var(--sub)}
+#tag-field-prototype .two .chips{display:flex;flex-wrap:wrap;gap:7px;width:100%}
+#tag-field-prototype .two .search{width:100%;flex-basis:100%;border-top:1px solid var(--line);padding-top:14px}
+#tag-field-prototype .list .chips{display:grid;width:100%;gap:0}
+#tag-field-prototype .list .chip{justify-content:space-between;width:100%;border-radius:0;background:transparent;border-bottom:1px solid var(--line);padding:11px 4px}
+#tag-field-prototype .list .search{flex-basis:100%}
+#tag-field-prototype .suggestions{position:absolute;top:calc(100% + 8px);left:0;right:0;z-index:2;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:5px;box-shadow:0 8px 24px #0003;max-height:250px;overflow:auto}
+#tag-field-prototype .suggestions[hidden]{display:none}
+#tag-field-prototype .option{display:block;width:100%;border:0;background:transparent;color:var(--ink);padding:13px 10px;text-align:left;font:inherit;overflow-wrap:anywhere;border-radius:6px}
+#tag-field-prototype .option:hover,#tag-field-prototype .option:focus-visible{background:var(--chip)}
+#tag-field-prototype .quiet{font-size:12px;color:var(--sub);margin:8px 0 0}
+#tag-field-prototype .video{background:var(--panel);border-radius:12px;padding:16px;display:grid;gap:10px}
+#tag-field-prototype .video small{color:var(--sub)}
+#tag-field-prototype .save{background:var(--accent);color:var(--onaccent);border:0;border-radius:12px;padding:16px;font:inherit;font-weight:600;width:100%}
+#tag-field-prototype .state{font-size:12px;color:var(--sub);padding:8px 20px 16px;overflow-wrap:anywhere}
+</style>
+<script>
+(()=>{
+const root=document.getElementById('tag-field-prototype');
+const all=['Bachata','Figur','Pasito','Salsa','pasito'];
+root.querySelectorAll('section').forEach((section,i)=>{
+section.innerHTML=`<div class="phone"><div class="head"><span aria-hidden="true">‹</span> Figur bearbeiten</div><div class="content"><label>Name<input class="basic" value="Caracol"></label><label>Lernstand<select class="basic"><option>Neu</option><option>In Übung</option></select></label><div><label>Tags</label><div class="tag-wrap"><div class="field ${['inline','two','list'][i]}"><div class="chips"></div><input class="search" aria-label="Tags suchen oder anlegen" placeholder="Tag hinzufügen …" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="tag-options-${i}"></div><div class="suggestions" id="tag-options-${i}" role="listbox" aria-label="Tag-Vorschläge" hidden></div></div><p class="quiet">Zum Suchen oder Anlegen tippen</p></div><div><p>Videos · 1</p><div class="video"><span>Caracol</span><small>Bestätigt · Erstes Video = Vorschaubild</small></div></div><button type="button" class="save">Figur speichern</button></div><div class="state" aria-live="polite"></div></div>`;
+const input=section.querySelector('.search'),chips=section.querySelector('.chips'),menu=section.querySelector('.suggestions'),state=section.querySelector('.state');
+let selected=['Salsa','Figur'];
+function showState(message=''){state.textContent=(message?message+' · ':'')+'Auswahl: '+(selected.join(', ')||'keine')+' · Suche: '+(input.value||'leer');}
+function drawChips(){chips.replaceChildren();selected.forEach(tag=>{const b=document.createElement('button');b.className='chip';b.type='button';b.textContent=tag+' ×';b.setAttribute('aria-label','Tag „'+tag+'“ entfernen');b.onclick=()=>{selected=selected.filter(x=>x!==tag);drawChips();drawMenu();};chips.append(b);});showState();}
+function drawMenu(){const q=input.value.trim();menu.replaceChildren();menu.hidden=!q;input.setAttribute('aria-expanded',String(Boolean(q)));if(!q){showState();return;}
+const matches=all.filter(t=>t.toLowerCase().includes(q.toLowerCase()));
+function add(label,fn){const b=document.createElement('button');b.type='button';b.className='option';b.setAttribute('role','option');b.textContent=label;b.onclick=fn;menu.append(b);}
+matches.forEach(tag=>{add((selected.includes(tag)?'✓ ':'')+tag,()=>{if(!selected.includes(tag))selected.push(tag);input.value='';drawChips();drawMenu();input.focus();});menu.lastChild.setAttribute('aria-selected',String(selected.includes(tag)));});
+if(!all.includes(q)&&!selected.includes(q))add('+ Neues Tag „'+q+'“ anlegen',()=>{selected.push(q);all.push(q);input.value='';drawChips();drawMenu();input.focus();});showState();}
+input.oninput=drawMenu;input.onfocus=()=>{if(input.value.trim())drawMenu();};
+input.onkeydown=e=>{if(e.key==='Escape'){menu.hidden=true;input.setAttribute('aria-expanded','false');}if(e.key==='ArrowDown'&&!menu.hidden){e.preventDefault();menu.querySelector('button')?.focus();}if(e.key==='Enter')e.preventDefault();};
+menu.onkeydown=e=>{const bs=[...menu.querySelectorAll('button')],at=bs.indexOf(document.activeElement);if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();bs[(at+(e.key==='ArrowDown'?1:-1)+bs.length)%bs.length]?.focus();}if(e.key==='Escape'){input.focus();menu.hidden=true;input.setAttribute('aria-expanded','false');}};
+section.querySelector('.field').onclick=e=>{if(e.target.classList.contains('field'))input.focus();};
+document.addEventListener('click',e=>{if(!e.composedPath().includes(section.querySelector('.tag-wrap'))){menu.hidden=true;input.setAttribute('aria-expanded','false');}});
+section.querySelector('.save').onclick=()=>showState('Nur Prototyp – Auswahl übernommen');drawChips();
+});
+})();
+</script>
+<nav id="prototype-switcher" style="position:fixed;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:14px;align-items:center;background:#ece5f3;color:#21142d;padding:10px;border-radius:16px;z-index:10"><button id="prev" aria-label="Vorherige Variante">←</button><span id="variant-name"></span><button id="next" aria-label="Nächste Variante">→</button></nav>
+<script>
+const variants=[...document.querySelectorAll('[data-variant]')];
+let at=Math.max(0,['A','B','C'].indexOf(new URL(location.href).searchParams.get('variant')||'A'));
+function switchTo(n){at=(n+3)%3;variants.forEach((s,i)=>s.hidden=i!==at);document.getElementById('variant-name').textContent=['A','B','C'][at]+' · '+variants[at].dataset.variant;const u=new URL(location.href);u.searchParams.set('variant',['A','B','C'][at]);history.replaceState(null,'',u);}
+document.getElementById('prev').onclick=()=>switchTo(at-1);document.getElementById('next').onclick=()=>switchTo(at+1);document.addEventListener('keydown',e=>{if(e.target.closest('input,textarea,select,[contenteditable]'))return;if(e.key==='ArrowLeft')switchTo(at-1);if(e.key==='ArrowRight')switchTo(at+1);});switchTo(at);
+</script></body></html>
