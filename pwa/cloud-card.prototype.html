@@ -1,0 +1,162 @@
+<!doctype html><html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cloud-Karten · Prototyp</title><style>body{margin:0;background:#171220;padding-bottom:70px}</style></head><body><script>/* Lucide 1.8.0 official icon subset.
+ISC License
+
+Copyright (c) 2026 Lucide Icons and Contributors
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+---
+
+The following Lucide icons are derived from the Feather project:
+
+airplay, alert-circle, alert-octagon, alert-triangle, aperture, arrow-down-circle, arrow-down-left, arrow-down-right, arrow-down, arrow-left-circle, arrow-left, arrow-right-circle, arrow-right, arrow-up-circle, arrow-up-left, arrow-up-right, arrow-up, at-sign, calendar, cast, check, chevron-down, chevron-left, chevron-right, chevron-up, chevrons-down, chevrons-left, chevrons-right, chevrons-up, circle, clipboard, clock, code, columns, command, compass, corner-down-left, corner-down-right, corner-left-down, corner-left-up, corner-right-down, corner-right-up, corner-up-left, corner-up-right, crosshair, database, divide-circle, divide-square, dollar-sign, download, external-link, feather, frown, hash, headphones, help-circle, info, italic, key, layout, life-buoy, link-2, link, loader, lock, log-in, log-out, maximize, meh, minimize, minimize-2, minus-circle, minus-square, minus, monitor, moon, more-horizontal, more-vertical, move, music, navigation-2, navigation, octagon, pause-circle, percent, plus-circle, plus-square, plus, power, radio, rss, search, server, share, shopping-bag, sidebar, smartphone, smile, square, table-2, tablet, target, terminal, trash-2, trash, triangle, tv, type, upload, x-circle, x-octagon, x-square, x, zoom-in, zoom-out
+
+The MIT License (MIT) (for the icons listed above)
+
+Copyright (c) 2013-present Cole Bemis
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+const prototypeIcons={"chevron-right":[["path",{"d":"m9 18 6-6-6-6"}]],"settings":[["path",{"d":"M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"}],["circle",{"cx":"12","cy":"12","r":"3"}]],"chevron-left":[["path",{"d":"m15 18-6-6 6-6"}]],"refresh-cw":[["path",{"d":"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"}],["path",{"d":"M21 3v5h-5"}],["path",{"d":"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"}],["path",{"d":"M8 16H3v5"}]],"user-round":[["circle",{"cx":"12","cy":"8","r":"5"}],["path",{"d":"M20 21a8 8 0 0 0-16 0"}]],"clapperboard":[["path",{"d":"m12.296 3.464 3.02 3.956"}],["path",{"d":"M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3z"}],["path",{"d":"M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"}],["path",{"d":"m6.18 5.276 3.1 3.899"}]],"cloud-check":[["path",{"d":"m17 15-5.5 5.5L9 18"}],["path",{"d":"M5.516 16.07A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 3.501 7.327"}]],"tag":[["path",{"d":"M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"}],["circle",{"cx":"7.5","cy":"7.5","r":".5","fill":"currentColor"}]],"play":[["path",{"d":"M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"}]],"folder-open":[["path",{"d":"m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"}]],"library":[["path",{"d":"m16 6 4 14"}],["path",{"d":"M12 6v14"}],["path",{"d":"M8 8v12"}],["path",{"d":"M4 4v16"}]],"copy-plus":[["line",{"x1":"15","x2":"15","y1":"12","y2":"18"}],["line",{"x1":"12","x2":"18","y1":"15","y2":"15"}],["rect",{"width":"14","height":"14","x":"8","y":"8","rx":"2","ry":"2"}],["path",{"d":"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"}]],"shield-off":[["path",{"d":"m2 2 20 20"}],["path",{"d":"M5 5a1 1 0 0 0-1 1v7c0 5 3.5 7.5 7.67 8.94a1 1 0 0 0 .67.01c2.35-.82 4.48-1.97 5.9-3.71"}],["path",{"d":"M9.309 3.652A12.252 12.252 0 0 0 11.24 2.28a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1v7a9.784 9.784 0 0 1-.08 1.264"}]],"trash-2":[["path",{"d":"M10 11v6"}],["path",{"d":"M14 11v6"}],["path",{"d":"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"}],["path",{"d":"M3 6h18"}],["path",{"d":"M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"}]],"chevron-down":[["path",{"d":"m6 9 6 6 6-6"}]],"plus":[["path",{"d":"M5 12h14"}],["path",{"d":"M12 5v14"}]],"footprints":[["path",{"d":"M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z"}],["path",{"d":"M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z"}],["path",{"d":"M16 17h4"}],["path",{"d":"M4 13h4"}]],"cloud":[["path",{"d":"M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"}]],"x":[["path",{"d":"M18 6 6 18"}],["path",{"d":"m6 6 12 12"}]]};
+window.lucide={createIcons(options={}){document.querySelectorAll('i[data-lucide]').forEach(node=>{const name=node.dataset.lucide,shape=prototypeIcons[name];if(!shape)return;const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');const attrs={viewBox:'0 0 24 24',width:18,height:18,fill:'none',stroke:'currentColor','stroke-width':1.7,'stroke-linecap':'round','stroke-linejoin':'round','aria-hidden':'true',...options.attrs};for(const [k,v] of Object.entries(attrs))svg.setAttribute(k,v);for(const [tag,attrs] of shape){const e=document.createElementNS(svg.namespaceURI,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,v);svg.append(e);}node.replaceWith(svg);});}};
+</script><!-- Wegwerfprototyp: drei Cloud-Kopfzeilen und ruhigere Figurenkarten. Konto und Aktualisieren bleiben im Cloud-Header; Einstellungen im App-Header. Nur Arbeitsspeicher. -->
+<div id="cloud-card-prototype" class="viz-carousel viz-dotted-background" aria-label="Cloud-Ansichten vergleichen" data-previous-label="Zurück" data-next-label="Weiter">
+<section data-variant="Pur" aria-label="Pur"></section>
+<section data-variant="Kreise" aria-label="Kreise" hidden></section>
+<section data-variant="Gruppiert" aria-label="Gruppiert" hidden></section>
+</div>
+<style>
+#cloud-card-prototype{color-scheme:light dark}
+#cloud-card-prototype>section{padding:12px 4px;min-height:940px;box-sizing:border-box}
+#cloud-card-prototype .app{--bg:light-dark(#faf7ff,#171220);--surface:light-dark(#eee8f4,#2b2335);--upper:light-dark(#f1ebf7,#221b2c);--ink:light-dark(#281d32,#f1ecf6);--muted:light-dark(#6f617b,#beb1cb);--accent:light-dark(#72469b,#cfb0f3);--onaccent:light-dark(#fff,#2b193b);--selected:light-dark(#e2d2ee,#493653);--line:light-dark(#d0c2db,#554660);--good:light-dark(#426d35,#acd29b);--danger:light-dark(#a32d43,#f5a6b5);font-family:Arial,sans-serif;color:var(--ink);background:var(--bg);max-width:430px;margin:auto;border:1px solid var(--line);border-radius:18px;overflow:hidden;position:relative}
+#cloud-card-prototype .app *{box-sizing:border-box}
+#cloud-card-prototype .brand{background:var(--upper);padding:20px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid var(--line)}
+#cloud-card-prototype .brand strong{font-size:25px;font-weight:600;display:block;letter-spacing:-.7px}
+#cloud-card-prototype .brand small{font-size:12px;color:var(--muted);display:block;margin-top:4px}
+#cloud-card-prototype button{font-family:inherit;font-size:14px;color:inherit;cursor:pointer}
+#cloud-card-prototype .icon{border:0;background:transparent;width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;color:var(--accent);padding:0;border-radius:10px}
+#cloud-card-prototype .icon svg{display:block;width:22px;height:22px;stroke-width:1.8}
+#cloud-card-prototype button:focus-visible,#cloud-card-prototype summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#cloud-card-prototype .bar{display:flex;align-items:center;gap:2px;padding:12px 8px;border-bottom:1px solid var(--line);min-height:72px}
+#cloud-card-prototype .bar h2{font-size:19px;letter-spacing:-.4px;margin:0;flex:1;min-width:0;line-height:1.2}
+#cloud-card-prototype .tools{display:flex;align-items:center;gap:2px;flex:none}
+#cloud-card-prototype .circles .tools{gap:8px}
+#cloud-card-prototype .circles .tools .icon{background:var(--surface);border-radius:50%;width:44px;height:44px}
+#cloud-card-prototype .grouped .tools{background:var(--surface);border:1px solid var(--line);border-radius:12px;gap:0;overflow:hidden}
+#cloud-card-prototype .grouped .tools .icon{border-radius:0;width:42px;flex-basis:42px;height:42px}
+#cloud-card-prototype .grouped .tools .icon+button{border-left:1px solid var(--line)}
+#cloud-card-prototype .scope{display:flex;gap:4px;background:var(--upper);padding:4px;margin:12px 16px;border-radius:12px}
+#cloud-card-prototype .scope button{flex:1;min-height:42px;border:0;border-radius:9px;background:transparent;color:var(--muted);font-weight:600}
+#cloud-card-prototype .scope button[aria-pressed=true]{background:var(--accent);color:var(--onaccent)}
+#cloud-card-prototype .body{padding:4px 14px 18px;min-height:620px}
+#cloud-card-prototype .figure{border:1px solid var(--accent);border-radius:16px;background:var(--surface);padding:14px}
+#cloud-card-prototype .figure-head{display:flex;align-items:center;gap:10px}
+#cloud-card-prototype .thumb{width:42px;height:48px;border-radius:8px;background:var(--selected);display:grid;place-items:center;color:var(--accent);flex:none}
+#cloud-card-prototype .thumb svg{width:22px;height:22px}
+#cloud-card-prototype .figure-head h3{font-size:16px;letter-spacing:-.2px;margin:0 0 5px;font-weight:600}
+#cloud-card-prototype .meta{font-size:12px;color:var(--muted)}
+#cloud-card-prototype .available{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--good);margin:12px 0}
+#cloud-card-prototype .available svg{width:16px;height:16px}
+#cloud-card-prototype .local-tabs{display:flex;gap:18px;border-bottom:1px solid var(--line);margin:12px 0 16px}
+#cloud-card-prototype .local-tabs button{border:0;background:transparent;padding:11px 2px;color:var(--muted);font-weight:600;border-bottom:2px solid transparent;min-height:44px}
+#cloud-card-prototype .local-tabs button[aria-selected=true]{color:var(--accent);border-bottom-color:var(--accent)}
+#cloud-card-prototype .description{font-size:14px;line-height:1.6;margin:0 0 16px}
+#cloud-card-prototype .tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
+#cloud-card-prototype .tag{display:inline-flex;align-items:center;gap:5px;border-radius:18px;padding:6px 10px;background:var(--selected);color:var(--accent);font-size:12px}
+#cloud-card-prototype .tag svg{width:13px;height:13px}
+#cloud-card-prototype .video{display:flex;align-items:center;gap:12px;text-align:left;width:100%;background:var(--upper);border:1px solid var(--line);border-radius:10px;padding:12px;min-height:68px}
+#cloud-card-prototype .play{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--selected);color:var(--accent);flex:none}
+#cloud-card-prototype .play svg{width:18px;height:18px}
+#cloud-card-prototype .video strong{display:block;font-size:14px;font-weight:500}
+#cloud-card-prototype .video small{display:block;font-size:12px;color:var(--muted);margin-top:4px}
+#cloud-card-prototype .primary{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;margin-top:12px;border:0;border-radius:10px;background:var(--accent);color:var(--onaccent);font-weight:600;padding:12px}
+#cloud-card-prototype .primary svg{width:17px;height:17px}
+#cloud-card-prototype .action{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:14px 0;min-height:52px;background:transparent;border:0;border-bottom:1px solid var(--line)}
+#cloud-card-prototype .action svg{width:19px;height:19px;color:var(--accent);flex:none}
+#cloud-card-prototype .action span{flex:1}
+#cloud-card-prototype .action .chev{width:16px;color:var(--muted)}
+#cloud-card-prototype .danger,#cloud-card-prototype .danger svg{color:var(--danger)}
+#cloud-card-prototype .consent{font-size:12px;color:var(--muted);margin:0 0 10px}
+#cloud-card-prototype details{margin-top:14px}
+#cloud-card-prototype summary{font-size:14px;color:var(--muted);padding:10px 0;min-height:44px;cursor:pointer}
+#cloud-card-prototype .collapsed{display:flex;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:14px;padding:16px 14px;margin-top:12px;background:var(--surface);font-size:14px}
+#cloud-card-prototype .collapsed svg{width:18px;height:18px;color:var(--muted)}
+#cloud-card-prototype .bottom{display:flex;justify-content:space-around;gap:12px;border-top:1px solid var(--line);padding:14px}
+#cloud-card-prototype .bottom button{border:0;background:transparent;display:grid;justify-items:center;gap:6px;color:var(--muted);font-size:12px;min-height:44px}
+#cloud-card-prototype .bottom button:last-child{color:var(--accent)}
+#cloud-card-prototype .bottom svg{width:22px;height:22px}
+#cloud-card-prototype .feedback{font-size:12px;color:light-dark(#6f617b,#beb1cb);margin:10px auto 0;max-width:430px;min-height:30px}
+#cloud-card-prototype .overlay{position:absolute;inset:96px 10px auto;background:var(--bg);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 40px #0005;z-index:4;padding:16px}
+#cloud-card-prototype .overlay[hidden],#cloud-card-prototype [hidden]{display:none}
+#cloud-card-prototype .overlay h3{margin:0;font-size:18px}
+#cloud-card-prototype .overlay-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+#cloud-card-prototype .overlay p{font-size:14px;line-height:1.6;color:var(--muted)}
+#cloud-card-prototype .library h3{font-size:17px;margin:20px 0 4px}
+#cloud-card-prototype .library small{font-size:12px;color:var(--muted)}
+@media(max-width:360px){#cloud-card-prototype .brand strong{font-size:22px}#cloud-card-prototype .bar h2{font-size:17px}#cloud-card-prototype .bar{padding-left:2px;padding-right:4px}#cloud-card-prototype .body{padding-left:10px;padding-right:10px}}
+</style>
+<script>
+(()=>{
+const root=document.getElementById('cloud-card-prototype');
+const icon=name=>`<i data-lucide="${name}" aria-hidden="true"></i>`;
+root.querySelectorAll(':scope>section').forEach((section,index)=>{
+const variant=section.dataset.variant;
+const button=(name,label,attr='')=>`<button type="button" class="icon" aria-label="${label}" ${attr}>${icon(name)}</button>`;
+const action=(name,label,attr='')=>`<button type="button" class="action" ${attr}>${icon(name)}<span>${label}</span>${icon('chevron-right')}</button>`;
+section.innerHTML=`<div class="app ${['plain','circles','grouped'][index]}"><header class="brand"><div><strong>Step by Step</strong><small>Deine Schritte. Dein Tempo.</small></div>${button('settings','Einstellungen','data-open="settings"')}</header><div class="bar">${button('chevron-left','Zurück','data-demo="Zur Figurenübersicht"')}<h2>Cloud-Speicher</h2><div class="tools" aria-label="Cloud-Aktionen">${button('refresh-cw','Aktualisieren','data-demo="Cloud-Inhalte aktualisiert"')}${button('user-round','Mein Konto','data-open="account"')}</div></div><nav class="scope" aria-label="Cloud-Bereich"><button type="button" aria-pressed="true" data-scope="figures">Meine Figuren</button><button type="button" aria-pressed="false" data-scope="libraries">Bibliotheken</button></nav><main class="body"><div data-view="figures"><article class="figure"><div class="figure-head"><div class="thumb">${icon('clapperboard')}</div><div><h3>Setenta y cuatro</h3><div class="meta">1 Video · Öffentliche Freigabe erlaubt</div></div></div><div class="available">${icon('cloud-check')}Lokal verfügbar</div><nav class="local-tabs" aria-label="Figur"><button type="button" role="tab" aria-selected="true" data-tab="videos">Videos</button><button type="button" role="tab" aria-selected="false" data-tab="manage">Verwalten</button></nav><div data-panel="videos"><p class="description">Setenta, dann Setenta y uno. Die rechte Hand nach oben führen und auf 5 mit links den Impuls zur Drehung geben. Verbindung mit beiden Händen halten.</p><div class="tags"><span class="tag">${icon('tag')}Salsa</span><span class="tag">${icon('tag')}Figur</span></div><button type="button" class="video" aria-label="Setenta y cuatro abspielen, 12,3 MB" data-open="video"><span class="play">${icon('play')}</span><span><strong>Setenta y cuatro</strong><small>12,3 MB · Abspielen</small></span></button><button type="button" class="primary" data-demo="Lokale Figur geöffnet">${icon('folder-open')}Lokal öffnen</button></div><div data-panel="manage" hidden><p class="consent">Öffentliche Freigabe · Erlaubt</p>${action('library','Bibliothek zuordnen','data-demo="Bibliothek auswählen"')}${action('copy-plus','Variante erstellen','data-demo="Neue Variante vorbereiten"')}<details><summary>Weitere Aktionen</summary>${action('shield-off','Freigabe widerrufen','data-open="revoke"')}<button type="button" class="action danger" data-open="delete">${icon('trash-2')}<span>Cloud-Figur löschen</span></button></details></div></article><div class="collapsed"><span>Tap and slide</span>${icon('chevron-down')}</div></div><div data-view="libraries" hidden><button type="button" class="primary" data-demo="Neue Bibliothek vorbereiten">${icon('plus')}Bibliothek erstellen</button><div class="library"><h3>Salsaluca privat</h3><small>Privat · Besitzer</small>${action('library','Verwalten','data-demo="Salsaluca privat verwalten"')}<h3>Salsa Kurs 2</h3><small>Öffentlich · Besitzer</small>${action('library','Verwalten','data-demo="Salsa Kurs 2 verwalten"')}</div></div></main><nav class="bottom" aria-label="Hauptnavigation"><button type="button" data-demo="Zur Figurenübersicht">${icon('footprints')}Figuren</button><button type="button" data-demo="Cloud-Speicher geöffnet">${icon('cloud')}Cloud-Speicher</button></nav><aside class="overlay" hidden aria-label="Dialog"><div class="overlay-head"><h3></h3>${button('x','Schließen','data-close')}</div><div class="overlay-content"></div></aside></div><div class="feedback" aria-live="polite">${variant} · Meine Figuren · Videos</div>`;
+let area='Meine Figuren',tab='Videos';
+const feedback=section.querySelector('.feedback');
+const report=message=>{feedback.textContent=variant+' · '+area+' · '+tab+(message?' · '+message:'');};
+const overlay=section.querySelector('.overlay');
+section.addEventListener('click',event=>{
+const b=event.target.closest('button');if(!b)return;
+if(b.dataset.scope){area=b.dataset.scope==='figures'?'Meine Figuren':'Bibliotheken';section.querySelectorAll('[data-scope]').forEach(n=>n.setAttribute('aria-pressed',String(n===b)));section.querySelectorAll('[data-view]').forEach(n=>n.hidden=n.dataset.view!==b.dataset.scope);report();}
+if(b.dataset.tab){tab=b.dataset.tab==='videos'?'Videos':'Verwalten';section.querySelectorAll('[data-tab]').forEach(n=>n.setAttribute('aria-selected',String(n===b)));section.querySelectorAll('[data-panel]').forEach(n=>n.hidden=n.dataset.panel!==b.dataset.tab);report();}
+if(b.dataset.demo)report(b.dataset.demo+' (Demo)');
+if(b.hasAttribute('data-close')){overlay.hidden=true;report();}
+if(b.dataset.open){let title,content;switch(b.dataset.open){
+case 'settings':title='Einstellungen';content='<p>Darstellung · Speicherorte · Offline-Nutzung · Backups</p>';break;
+case 'account':title='Mein Konto';content='<p>Angemeldet · Upload erlaubt<br>Speicherverbrauch und Abmelden bleiben hier.</p>';break;
+case 'video':title='Setenta y cuatro';content='<p>Hier startet die Cloud-Videovorschau. Dieser Prototyp lädt keine Videos.</p>';break;
+case 'revoke':title='Freigabe widerrufen?';content='<p>Öffentliche Bibliothekszuordnungen werden entfernt. Private Bibliotheken bleiben unverändert.</p><button type="button" class="primary" data-demo="Widerruf bestätigt" data-close>Freigabe widerrufen</button>';break;
+case 'delete':title='Cloud-Figur löschen?';content='<p>Figur und Videos werden aus der Cloud und ihren Bibliotheken entfernt. Lokale Kopien bleiben erhalten.</p><button type="button" class="primary" data-demo="Löschen bestätigt" data-close>Löschen</button>';break;
+}overlay.querySelector('h3').textContent=title;overlay.querySelector('.overlay-content').innerHTML=content;overlay.hidden=false;report(title);}
+});
+section.querySelector('details').addEventListener('toggle',e=>report(e.target.open?'Weitere Aktionen geöffnet':''));
+});
+if(globalThis.lucide)lucide.createIcons();
+})();
+</script>
+<nav id="prototype-switcher" style="position:fixed;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:14px;align-items:center;background:#ece5f3;color:#21142d;padding:10px;border-radius:16px;z-index:10"><button id="prev" aria-label="Vorherige Variante">←</button><span id="variant-name"></span><button id="next" aria-label="Nächste Variante">→</button></nav>
+<script>
+const variants=[...document.querySelectorAll('[data-variant]')];
+let at=Math.max(0,['A','B','C'].indexOf(new URL(location.href).searchParams.get('variant')||'A'));
+function switchTo(n){at=(n+3)%3;variants.forEach((s,i)=>s.hidden=i!==at);document.getElementById('variant-name').textContent=variants[at].dataset.variant;const u=new URL(location.href);u.searchParams.set('variant',['A','B','C'][at]);history.replaceState(null,'',u);}
+document.getElementById('prev').onclick=()=>switchTo(at-1);document.getElementById('next').onclick=()=>switchTo(at+1);document.addEventListener('keydown',e=>{if(e.target.closest('input,textarea,select,[contenteditable]'))return;if(e.key==='ArrowLeft')switchTo(at-1);if(e.key==='ArrowRight')switchTo(at+1);});switchTo(at);
+</script></body></html>
