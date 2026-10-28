@@ -37,3 +37,6 @@ Die Zuordnung einer lokalen Figur zu ihrer Cloud-Figur und der übernommenen ode
 
 **Figuren-Upload**:
 Der gemeinsame Ablauf, der Videos einer lokalen Figur prüft und bei Bedarf überträgt, die Cloud-Figur endgültig speichert und erreichte Ergebnisse für getrennte Nacharbeiten erhält. Bibliothekszuordnung und lokale Cloud-Herkunft können nach erfolgreichem Speichern unabhängig wiederholt werden. Ein unbekannter Speicherstand wird anhand des eindeutigen Upload-Vorgangs geklärt.
+
+**Bibliotheks-Bearbeitungssitzung**:
+Der im Arbeitsspeicher gehaltene Entwurf einer bestehenden Bibliothek mit Angaben, Figuren und Reihenfolge. Die Sitzung umfasst Bearbeiten, Unterbrechen für einen Figuren-Upload, Fortsetzen, Speichern, Verwerfen sowie Fehler- und Konfliktzustände. Sie ist an die aktuelle Anmeldesitzung gebunden und wird nach einem App-Neustart nicht wiederhergestellt. Bereits hochgeladene Cloud-Figuren bestehen unabhängig vom Bibliotheksentwurf.
