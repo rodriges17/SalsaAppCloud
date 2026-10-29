@@ -190,12 +190,12 @@ async function localUpload(page, folder=false) {
 }
 for(const folder of [false,true])test(`upload from ${folder?'device folder':'app storage'} shows public consent errors beside the button and uploads selected bytes`,async({page,browserName})=>{
  test.skip(folder&&browserName!=='chromium','Native directory handles covered in Chromium.');
- await signIn(page);const calls=await mock(page,true,false,true);const bytes=await localUpload(page,folder);
+ await signIn(page);const calls=await mock(page,true,false,true,{reflectUpload:true});const bytes=await localUpload(page,folder);
  await page.getByRole('combobox',{name:'Bibliothek',exact:true}).selectOption('lib-1');
  const upload=page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true});await upload.tap();
  const error=page.locator('#cloudBody [role=alert]');await expect(error).toContainText('öffentlichen Veröffentlichung zustimmen');await expect(error).toBeInViewport();expect(calls.some(c=>c.action==='reserve')).toBe(false);
  await page.getByLabel('Öffentliche Veröffentlichung dieser Figur erlauben',{exact:true}).check();await expect(error).toBeHidden();await upload.tap();
- await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();
+ await expect(page.locator('[data-own-figure="figure-upload"] [role=tab][aria-selected=true]')).toHaveText('Verwalten');
  expect(calls.filter(c=>['reserve','upload','finalize','commit','attach'].includes(c.action)).map(c=>c.action)).toEqual(['reserve','upload','finalize','commit','attach']);
  // WebKit's request inspector omits Blob postData; verify the fetch body there.
  expect(await page.evaluate(()=>window.__sentCloudVideo)).toEqual({bytes,type:'video/mp4'});
@@ -204,11 +204,11 @@ for(const folder of [false,true])test(`upload from ${folder?'device folder':'app
  expect(calls.find(c=>c.action==='attach').payload).toEqual({library:'lib-1',revision:'uploaded-revision'});
 });
 test('private upload needs no public consent and failed transfer is visible and retryable',async({page})=>{
- await signIn(page);const options={visibility:'private',failUpload:true},calls=await mock(page,true,false,true,options);await localUpload(page);
+ await signIn(page);const options={visibility:'private',failUpload:true,reflectUpload:true},calls=await mock(page,true,false,true,options);await localUpload(page);
  await page.getByRole('combobox',{name:'Bibliothek',exact:true}).selectOption('lib-1');
  const upload=page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true});await upload.tap();const error=page.locator('#cloudBody [role=alert]');await expect(error).toContainText('Upload unterbrochen');await expect(error).toBeInViewport();
  expect(calls.some(c=>c.action==='abort')).toBe(true);expect(calls.some(c=>c.action==='commit')).toBe(false);await expect(upload).toBeEnabled();
- options.failUpload=false;await upload.tap();await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();expect(calls.find(c=>c.action==='commit').payload.public_allowed).toBe(false);
+ options.failUpload=false;await upload.tap();await expect(page.locator('[data-own-figure="figure-upload"] [role=tab][aria-selected=true]')).toHaveText('Verwalten');expect(calls.find(c=>c.action==='commit').payload.public_allowed).toBe(false);
  expect(await page.evaluate(async()=>(await(await import('/pwa/storage.js')).listFigures()).length)).toBe(1);
 });
 
