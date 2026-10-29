@@ -297,7 +297,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   if(scenario==='cloud-repair-missing'){
    await page.locator('.cloud-local-status').filter({hasText:'Lokale Dateien fehlen'}).waitFor();
    assert(await page.getByRole('button',{name:'Lokal öffnen',exact:true}).count()===0,'Unreadable files count as locally available');
-   await page.getByRole('button',{name:'Lokal übernehmen',exact:true}).click();
+   await page.getByRole('button',{name:'Lokal verfügbar machen',exact:true}).click();
    await page.locator('#cloudImportConflict').getByRole('button',{name:'Vorhandene Figur ersetzen',exact:true}).click();
    await page.waitForFunction(()=>!document.querySelector('#cloudDialog').open);
   }else{
@@ -357,7 +357,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   });
   async function openLibrary(){await page.locator('#cloudButton').click();await page.locator('a.cloud-library-card').click();}
   if(scenario==='cloud-single-direct-download'){
-   await openLibrary();await page.locator('.cloud-library-summary').first().click();await page.getByRole('button',{name:'In meine Figuren übernehmen',exact:true}).first().click();
+   await openLibrary();await page.locator('.cloud-library-summary').first().click();await page.getByRole('button',{name:'Lokal verfügbar machen',exact:true}).first().click();
    await page.waitForFunction(()=>!document.querySelector('#cloudDialog').open);
    assert(!await page.locator('#editor').isVisible(),'Single cloud download opened the editor');
    const saved=await page.evaluate(async root=>{const s=await import(root+'storage.js'),f=(await s.listFigures())[0];return {title:f.title,status:f.status,description:f.description,tags:f.tags,duration:(await s.figureVideos(f))[0].duration};},root);

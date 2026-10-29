@@ -528,3 +528,6 @@ a.cloud-library-card:active{background:var(--selection)}
 
 .filter-row .chips button{position:relative;min-height:34px;padding:4px 10px;margin-block:5px;font-weight:500}
 .filter-row .chips button::after{content:"";position:absolute;inset:-5px 0}
+
+/* Highlight the local destination within library figure actions. */
+button.cloud-local-open { background:var(--selection); border-color:var(--lavender); color:var(--text); box-shadow:none; }

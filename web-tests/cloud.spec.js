@@ -54,7 +54,7 @@ async function expandOwnFigure(page, manage = false) {
 async function start(page){await page.goto('/pwa/');await expect(page.getByRole('heading',{name:'Step by Step',exact:true})).toBeVisible();}
 test('public cloud download saves directly with cloud metadata and becomes an offline copy',async({page,context})=>{
  await mock(page);await start(page);await page.locator('#cloudButton').tap();await page.locator('a.cloud-library-card').tap();await expandLibraryFigure(page);
- await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();await expect(page.locator('#cloudBody input[type=checkbox]')).toHaveCount(0);await page.getByRole('button',{name:'In meine Figuren übernehmen',exact:true}).tap();
+ await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();await expect(page.locator('#cloudBody input[type=checkbox]')).toHaveCount(0);await page.getByRole('button',{name:'Lokal verfügbar machen',exact:true}).tap();
  await finishCloudImport(page);
  const saved=await page.evaluate(async()=>(await(await import('/pwa/storage.js')).listFigures())[0]);
  expect(saved).toMatchObject({title:'Cloud Drehung',description:'Aus der Cloud',tags:['Salsa'],status:'Neu'});
@@ -292,9 +292,9 @@ test('cloud poster stays identical on a new anonymous device and after local rem
 test('multiple cloud videos have an explicit download selection and only selected videos are imported',async({page})=>{
  const calls=await mock(page,false,false,true,{videos:[{id:'video-1',name:'Führung'},{id:'video-2',name:'Folgen'}]});
  await start(page);await page.locator('#cloudButton').tap();await page.locator('a.cloud-library-card').tap();await expandLibraryFigure(page);
- await expect(page.getByRole('heading',{name:'Videos zum Herunterladen auswählen',exact:true})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Videos für die lokale Kopie auswählen',exact:true})).toBeVisible();
  const checks=page.locator('#cloudBody input[type=checkbox]');await expect(checks).toHaveCount(2);await checks.nth(0).uncheck();await checks.nth(1).uncheck();
- const download=page.getByRole('button',{name:'Ausgewählte Videos in meine Figuren übernehmen',exact:true});await download.tap();await expect(page.locator('#cloudError')).toContainText('Bitte mindestens ein Video auswählen');
+ const download=page.getByRole('button',{name:'Lokal verfügbar machen',exact:true});await download.tap();await expect(page.locator('#cloudError')).toContainText('Bitte mindestens ein Video auswählen');
  expect(calls.filter(call=>call.action==='media_url')).toHaveLength(0);
  await checks.nth(1).check();await download.tap();await finishCloudImport(page);expect((await localCloudFigures(page))[0].videoIds).toHaveLength(1);
  expect(calls.filter(call=>call.action==='media_url').map(call=>call.payload.media)).toEqual(['video-2']);
@@ -313,7 +313,7 @@ test('failed poster loading keeps a neutral placeholder and the figure actions u
   const data=route.request().postDataJSON();if(data.action==='poster_get')return route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({error:'Test: Vorschaubild nicht verfügbar'})});await route.fallback();
  });
  await start(page);await page.locator('#cloudButton').tap();await page.locator('a.cloud-library-card').tap();await expandLibraryFigure(page);await page.locator('.cloud-library-summary').scrollIntoViewIfNeeded();await expect(page.locator('.cloud-thumbnail-placeholder')).toBeVisible();await expect(page.locator('.cloud-thumbnail')).toHaveCount(0);
- await page.getByRole('button',{name:'In meine Figuren übernehmen',exact:true}).tap();await finishCloudImport(page);
+ await page.getByRole('button',{name:'Lokal verfügbar machen',exact:true}).tap();await finishCloudImport(page);
 });
 
 async function seedCloudLocal(page, {title='Cloud Drehung', fingerprint=null}={}) {
@@ -333,7 +333,7 @@ async function localCloudFigures(page) { return page.evaluate(async()=> (await (
 test('a downloaded cloud figure opens its local copy without importing again',async({page})=>{
  await signIn(page);await mock(page,true,true,true,{noLibraries:true});
  await start(page);await page.locator('#cloudButton').tap();
- await expandOwnFigure(page);await page.getByRole('button',{name:'Lokal übernehmen',exact:true}).tap();await finishCloudImport(page);
+ await expandOwnFigure(page);await page.getByRole('button',{name:'Lokal verfügbar machen',exact:true}).tap();await finishCloudImport(page);
  await expect(page.locator('[data-cloud-status=cloud]')).toHaveCount(1);
  await page.locator('#cloudButton').tap();
  await expandOwnFigure(page);await expect(page.locator('.cloud-local-status').first()).toHaveText('Lokal verfügbar');
@@ -343,12 +343,12 @@ test('a downloaded cloud figure opens its local copy without importing again',as
 
 test('direct cloud replacement can be cancelled and preserves identity and learning status only after confirmation',async({page},info)=>{
  await signIn(page);const calls=await mock(page,true,true);await start(page);const before=await seedCloudLocal(page);
- await page.locator('#cloudButton').tap();await expandOwnFigure(page);await page.getByRole('button',{name:'Lokal übernehmen',exact:true}).tap();
+ await page.locator('#cloudButton').tap();await expandOwnFigure(page);await page.getByRole('button',{name:'Lokal verfügbar machen',exact:true}).tap();
  const conflict=page.locator('#cloudImportConflict');await expect(conflict).toBeVisible();
  for(const theme of ['dark','light']){await page.evaluate(t=>window.stepAppearance.set(t),theme);await page.screenshot({path:info.outputPath(`${theme}-cloud-import-conflict.png`)});}
  await conflict.getByRole('button',{name:'Abbrechen',exact:true}).tap();await expect(conflict).toHaveCount(0);await expect(page.locator('#cloudDialog')).toBeVisible();
  expect((await localCloudFigures(page))[0].revision).toBe(before.revision);
- await expandOwnFigure(page);await page.getByRole('button',{name:'Lokal übernehmen',exact:true}).tap();await conflict.getByRole('button',{name:'Vorhandene Figur ersetzen',exact:true}).tap();
+ await expandOwnFigure(page);await page.getByRole('button',{name:'Lokal verfügbar machen',exact:true}).tap();await conflict.getByRole('button',{name:'Vorhandene Figur ersetzen',exact:true}).tap();
  await finishCloudImport(page);
  const local=await localCloudFigures(page);expect(local).toHaveLength(1);expect(local[0]).toMatchObject({id:before.id,status:'Sitzt',createdAt:before.createdAt,importFingerprint:'cloud:rev-1:video-1'});expect(local[0].revision).not.toBe(before.revision);expect(local[0].videoIds).not.toEqual(before.videoIds);
  expect(calls.filter(c=>['attach','library_save','public_permission','delete_figure'].includes(c.action))).toHaveLength(0);
@@ -356,7 +356,7 @@ test('direct cloud replacement can be cancelled and preserves identity and learn
 
 test('local content changes show cloud with a pencil while learning status does not',async({page})=>{
  await signIn(page);await mock(page,true,true,true,{noLibraries:true});
- await start(page);await page.locator('#cloudButton').tap();await expandOwnFigure(page);await page.getByRole('button',{name:'Lokal übernehmen',exact:true}).tap();await finishCloudImport(page);
+ await start(page);await page.locator('#cloudButton').tap();await expandOwnFigure(page);await page.getByRole('button',{name:'Lokal verfügbar machen',exact:true}).tap();await finishCloudImport(page);
  await page.locator('.card-options').tap();await page.getByRole('button',{name:'Bearbeiten',exact:true}).tap();
  await page.locator('#figureStatus').selectOption('Sitzt');await page.locator('#saveFigure').tap();await expect(page.locator('#editor')).not.toBeVisible();
  await expect(page.locator('[data-cloud-status=cloud]')).toHaveCount(1);
@@ -384,7 +384,7 @@ for(const folder of [false,true])test(`uploaded ${folder?'folder':'app'} origina
   await page.evaluate(()=>{FileSystemDirectoryHandle.prototype.queryPermission=async()=> 'prompt';FileSystemDirectoryHandle.prototype.requestPermission=async()=> 'denied';});
   await page.locator('#cloudButton').tap();
   await expandOwnFigure(page);await expect(page.locator('.cloud-local-status').first()).toHaveText('Ordnerzugriff nötig');
-  await expect(page.getByRole('button',{name:'Lokal übernehmen',exact:true})).toBeDisabled();
+  await expect(page.getByRole('button',{name:'Lokal verfügbar machen',exact:true})).toBeDisabled();
  }
 
 });
@@ -417,7 +417,7 @@ test('partial creation retries membership only and never recreates the account',
 for(const mode of ['reader','revoked','owner'])test(`role-aware navigation: ${mode}`,async({page})=>{
  await signIn(page);const me={id:'viewer',email:'viewer@example.test',is_admin:false,upload_enabled:false,used:mode==='revoked'?3:0,quota:250000000};await mock(page,false,mode==='revoked',false,{me,manage:mode==='owner',owner:mode==='owner'?'viewer':'owner'});await start(page);await page.locator('#cloudButton').tap();
  await expect(page.getByRole('button',{name:'Plattformverwaltung',exact:true})).toHaveCount(0);
- if(mode==='revoked'){await expect(page.getByRole('heading',{name:'Meine Cloud-Figuren',exact:true})).toBeVisible();await expect(page.locator('#cloudBody')).toContainText('Uploads sind für dein Konto deaktiviert.');await expandOwnFigure(page);await expect(page.getByRole('button',{name:'Lokal übernehmen',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Bibliothek zuordnen',exact:true})).toHaveCount(0);}else{await expect(page.locator('.cloud-tabs button')).toHaveText(['Bibliotheken']);}
+ if(mode==='revoked'){await expect(page.getByRole('heading',{name:'Meine Cloud-Figuren',exact:true})).toBeVisible();await expect(page.locator('#cloudBody')).toContainText('Uploads sind für dein Konto deaktiviert.');await expandOwnFigure(page);await expect(page.getByRole('button',{name:'Lokal verfügbar machen',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Bibliothek zuordnen',exact:true})).toHaveCount(0);}else{await expect(page.locator('.cloud-tabs button')).toHaveText(['Bibliotheken']);}
  if(mode==='owner'){await expect(page.getByText('Besitzer · Bibliothek verwalten',{exact:true})).toBeVisible();await page.locator('a.cloud-library-card').tap();await expandLibraryFigure(page);await editSettings(page);await expect(page.getByRole('heading',{name:'Mitglieder & Zugriff',exact:true})).toBeVisible();await expect(page.getByLabel('Vollständige E-Mail-Adresse',{exact:true})).toHaveCount(0);await page.getByRole('button',{name:'Mitglied hinzufügen',exact:true}).tap();await expect(page.getByLabel('Vollständige E-Mail-Adresse',{exact:true})).toBeVisible();await expect(page.getByLabel('Personen suchen',{exact:true})).toHaveCount(0);}
 });
 
@@ -516,7 +516,7 @@ for (const authenticated of [false, true]) test(`content matching detects indepe
  await page.locator('#cloudButton').tap();
  if(!authenticated){await page.locator('a.cloud-library-card').tap();await expandLibraryFigure(page);}
  if(authenticated)await expandOwnFigure(page);
- await expect(page.getByRole('button',{name:authenticated?'Lokal übernehmen':'In meine Figuren übernehmen',exact:true})).toBeEnabled();
+ await expect(page.getByRole('button',{name:authenticated?'Lokal verfügbar machen':'Lokal verfügbar machen',exact:true})).toBeEnabled();
  await expect(page.locator('.cloud-local-status').first()).toBeHidden();
  expect(calls.filter(c=>c.action==='media_url')).toHaveLength(0);
  expect(await localCloudFigures(page)).toHaveLength(1);
@@ -645,15 +645,15 @@ test('own cloud cards reveal tabbed options on click and keep only one expanded'
  await expect(page.getByRole('button',{name:'Bibliothek zuordnen',exact:true})).toHaveCount(0);
  await expect(page.getByRole('tab',{name:'Verwalten',exact:true})).toHaveCount(0);
  await cards.first().locator('summary').tap();
- await expect(cards.first().getByRole('button',{name:'Lokal übernehmen',exact:true})).toBeVisible();
+ await expect(cards.first().getByRole('button',{name:'Lokal verfügbar machen',exact:true})).toBeVisible();
  await expect(cards.first().getByRole('button',{name:'Cloud-Figur löschen',exact:true})).toBeHidden();
  await cards.first().getByRole('tab',{name:'Verwalten',exact:true}).tap();
  await expect(cards.first().getByRole('button',{name:'Bibliothek zuordnen',exact:true})).toBeVisible();
- await expect(cards.first().getByRole('button',{name:'Lokal übernehmen',exact:true})).toBeHidden();
+ await expect(cards.first().getByRole('button',{name:'Lokal verfügbar machen',exact:true})).toBeHidden();
  for(const theme of ['light','dark']){await page.evaluate(t=>window.stepAppearance.set(t),theme);await page.screenshot({path:info.outputPath(theme+'-pur-management.png')});}
  await cards.first().getByRole('tab',{name:'Verwalten',exact:true}).press('ArrowLeft');
  await expect(cards.first().getByRole('tab',{name:'Figur',exact:true})).toBeFocused();
- await expect(cards.first().getByRole('button',{name:'Lokal übernehmen',exact:true})).toBeVisible();
+ await expect(cards.first().getByRole('button',{name:'Lokal verfügbar machen',exact:true})).toBeVisible();
  await cards.last().locator('summary').tap();await expect(page.locator('.cloud-own-figure[open]')).toHaveCount(1);await expect(cards.first()).not.toHaveAttribute('open','');
  for(const theme of ['light','dark']){await page.evaluate(t=>window.stepAppearance.set(t),theme);await page.screenshot({path:info.outputPath(theme+'-own-cloud-cards-c.png')});}
  await cards.last().locator('summary').tap();await expect(page.locator('.cloud-own-figure[open]')).toHaveCount(0);
@@ -695,7 +695,7 @@ test('available cloud figures share a top-right label, keep expansion without ar
  await page.evaluate(async()=>{const s=await import('/pwa/storage.js'),blob=await(await fetch('/web-tests/fixtures/clip.mp4')).blob();await s.saveFigure({id:'available-pair',title:'Meine lokale Figur',description:'Lokal',tags:['Salsa'],status:'Sitzt',importFingerprint:'cloud:rev-1:video-1,video-2'},['one','two'].map(id=>({id,name:id,blob,confirmed:true,duration:6,width:320,height:180})));});
  await page.locator('#cloudButton').tap();const own=page.locator('.cloud-own-figure').first();
  await expect(own.locator('.cloud-own-availability')).toHaveText('Lokal verfügbar');await expect(own.locator('.cloud-library-chevron')).toHaveCount(0);
- await expandOwnFigure(page);await expect(own.getByRole('checkbox')).toHaveCount(0);await expect(own.locator('.cloud-local-status')).toBeHidden();await expect(own.getByRole('heading',{name:'Videos zum Herunterladen auswählen',exact:true})).toBeHidden();
+ await expandOwnFigure(page);await expect(own.getByRole('checkbox')).toHaveCount(0);await expect(own.locator('.cloud-local-status')).toBeHidden();await expect(own.getByRole('heading',{name:'Videos für die lokale Kopie auswählen',exact:true})).toBeHidden();
  await expect(own.getByRole('button',{name:'Video „Führung“ abspielen',exact:true})).toBeVisible();await expect(own.getByRole('button',{name:'Video „Folgen“ abspielen',exact:true})).toBeVisible();await expect(own.getByRole('button',{name:'Lokal öffnen',exact:true})).toBeVisible();
  await page.screenshot({path:info.outputPath('available-own-cloud-no-download-checkboxes.png')});
  await page.getByRole('button',{name:'Bibliotheken',exact:true}).tap();await page.locator('a.cloud-library-card').tap();
@@ -703,6 +703,8 @@ test('available cloud figures share a top-right label, keep expansion without ar
  await expect(summary.locator('.cloud-library-availability')).toHaveText('Lokal verfügbar');await expect(summary.locator('.cloud-library-chevron')).toHaveCount(0);
  expect(await summary.evaluate(row=>{const a=row.querySelector('.cloud-library-availability').getBoundingClientRect(),title=row.querySelector('h3').getBoundingClientRect(),r=row.getBoundingClientRect();return Math.abs(a.top-title.top)<2&&Math.abs(a.right-r.right)<2;})).toBe(true);
  await expandLibraryFigure(page);const entry=page.locator('.cloud-library-figure').first();await expect(entry.getByRole('checkbox')).toHaveCount(0);await expect(entry.getByRole('button',{name:'Lokal öffnen',exact:true})).toBeVisible();
+ await expect(entry.getByRole('button',{name:'Lokal öffnen',exact:true})).toHaveClass(/cloud-local-open/);
+ await expect(entry.getByRole('button',{name:'Lokal öffnen',exact:true})).toHaveCSS('box-shadow','none');
  await page.screenshot({path:info.outputPath('available-library-row-top-right.png')});
 });
 
@@ -792,7 +794,7 @@ for(const ending of ['cancel','error'])test(`library download ${ending} leaves o
  let release;const blocked=new Promise(resolve=>release=resolve);
  await page.route('**/storage/v1/object/sign/**',async route=>{if(ending==='cancel')await blocked;await route.fulfill({status:503,body:'Unavailable'}).catch(()=>{});});
  await page.getByRole('button',{name:'Alle Figuren lokal verfügbar machen',exact:true}).tap();await page.locator('#confirmOK').click();
- try {if(ending==='cancel'){await expect(page.locator('#cloudStatus')).toContainText('Cloud Drehung');await page.getByRole('button',{name:'Download abbrechen',exact:true}).tap();}
+ try {if(ending==='cancel'){await expect(page.locator('#cloudStatus')).toContainText('Cloud Drehung');await page.locator('#cloudCancelUpload').tap();}
  await expect(page.locator('#cloudStatus')).toContainText(ending==='cancel'?'Abgebrochen':'1 fehlgeschlagen');
  await expect(page.locator('#cloudDialog > .save-footer')).toHaveAttribute('aria-busy','false');await expect(page.locator('#cloudCancelUpload')).toBeHidden();
  }finally{release();}
