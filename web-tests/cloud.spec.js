@@ -794,7 +794,7 @@ for(const ending of ['cancel','error'])test(`library download ${ending} leaves o
  let release;const blocked=new Promise(resolve=>release=resolve);
  await page.route('**/storage/v1/object/sign/**',async route=>{if(ending==='cancel')await blocked;await route.fulfill({status:503,body:'Unavailable'}).catch(()=>{});});
  await page.getByRole('button',{name:'Alle Figuren lokal verfügbar machen',exact:true}).tap();await page.locator('#confirmOK').click();
- try {if(ending==='cancel'){await expect(page.locator('#cloudStatus')).toContainText('Cloud Drehung');await page.getByRole('button',{name:'Download abbrechen',exact:true}).tap();}
+ try {if(ending==='cancel'){await expect(page.locator('#cloudStatus')).toContainText('Cloud Drehung');await page.locator('#cloudCancelUpload').tap();}
  await expect(page.locator('#cloudStatus')).toContainText(ending==='cancel'?'Abgebrochen':'1 fehlgeschlagen');
  await expect(page.locator('#cloudDialog > .save-footer')).toHaveAttribute('aria-busy','false');await expect(page.locator('#cloudCancelUpload')).toBeHidden();
  }finally{release();}
