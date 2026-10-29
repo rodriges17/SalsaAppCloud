@@ -84,7 +84,7 @@ test('backend not yet configured shows a useful error and leaves ZIP import usab
 
 test('manual sign-in link is redeemed inside the current app without navigating away',async({page})=>{
  await mock(page,true);
- await page.route(`${host}/auth/v1/verify`,r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({access_token:'test-new-user-jwt',refresh_token:'test-new-refresh',expires_in:3600})}));
+ await page.route(`${host}/auth/v1/verify`,r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({access_token:'test-new-user-jwt',refresh_token:'test-new-refresh',expires_in:3600,user:{id:'admin',email:'admin@example.test'}})}));
  await start(page);await page.locator('#cloudButton').tap();
  await expect(page.locator('#cloudBody')).not.toContainText('iPhone-App');
  await expect(page.locator('#cloudBody input')).toHaveCount(0);
@@ -93,6 +93,9 @@ test('manual sign-in link is redeemed inside the current app without navigating 
  await page.locator('#cloudLoginOpen').tap();
  await page.getByLabel('Anmeldelink einfügen',{exact:true}).fill('https://rodriges17.github.io/SalsaAppCloud/?cloud=1&type=magiclink&token_hash=test-once');
  await page.getByRole('button',{name:'Anmelden',exact:true}).tap();
+ await expect(page.locator('#cloudLoginConfirmation')).toContainText('admin@example.test');
+ expect(await page.evaluate(()=>localStorage.getItem('salsa-cloud-session:/pwa/:v1'))).toBeNull();
+ await page.locator('#cloudLoginConfirmation').getByRole('button',{name:'Anmelden',exact:true}).tap();
  await page.locator('#cloudAccountOpen').tap();await expect(page.locator('#cloudAccountMenu')).toContainText('admin@example.test');await page.getByRole('button',{name:'Kontomenü schließen',exact:true}).tap();
  await expect(page.locator('.cloud-tabs button')).toHaveText(['Meine Figuren','Bibliotheken']);
  await expect(page.getByRole('button',{name:'Bibliotheken',exact:true})).toHaveAttribute('aria-pressed','true');
@@ -842,4 +845,20 @@ test('uploaded figure opens Manage with focus, and subsequent navigation collaps
  const manage=card.getByRole('tab',{name:'Verwalten',exact:true});await expect(manage).toHaveAttribute('aria-selected','true');await expect(manage).toBeFocused();
  await page.getByRole('button',{name:'Bibliotheken',exact:true}).tap();await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).tap();
  await expect(page.locator('.cloud-own-figure[open]')).toHaveCount(0);
+});
+
+test('opening a personal link preserves the current account until confirmation and Escape cancels it',async({page})=>{
+ await signIn(page);const calls=await mock(page,true);
+ await page.route(`${host}/auth/v1/verify`,r=>r.fulfill({json:{access_token:'candidate-jwt',refresh_token:'candidate-refresh',expires_in:3600,user:{id:'candidate',email:'candidate@example.test'}}}));
+ await page.route(`${host}/auth/v1/user`,r=>r.fulfill({json:{id:'admin',email:'admin@example.test'}}));
+ await page.route(`${host}/auth/v1/logout?scope=local`,r=>r.fulfill({json:{}}));
+ await page.goto('/pwa/?cloud=1&type=magiclink&token_hash=test-once');
+ const prompt=page.locator('#cloudLoginConfirmation');await expect(prompt).toBeVisible();
+ await expect(prompt).toContainText('admin@example.test');await expect(prompt).toContainText('candidate@example.test');
+ expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('salsa-cloud-session:/pwa/:v1')).access_token)).toBe('test-user-jwt');
+ expect(calls).toHaveLength(0);expect(page.url()).not.toContain('token_hash');
+ await page.keyboard.press('Escape');await expect(prompt).toHaveCount(0);
+ await expect(page.locator('#cloudError')).toContainText('Einmallink ist verbraucht');
+ expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('salsa-cloud-session:/pwa/:v1')).access_token)).toBe('test-user-jwt');
+ expect(calls.some(c=>c.authorization==='Bearer candidate-jwt')).toBe(false);
 });
