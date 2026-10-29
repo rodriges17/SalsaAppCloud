@@ -190,12 +190,12 @@ async function localUpload(page, folder=false) {
 }
 for(const folder of [false,true])test(`upload from ${folder?'device folder':'app storage'} shows public consent errors beside the button and uploads selected bytes`,async({page,browserName})=>{
  test.skip(folder&&browserName!=='chromium','Native directory handles covered in Chromium.');
- await signIn(page);const calls=await mock(page,true,false,true);const bytes=await localUpload(page,folder);
+ await signIn(page);const calls=await mock(page,true,false,true,{reflectUpload:true});const bytes=await localUpload(page,folder);
  await page.getByRole('combobox',{name:'Bibliothek',exact:true}).selectOption('lib-1');
  const upload=page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true});await upload.tap();
  const error=page.locator('#cloudBody [role=alert]');await expect(error).toContainText('öffentlichen Veröffentlichung zustimmen');await expect(error).toBeInViewport();expect(calls.some(c=>c.action==='reserve')).toBe(false);
  await page.getByLabel('Öffentliche Veröffentlichung dieser Figur erlauben',{exact:true}).check();await expect(error).toBeHidden();await upload.tap();
- await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();
+ await expect(page.locator('[data-own-figure="figure-upload"] [role=tab][aria-selected=true]')).toHaveText('Verwalten');
  expect(calls.filter(c=>['reserve','upload','finalize','commit','attach'].includes(c.action)).map(c=>c.action)).toEqual(['reserve','upload','finalize','commit','attach']);
  // WebKit's request inspector omits Blob postData; verify the fetch body there.
  expect(await page.evaluate(()=>window.__sentCloudVideo)).toEqual({bytes,type:'video/mp4'});
@@ -204,11 +204,11 @@ for(const folder of [false,true])test(`upload from ${folder?'device folder':'app
  expect(calls.find(c=>c.action==='attach').payload).toEqual({library:'lib-1',revision:'uploaded-revision'});
 });
 test('private upload needs no public consent and failed transfer is visible and retryable',async({page})=>{
- await signIn(page);const options={visibility:'private',failUpload:true},calls=await mock(page,true,false,true,options);await localUpload(page);
+ await signIn(page);const options={visibility:'private',failUpload:true,reflectUpload:true},calls=await mock(page,true,false,true,options);await localUpload(page);
  await page.getByRole('combobox',{name:'Bibliothek',exact:true}).selectOption('lib-1');
  const upload=page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true});await upload.tap();const error=page.locator('#cloudBody [role=alert]');await expect(error).toContainText('Upload unterbrochen');await expect(error).toBeInViewport();
  expect(calls.some(c=>c.action==='abort')).toBe(true);expect(calls.some(c=>c.action==='commit')).toBe(false);await expect(upload).toBeEnabled();
- options.failUpload=false;await upload.tap();await expect(page.getByRole('heading',{name:'Cloud Kurs',exact:true})).toBeVisible();expect(calls.find(c=>c.action==='commit').payload.public_allowed).toBe(false);
+ options.failUpload=false;await upload.tap();await expect(page.locator('[data-own-figure="figure-upload"] [role=tab][aria-selected=true]')).toHaveText('Verwalten');expect(calls.find(c=>c.action==='commit').payload.public_allowed).toBe(false);
  expect(await page.evaluate(async()=>(await(await import('/pwa/storage.js')).listFigures()).length)).toBe(1);
 });
 
@@ -750,7 +750,7 @@ test('library download has one fixed progress surface and retains its result',as
  await mock(page);await start(page);await page.locator('#cloudButton').tap();await page.locator('a.cloud-library-card').tap();
  let release;const blocked=new Promise(resolve=>release=resolve);
  await page.route('**/storage/v1/object/sign/**',async route=>{await blocked;await route.fulfill({status:200,contentType:'video/mp4',body:await readFile('web-tests/fixtures/clip.mp4')});});
- await page.getByRole('button',{name:'Alle Figuren lokal verfügbar machen',exact:true}).tap();
+ await page.getByRole('button',{name:'Alle Figuren lokal verfügbar machen',exact:true}).tap();await page.locator('#confirmOK').click();
  try {
   await expect(page.locator('#cloudStatus')).toContainText('Cloud Drehung');
   await expect(page.getByText(/Video 1 von 1 laden.*Cloud Drehung/)).toHaveCount(1);
@@ -788,7 +788,7 @@ for(const ending of ['cancel','error'])test(`library download ${ending} leaves o
  await mock(page);await start(page);await page.locator('#cloudButton').tap();await page.locator('a.cloud-library-card').tap();
  let release;const blocked=new Promise(resolve=>release=resolve);
  await page.route('**/storage/v1/object/sign/**',async route=>{if(ending==='cancel')await blocked;await route.fulfill({status:503,body:'Unavailable'}).catch(()=>{});});
- await page.getByRole('button',{name:'Alle Figuren lokal verfügbar machen',exact:true}).tap();
+ await page.getByRole('button',{name:'Alle Figuren lokal verfügbar machen',exact:true}).tap();await page.locator('#confirmOK').click();
  try {if(ending==='cancel'){await expect(page.locator('#cloudStatus')).toContainText('Cloud Drehung');await page.getByRole('button',{name:'Download abbrechen',exact:true}).tap();}
  await expect(page.locator('#cloudStatus')).toContainText(ending==='cancel'?'Abgebrochen':'1 fehlgeschlagen');
  await expect(page.locator('#cloudDialog > .save-footer')).toHaveAttribute('aria-busy','false');await expect(page.locator('#cloudCancelUpload')).toBeHidden();
@@ -815,4 +815,31 @@ test('guided administration separates account password from the platform screen'
  await page.locator('#cloudBack').tap();await expect(page.locator('#cloudAccountMenu')).toBeVisible();
  await page.getByRole('button',{name:'Passwort einrichten / ändern',exact:true}).tap();
  await expect(page.locator('#cloudAccountMenu').getByLabel('Neues Passwort',{exact:true})).toBeVisible();
+});
+
+test('library tags stay below the title without increasing collapsed row height',async({page})=>{
+ await mock(page);await start(page);await page.locator('#cloudButton').tap();await page.locator('a.cloud-library-card').tap();
+ await expect(page.locator('.cloud-library-description')).toHaveText('Geteilte Figuren');
+ const summary=page.locator('.cloud-library-summary').first();await expect(summary.locator('.cloud-tag-pill')).toHaveText(['Salsa']);
+ for(const width of [320,390,844]){
+  await page.setViewportSize({width,height:844});
+  const heights=await summary.evaluate(row=>{
+   const name=row.querySelector('.cloud-library-name'),title=name.querySelector('h3'),copy=name.cloneNode(true),height=row.getBoundingClientRect().height;
+   name.replaceWith(title);const original=row.getBoundingClientRect().height;title.replaceWith(copy);return {height,original};
+  });
+  expect(Math.abs(heights.height-heights.original)).toBeLessThan(1);
+ }
+ await page.getByRole('button',{name:'Alle Figuren lokal verfügbar machen',exact:true}).tap();
+ await expect(page.locator('#confirmDialog')).toBeVisible();await expect(page.locator('#confirmDialog')).toContainText('Vorhandene Videos werden wiederverwendet');
+ await page.locator('#confirmCancel').tap();await expect(page.locator('#cloudDownloadProgress')).toBeHidden();
+});
+
+test('uploaded figure opens Manage with focus, and subsequent navigation collapses it',async({page})=>{
+ await signIn(page);await mock(page,true,false,true,{reflectUpload:true});await localUpload(page);
+ await page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true}).tap();
+ const card=page.locator('[data-own-figure="figure-upload"]');
+ await expect(card).toHaveAttribute('open','');
+ const manage=card.getByRole('tab',{name:'Verwalten',exact:true});await expect(manage).toHaveAttribute('aria-selected','true');await expect(manage).toBeFocused();
+ await page.getByRole('button',{name:'Bibliotheken',exact:true}).tap();await page.getByRole('button',{name:'Meine Cloud-Figuren',exact:true}).tap();
+ await expect(page.locator('.cloud-own-figure[open]')).toHaveCount(0);
 });

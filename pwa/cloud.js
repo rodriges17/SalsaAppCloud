@@ -95,7 +95,7 @@ async function run(message, work, errorTarget = errorBox, retainStatus = false) 
   if (busy) return; busy = true; statusBox.closest('footer').setAttribute('aria-busy', 'true'); errorBox.hidden = true; errorTarget.hidden = true; statusBox.textContent = message;
   body.inert = true; if (loginDialog) loginDialog.inert = true; if (accountDialog) accountDialog.inert = true; document.getElementById('cloudBack').disabled = true; dialog.querySelectorAll('[data-nav], #cloudNavigation button, .cloud-refresh-trigger, #cloudAccountOpen, #cloudSettings').forEach(button => { button.disabled = true; });
   try { return await work(); } catch (error) { if (error.accessChanged) { clearLibrarySession(); await recoverAccess(); } if (retainStatus) statusBox.textContent = error?.message ?? 'Download fehlgeschlagen.'; report(error, errorTarget.isConnected ? errorTarget : errorBox); }
-  finally { busy = false; statusBox.closest('footer').setAttribute('aria-busy', 'false'); body.inert = false; if (loginDialog) loginDialog.inert = false; if (accountDialog) accountDialog.inert = false; document.getElementById('cloudBack').disabled = false; dialog.querySelectorAll('[data-nav], #cloudNavigation button, .cloud-refresh-trigger, #cloudAccountOpen, #cloudSettings').forEach(button => { button.disabled = false; }); if (!retainStatus) statusBox.textContent = ''; if (authReloadPending && dialog.open) { authReloadPending = false; source = null; area = 'initial'; void load(null, true); } }
+  finally { busy = false; statusBox.closest('footer').setAttribute('aria-busy', 'false'); body.inert = false; if (loginDialog) loginDialog.inert = false; if (accountDialog) accountDialog.inert = false; document.getElementById('cloudBack').disabled = false; dialog.querySelectorAll('[data-nav], #cloudNavigation button, .cloud-refresh-trigger, #cloudAccountOpen, #cloudSettings').forEach(button => { button.disabled = false; }); if (!retainStatus) statusBox.textContent = ''; focusUploadedFigure(); if (authReloadPending && dialog.open) { authReloadPending = false; source = null; area = 'initial'; void load(null, true); } }
 }
 async function recoverAccess() {
   const owner = cloudIdentity(), epoch = viewEpoch;
@@ -157,6 +157,7 @@ function cloudStatusLabel(target, text, modified = false) {
 }
 async function navigate(next, library = null) {
   if (!await peopleView.leave() || !await leaveLibraryDraft()) return;
+  if (next === 'figures' || next === 'initial') resetOwnFigures();
   clearLibrarySession(); source = null; area = next; if (['admin', 'create'].includes(next)) await run('Laden …', () => load(library)); else await load(library, true);
 }
 function focusSection(box) {
@@ -346,7 +347,10 @@ async function libraryView(id, detail) {
     const summary = node('summary', undefined, 'cloud-library-summary');
     summary.append(node('span', String(index + 1), 'cloud-order-number'));
     const picture = node('span', undefined, 'cloud-library-picture'); if (rev?.videos?.length) thumbnail(picture, rev); summary.append(picture);
-    summary.append(node('h3', rev?.title ?? 'Noch nicht veröffentlicht'));
+    const name = node('div', undefined, 'cloud-library-name');
+    name.append(node('h3', rev?.title ?? 'Noch nicht veröffentlicht'));
+    if (rev?.tags?.length) { const tags = tagPills(rev.tags); tags.title = rev.tags.join(', '); name.append(tags); }
+    summary.append(name);
     const availability = node('span', undefined, 'cloud-library-availability');
     const update = () => {
       const local = localIndex.resolve(rev, localFigures, { figureId: entry.figure_id });
@@ -359,8 +363,8 @@ async function libraryView(id, detail) {
       for (const other of entriesBox.querySelectorAll('details[open]')) if (other !== box) other.open = false;
       if (!mounted) {
         mounted = true;
-        if (entry.published) revisionCard(content, { ...entry.published, figure_id: entry.figure_id }, 'Aktuelle Figur', rev.title, true);
-        if (entry.pending && entry.pending.id !== entry.published?.id) revisionCard(content, { ...entry.pending, figure_id: entry.figure_id }, 'Zur Freigabe', rev.title, true);
+        if (entry.published) revisionCard(content, { ...entry.published, figure_id: entry.figure_id }, 'Aktuelle Figur', rev.title, true, true);
+        if (entry.pending && entry.pending.id !== entry.published?.id) revisionCard(content, { ...entry.pending, figure_id: entry.figure_id }, 'Zur Freigabe', rev.title, true, rev.id === entry.pending.id);
         if (!entry.published && entry.pending) content.append(node('p', 'Diese Figur ist noch nicht für Besucher freigegeben.'));
       }
     };
@@ -484,7 +488,9 @@ function libraryDownloadControls(parent, entries) {
   const resultText = statusBox;
   const failures = node('ul'); failures.hidden = true;
   const progress = document.getElementById('cloudDownloadProgress');
-  const start = action('Alle Figuren lokal verfügbar machen', () => run('Lokalen Bestand prüfen …', async () => {
+  const start = action('Alle Figuren lokal verfügbar machen', async () => {
+    if (!await hooks.confirm({ title: 'Alle Figuren lokal verfügbar machen?', message: 'Alle veröffentlichten Figuren direkt im gewählten lokalen Speicher sichern. Vorhandene Videos werden wiederverwendet; bestehende Lernstände und Notizen bleiben erhalten.', ok: 'Herunterladen' })) return;
+    return run('Lokalen Bestand prüfen …', async () => {
     if (librarySession?.dirty) throw new Error('Bitte zuerst die Bibliothek speichern, bevor du alle Figuren lokal verfügbar machst.');
     const settings = await storageSettings();
     if (settings.activeFolder && settings.folders.find(folder => folder.id === settings.activeFolder)?.access !== 'granted') throw new Error('Bitte den gewählten Geräteordner in den Einstellungen freigeben, bevor du die Bibliothek herunterlädst.');
@@ -518,9 +524,10 @@ function libraryDownloadControls(parent, entries) {
       await hooks.localChanged?.();
       await refreshLocalFigures();
     } finally { controller = null; cancel.hidden = true; cancel.textContent = 'Upload abbrechen'; progress.hidden = true; }
-  }, errorBox, true));
+  }, errorBox, true);
+  });
   start.className = 'primary';
-  box.append(start, node('p', 'Alle veröffentlichten Figuren direkt im gewählten lokalen Speicher sichern. Vorhandene Videos werden wiederverwendet; bestehende Lernstände und Notizen bleiben erhalten.'), failures);
+  box.append(start, failures);
   parent.append(box);
 }
 function versionLabel(revision) {
@@ -534,14 +541,14 @@ async function previewVideo(box, revision, video) {
   clearPreviews(box);
   const player = node('video'); player.controls = true; player.playsInline = true; player.src = signed.url; box.append(player);
 }
-function revisionCard(parent, rev, label, parentTitle = parent.querySelector('h3')?.textContent, compact = false) {
+function revisionCard(parent, rev, label, parentTitle = parent.querySelector('h3')?.textContent, compact = false, tagsInSummary = false) {
   const box = node('article', undefined, 'cloud-revision'), heading = node('div', undefined, 'revision-heading');
   const copy = node('div'); copy.append(node('h4', label), node('p', versionLabel(rev))); heading.append(copy);
   if (!compact && rev.videos?.[0]) thumbnail(heading, rev);
   box.append(heading);
   if (rev.title !== parentTitle) box.append(node('p', rev.title, 'revision-title'));
   parent.append(box);
-  box.append(node('p', rev.description)); if(rev.tags?.length)box.append(tagPills(rev.tags));
+  box.append(node('p', rev.description)); if(!tagsInSummary && rev.tags?.length)box.append(tagPills(rev.tags));
   downloadControls(box, rev);
 }
 const videoSize=value=>Number.isFinite(Number(value)) && Number(value)>0?MB(value):'Größe unbekannt';
@@ -665,7 +672,20 @@ function variantButton(box, revision) {
   }));
 }
 let savedLibraryFigure = null;
+let uploadedFigureFocus = null;
 let ownFigureSelection = { id: null, tab: 'videos', owner: null };
+function resetOwnFigures() {
+  uploadedFigureFocus = null;
+  ownFigureSelection = { id: null, tab: 'videos', owner: state?.me?.id };
+  for (const card of body.querySelectorAll('.cloud-own-figure')) { clearPreviews(card); card.open = false; }
+}
+function focusUploadedFigure() {
+  const pending = uploadedFigureFocus; uploadedFigureFocus = null;
+  if (!pending || source || current || area !== 'figures' || pending.owner !== cloudIdentity() || !dialog.open) return;
+  const card = [...body.querySelectorAll('.cloud-own-figure')].find(card => card.dataset.ownFigure === pending.id);
+  const tab = card?.querySelector('[role=tab][aria-selected=true]');
+  if (card?.open && tab) { tab.focus({ preventScroll: true }); card.scrollIntoView({ block: 'nearest' }); }
+}
 function ownFigures() {
   if (ownFigureSelection.owner !== state.me?.id) ownFigureSelection = { id: null, tab: 'videos', owner: state.me?.id };
   if (!state.own_figures.some(f => f.id === ownFigureSelection.id)) ownFigureSelection.id = null;
@@ -835,7 +855,7 @@ async function publishForm() {
     const returnSession = librarySession?.suspended ? librarySession : null;
     const afterSaved = async result => {
       if (!workflow.currentAccount || result.kind !== 'saved') return;
-      ownFigureSelection = { id: result.saved.figure, tab: 'videos', owner }; savedLibraryFigure = result.saved.figure;
+      ownFigureSelection = { id: result.saved.figure, tab: 'manage', owner }; savedLibraryFigure = returnSession ? result.saved.figure : null;
       // A failed read or render is follow-up work, never an upload failure.
       try {
         if (returnSession) {
@@ -851,7 +871,8 @@ async function publishForm() {
         if (revision) localIndex.observe(revision);
         await hooks.localChanged?.();
         if (!workflow.currentAccount) return;
-        source = null; area = libraryId && !result.attachPending ? 'libraries' : 'figures'; await load(libraryId && !result.attachPending ? libraryId : null);
+        source = null; area = 'figures'; await load(null);
+        if (workflow.currentAccount) uploadedFigureFocus = { id: result.saved.figure, owner: cloudIdentity() };
         uploadViewError = null;
       } catch (error) { if (error.accessChanged) throw error; if (workflow.currentAccount) uploadViewError = 'Figur gespeichert. Die Ansicht konnte nicht aktualisiert werden.'; }
       if (workflow.currentAccount) renderUploadRecovery(afterSaved);
@@ -1047,7 +1068,7 @@ export function initCloud(callbacks) {
   const query = new URLSearchParams(location.search); if (query.has('library') || query.has('cloud')) setTimeout(() => openCloud(null, query.get('library')), 0);
 }
 export async function openCloud(local = null, library = null) {
-  if (busy || dialog.open) return; if (local && !signedIn()) return; source = local; current = library; area = 'initial';
+  if (busy || dialog.open) return; if (local && !signedIn()) return; resetOwnFigures(); source = local; current = library; area = 'initial';
   errorBox.hidden = true; if (displayedOwner !== cloudIdentity()) { cloudNavigation.replaceChildren(); cloudNavigation.hidden = true; } if (displayedOwner !== cloudIdentity() || local) { disposeUploadTags(); cancelThumbnails(); clearPreviews(body); body.replaceChildren(); }
   // Do not let dialog focus restoration reopen the search keyboard on return.
   if (document.activeElement?.matches('input, textarea, [contenteditable=true]')) document.activeElement.blur();
