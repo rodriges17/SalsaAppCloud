@@ -13,6 +13,7 @@ export async function runLibraryNavigationCase(page,{root,native,scenario}) {
   const {action}=route.request().postDataJSON();let result={};
   if(action==='state'){reads.push(action);result={me:editing?{id:'navigation-owner',email:'owner@test.ch',upload_enabled:false,is_admin:false,used:0,quota:0}:null,libraries:[{...library,manage:editing}],own_figures:[]};}
   if(action==='library'){reads.push(action);result={library,manage:editing,members:[],entries};}
+  if(action==='poster_get')result={poster:'/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHBwgHBgoICAgLCgoLDhgQDg0NDh0VFhEYIx8lJCIfIiEmKzcvJik0KSEiMEExNDk7Pj4+JS5ESUM8SDc9Pjv/2wBDAQoLCw4NDhwQEBw7KCIoOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozv/wAARCAAMAAwDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwBtFFFYnin/2Q==',kind:'local',can_write:false};
   await route.fulfill({contentType:'application/json',body:JSON.stringify(result)});
  });
  await page.locator('#cloudButton').click();await page.locator('a.cloud-library-card').click();
@@ -42,7 +43,9 @@ export async function runLibraryNavigationCase(page,{root,native,scenario}) {
   await last.locator('summary').evaluate(el=>el.scrollIntoView({block:'end'}));
   const beforeHeight=await last.locator('summary').evaluate(el=>el.getBoundingClientRect().height);
   await last.locator('summary').click();
-  await page.waitForFunction(()=>{const s=document.querySelector('#cloudDialog .cloud-scroll'),c=s.querySelector('.cloud-library-figure[open]');return c&&c.getBoundingClientRect().bottom<=Math.min(s.getBoundingClientRect().bottom,innerHeight)+1;});
+  await last.locator('.cloud-video-play').last().waitFor();
+  await page.waitForFunction(()=>{const s=document.querySelector('#cloudDialog .cloud-scroll'),c=s.querySelector('[data-library-figure="navigation-9"]');return c?.open&&c.querySelectorAll('.cloud-video-play').length===5&&c.getBoundingClientRect().bottom<=Math.min(s.getBoundingClientRect().bottom,innerHeight)+1;});
+  await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
   assert(await visibleEnd(),'The expanded last figure ends above fixed navigation');
   assert(await last.locator('.cloud-video-play').count()===5,'Long details retain all five videos');
   await last.locator('summary').evaluate(el=>el.click());
@@ -51,16 +54,17 @@ export async function runLibraryNavigationCase(page,{root,native,scenario}) {
   await last.locator('summary').click();
   const previous=page.locator('.cloud-library-figure').nth(8);
   await previous.locator('summary').click();
-  await page.waitForFunction(()=>document.querySelectorAll('.cloud-library-figure[open]').length===1);
+  await page.waitForFunction(()=>document.querySelector('[data-library-figure="navigation-8"]')?.open&&document.querySelectorAll('.cloud-library-figure[open]').length===1);
   await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
   assert(await visibleEnd(),'Switching figures reveals the new end');
   await previous.locator('summary').evaluate(el=>el.click());
+  await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
  }
  // A short, fully visible detail panel should not move the scroller.
  await page.setViewportSize({width:390,height:1100});
  const first=page.locator('.cloud-library-figure').first();
  await first.locator('summary').evaluate(el=>el.scrollIntoView({block:'start'}));
  const before=await scroller.evaluate(el=>el.scrollTop);
- await first.locator('summary').click();await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+ await first.locator('summary').click();await first.locator('.cloud-video-play').waitFor();await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
  assert(Math.abs((await scroller.evaluate(el=>el.scrollTop))-before)<1,'Already visible details do not jump');
 }
