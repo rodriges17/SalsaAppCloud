@@ -74,7 +74,7 @@ test('admin creates a person through three steps and explicitly generates a link
  await expect(page.locator('.cloud-person-summary[aria-expanded=true]')).toContainText('writer@example.test');
  expect(calls.find(c=>c.action==='admin_user').payload).toEqual({email:'writer@example.test',enabled:true,quota:100000000,create_only:true});
  expect(calls.some(c=>c.action==='admin_link')).toBe(false);
- await page.getByRole('button',{name:'Neuen Anmeldelink erstellen',exact:true}).tap();await expect(page.getByLabel('Einmaliger persönlicher Anmeldelink',{exact:true})).toHaveValue(/token_hash=one-time-test/);await expect(page.locator('.cloud-login-link')).toContainText('gültig bis');
+ await page.getByRole('tab',{name:'Aktionen',exact:true}).tap();await page.getByRole('button',{name:'Neuen Anmeldelink erstellen',exact:true}).tap();await expect(page.getByLabel('Einmaliger persönlicher Anmeldelink',{exact:true})).toHaveValue(/token_hash=one-time-test/);await expect(page.locator('.cloud-login-link')).toContainText('gültig bis');
  expect(calls.every(c=>c.authorization==='Bearer test-user-jwt')).toBe(true);
 });
 test('backend not yet configured shows a useful error and leaves ZIP import usable',async({page})=>{
@@ -387,19 +387,18 @@ for(const folder of [false,true])test(`uploaded ${folder?'folder':'app'} origina
 });
 
 const testPeople=[{id:'writer',email:'writer@example.test',upload_enabled:true,quota:250000000,used:34000000},{id:'reader',email:'reader@example.test',upload_enabled:false,quota:250000000,used:0}];
-test('person selection expands inline, collapses the previous entry and preserves drafts',async({page},info)=>{
+test('person selection protects edits before collapsing the previous entry',async({page},info)=>{
  await signIn(page);await mock(page,true,false,true,{people:structuredClone(testPeople)});await start(page);await page.locator('#cloudButton').tap();await page.locator('#cloudAccountOpen').tap();await page.getByRole('button',{name:'Plattformverwaltung',exact:true}).tap();
  const writer=page.locator('.cloud-person-summary').filter({hasText:'writer@example.test'}),reader=page.locator('.cloud-person-summary').filter({hasText:'reader@example.test'});
- await writer.tap();await expect(writer).toHaveAttribute('aria-expanded','true');await page.getByLabel('Speicherlimit in MB',{exact:true}).fill('300');
- await reader.tap();await expect(writer).toHaveAttribute('aria-expanded','false');await expect(page.locator('.cloud-person-details')).toHaveCount(1);
- await writer.tap();await expect(page.getByLabel('Speicherlimit in MB',{exact:true})).toHaveValue('300');
+ await writer.tap();await expect(writer).toHaveAttribute('aria-expanded','true');await page.getByRole('tab',{name:'Berechtigungen',exact:true}).tap();await page.getByLabel('Speicherlimit in MB',{exact:true}).fill('300');
+ await reader.tap();await expect(page.locator('#confirmDialog')).toBeVisible();await page.locator('#confirmCancel').tap();await expect(writer).toHaveAttribute('aria-expanded','true');await expect(page.getByLabel('Speicherlimit in MB',{exact:true})).toHaveValue('300');
  await expect(page.getByRole('button',{name:'Änderungen speichern',exact:true})).toBeEnabled();
  for(const theme of ['dark','light']){await page.evaluate(t=>window.stepAppearance.set(t),theme);await page.screenshot({path:info.outputPath(`people-${theme}.png`)});}
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
- await writer.tap();await expect(page.locator('.cloud-person-details')).toHaveCount(0);
+ await writer.tap();await page.locator('#confirmOK').tap();await expect(page.locator('.cloud-person-details')).toHaveCount(0);
 });
 test('upload removal requires confirmation and remains unchanged on cancel',async({page})=>{
- await signIn(page);const calls=await mock(page,true,false,true,{people:structuredClone(testPeople)});await start(page);await page.locator('#cloudButton').tap();await page.locator('#cloudAccountOpen').tap();await page.getByRole('button',{name:'Plattformverwaltung',exact:true}).tap();await page.locator('.cloud-person-summary').filter({hasText:'writer@example.test'}).tap();
+ await signIn(page);const calls=await mock(page,true,false,true,{people:structuredClone(testPeople)});await start(page);await page.locator('#cloudButton').tap();await page.locator('#cloudAccountOpen').tap();await page.getByRole('button',{name:'Plattformverwaltung',exact:true}).tap();await page.locator('.cloud-person-summary').filter({hasText:'writer@example.test'}).tap();await page.getByRole('tab',{name:'Berechtigungen',exact:true}).tap();
  await page.getByLabel('Figuren hochladen und Bibliotheken erstellen',{exact:true}).uncheck();await page.getByRole('button',{name:'Änderungen speichern',exact:true}).tap();
  await expect(page.locator('#confirmDialog')).toContainText('Bestehende Cloud-Figuren und Leserechte bleiben erhalten');await page.locator('#confirmCancel').tap();expect(calls.some(c=>c.action==='admin_user')).toBe(false);
  await page.getByRole('button',{name:'Änderungen speichern',exact:true}).tap();await page.locator('#confirmOK').tap();await expect(page.locator('.cloud-person-summary[aria-expanded=true]')).toContainText('Nur Lesen');
@@ -420,7 +419,7 @@ for(const mode of ['reader','revoked','owner'])test(`role-aware navigation: ${mo
 });
 
 test('server-side permission changes update navigation without deleting the login',async({page})=>{
- await signIn(page);const options={people:structuredClone(testPeople),failUser:true};const calls=await mock(page,true,false,true,options);await start(page);await page.locator('#cloudButton').tap();await page.locator('#cloudAccountOpen').tap();await page.getByRole('button',{name:'Plattformverwaltung',exact:true}).tap();await page.locator('.cloud-person-summary').filter({hasText:'writer@example.test'}).tap();await page.getByLabel('Speicherlimit in MB',{exact:true}).fill('300');
+ await signIn(page);const options={people:structuredClone(testPeople),failUser:true};const calls=await mock(page,true,false,true,options);await start(page);await page.locator('#cloudButton').tap();await page.locator('#cloudAccountOpen').tap();await page.getByRole('button',{name:'Plattformverwaltung',exact:true}).tap();await page.locator('.cloud-person-summary').filter({hasText:'writer@example.test'}).tap();await page.getByRole('tab',{name:'Berechtigungen',exact:true}).tap();await page.getByLabel('Speicherlimit in MB',{exact:true}).fill('300');
  options.me={id:'admin',email:'admin@example.test',is_admin:false,upload_enabled:false,quota:500000000,used:0};
  await page.getByRole('button',{name:'Änderungen speichern',exact:true}).tap();await expect(page.locator('#cloudError')).toContainText('Keine Berechtigung.');await expect(page.getByRole('button',{name:'Plattformverwaltung',exact:true})).toHaveCount(0);await expect(page.locator('.cloud-tabs button')).toHaveText(['Bibliotheken']);
  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('salsa-cloud-session:/pwa/:v1')).access_token)).toBe('test-user-jwt');expect(calls.filter(c=>c.action==='state').length).toBeGreaterThan(1);
@@ -487,11 +486,11 @@ test('platform admin signs in again with email and password without redeeming a 
 test('admin sets an own password with matching confirmation; secrets are cleared and never sent to the cloud function',async({page})=>{
  await signIn(page);const calls=await mock(page,true);const writes=[];
  await page.route(`${host}/auth/v1/user`,r=>{writes.push(r.request().postDataJSON());return r.fulfill({status:200,contentType:'application/json',body:'{"id":"admin"}'});});
- await start(page);await page.locator('#cloudButton').tap();await page.locator('#cloudAccountOpen').tap();await page.getByRole('button',{name:'Plattformverwaltung',exact:true}).tap();
- await page.getByLabel('Neues Admin-Passwort',{exact:true}).fill('a-new-demo-password');await page.getByLabel('Neues Admin-Passwort wiederholen',{exact:true}).fill('does-not-match');await page.getByRole('button',{name:'Admin-Passwort speichern',exact:true}).tap();
- await expect(page.locator('#cloudBody')).toContainText('Die neuen Passwörter stimmen nicht überein.');expect(writes).toHaveLength(0);
- await page.getByLabel('Neues Admin-Passwort wiederholen',{exact:true}).fill('a-new-demo-password');await page.getByRole('button',{name:'Admin-Passwort speichern',exact:true}).tap();
- await expect(page.locator('#cloudBody')).toContainText('Passwort gespeichert.');expect(writes).toEqual([{password:'a-new-demo-password'}]);await expect(page.getByLabel('Neues Admin-Passwort',{exact:true})).toHaveValue('');await expect(page.getByLabel('Neues Admin-Passwort wiederholen',{exact:true})).toHaveValue('');
+ await start(page);await page.locator('#cloudButton').tap();await page.locator('#cloudAccountOpen').tap();await page.getByRole('button',{name:'Passwort einrichten / ändern',exact:true}).tap();
+ await page.getByLabel('Neues Passwort',{exact:true}).fill('a-new-demo-password');await page.getByLabel('Neues Passwort wiederholen',{exact:true}).fill('does-not-match');await page.getByRole('button',{name:'Passwort speichern',exact:true}).tap();
+ await expect(page.locator('#cloudAccountMenu')).toContainText('Die neuen Passwörter stimmen nicht überein.');expect(writes).toHaveLength(0);
+ await page.getByLabel('Neues Passwort wiederholen',{exact:true}).fill('a-new-demo-password');await page.getByRole('button',{name:'Passwort speichern',exact:true}).tap();
+ await expect(page.locator('#cloudAccountMenu')).toContainText('Passwort gespeichert.');expect(writes).toEqual([{password:'a-new-demo-password'}]);await expect(page.getByLabel('Neues Passwort',{exact:true})).toHaveValue('');await expect(page.getByLabel('Neues Passwort wiederholen',{exact:true})).toHaveValue('');
  expect(JSON.stringify(calls)).not.toContain('a-new-demo-password');
 });
 test('failed password login keeps public access and clears the rejected password for retry',async({page})=>{
@@ -781,7 +780,7 @@ test('account menu holds identity quota and actions and closes before cloud back
  const menu=page.getByRole('dialog',{name:'Mein Konto',exact:true});await expect(menu).toBeVisible();await expect(menu).toContainText('admin@example.test');await expect(menu).toContainText('119.5 MB / 500.0 MB');
  await expect(menu.getByRole('button',{name:'Plattformverwaltung',exact:true})).toBeVisible();
  await page.keyboard.press('Escape');await expect(menu).toBeHidden();await expect(trigger).toBeFocused();
- await trigger.tap();await menu.getByRole('button',{name:'Plattformverwaltung',exact:true}).tap();await expect(menu).toBeHidden();await expect(page.getByRole('heading',{name:'Personen & Zugriff',exact:true})).toBeVisible();
+ await trigger.tap();await menu.getByRole('button',{name:'Plattformverwaltung',exact:true}).tap();await expect(menu).toBeHidden();await expect(page.getByRole('heading',{name:'Benutzer',exact:true})).toBeVisible();
  await trigger.tap();await page.evaluate(()=>document.querySelector('#cloudDialog').dispatchEvent(new Event('cancel',{cancelable:true})));await expect(menu).toBeHidden();await expect(page.locator('#cloudDialog')).toBeVisible();
 });
 
@@ -805,4 +804,15 @@ test('reader account menu refreshes quota and stays usable on small portrait and
  await page.setViewportSize({width:844,height:390});await page.locator('#cloudAccountOpen').tap();await expect(menu).toContainText('2.5 MB / 500.0 MB');await expect(menu.getByRole('button',{name:'Abmelden',exact:true})).toBeInViewport();
  await page.screenshot({path:'/tmp/step-cloud-account-landscape.png'});await page.setViewportSize({width:390,height:844});await page.screenshot({path:'/tmp/step-cloud-account-portrait.png'});
  await page.mouse.click(2,2);await expect(menu).toBeHidden();await expect(page.locator('#cloudDialog')).toBeVisible();
+});
+
+test('guided administration separates account password from the platform screen',async({page})=>{
+ await signIn(page);await mock(page,true,false,true,{people:structuredClone(testPeople)});await start(page);await page.locator('#cloudButton').tap();
+ await page.locator('#cloudAccountOpen').tap();await page.getByRole('button',{name:'Plattformverwaltung',exact:true}).tap();
+ await expect(page.locator('#cloudDialog > .screen-header h2')).toHaveText('Plattformverwaltung');
+ await expect(page.locator('#cloudNavigation')).toBeHidden();
+ await expect(page.getByLabel('Neues Admin-Passwort',{exact:true})).toHaveCount(0);
+ await page.locator('#cloudBack').tap();await expect(page.locator('#cloudAccountMenu')).toBeVisible();
+ await page.getByRole('button',{name:'Passwort einrichten / ändern',exact:true}).tap();
+ await expect(page.locator('#cloudAccountMenu').getByLabel('Neues Passwort',{exact:true})).toBeVisible();
 });

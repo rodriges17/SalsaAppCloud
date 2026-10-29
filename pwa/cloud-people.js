@@ -1,6 +1,12 @@
 // Administrator-only people UI. Drafts and generated links live only in this view.
-export function createPeopleView({ node, action, field, select, checkbox, call, run, confirm, state, refresh, report, section }) {
-  let expanded = null, adding = null, query = '';
+export function createPeopleView({ node, action, field, select, checkbox, call, run, confirm, state, refresh, report, account, extraManagement = () => null }) {
+  let expanded = null, adding = null, query = '', filter = 'Alle', activeTab = 'Konto', more, platformDraft = null;
+  const dirty = () => [...drafts].some(([id,d]) => { const p = state()?.people?.find(p => p.id === id); return p && (d.enabled !== p.upload_enabled || Number(d.quota) !== p.quota / 1000000 || Object.keys(d.members || {}).length); });
+  async function leave() {
+    if (!dirty() && !adding && platformDraft === null) return true;
+    if (!await confirm({title:'Ungespeicherte Änderungen', message:'Möchtest du die Änderungen verwerfen oder weiter bearbeiten?', ok:'Verwerfen', cancel:'Weiter bearbeiten', destructive:true})) return false;
+    drafts.clear(); adding = null; platformDraft = null; return true;
+  }
   const drafts = new Map();
   const mb = n => `${(Number(n ?? 0) / 1000000).toFixed(1)} MB`;
   const manageable = () => state().libraries.filter(l => l.manage);
@@ -16,7 +22,7 @@ export function createPeopleView({ node, action, field, select, checkbox, call, 
     const message = lib.visibility === 'private' ? 'Der Zugriff auf diese private Bibliothek entfällt. Bereits heruntergeladene lokale Kopien bleiben erhalten.' : 'Die Mitgliedschaft entfällt. Die öffentliche Bibliothek bleibt lesbar. Bereits heruntergeladene lokale Kopien bleiben erhalten.';
     if (await confirm({ title: `${person.email}: Mitglied entfernen?`, message, ok: 'Mitglied entfernen', destructive: true })) await work();
   }
-  function membershipEditor(box, person, memberships, reload) {
+  function membershipEditor(box, person, memberships, reload, draft, changed) {
     for (const lib of state().libraries) {
       const member = memberships.find(m => m.library_id === lib.id), owner = lib.owner_id === person.id;
       if (!owner && !member && !lib.manage) continue;
@@ -27,28 +33,44 @@ export function createPeopleView({ node, action, field, select, checkbox, call, 
       const choices = [['reader', 'Lesen']];
       if (lib.collaborative && person.upload_enabled) choices.push(['contributor', 'Mitwirken']);
       const form = node('form'); row.append(form);
-      const role = select(form, `Rolle in ${lib.title}`, choices, member?.role);
+      const role = select(form, `Rolle in ${lib.title}`, member ? choices : [['','Kein Zugriff'],...choices], draft.members?.[lib.id] ?? member?.role ?? '');
+      role.onchange = () => { draft.members ??= {}; if (role.value === (member?.role ?? '')) delete draft.members[lib.id]; else draft.members[lib.id] = role.value || 'remove'; changed(); };
       if (!lib.collaborative || !person.upload_enabled) row.append(node('p', !lib.collaborative ? 'Diese Bibliothek erlaubt keine gemeinschaftlichen Beiträge.' : 'Mitwirken benötigt die Upload-Freigabe des Administrators.', 'small muted'));
-      form.append(action(member ? 'Rolle speichern' : 'Zugriff zuweisen', () => run('Zugriff speichern …', async () => { await call('member', { library: lib.id, email: person.email, role: role.value }); await reload(); })));
       form.onsubmit = e => e.preventDefault();
-      if (member) row.append(action('Mitglied entfernen', () => removeMember(person, lib, () => run('Mitglied entfernen …', async () => { await call('member', { library: lib.id, email: person.email, role: 'remove' }); await reload(); }))));
+      if (member) row.append(action('Mitglied entfernen', async () => { if (!await leave()) return; return removeMember(person, lib, () => run('Mitglied entfernen …', async () => { await call('member', { library: lib.id, email: person.email, role: 'remove' }); await reload(); })); }));
     }
   }
   async function details(box, person) {
+    const tabs = node('div', undefined, 'cloud-person-tabs'); tabs.setAttribute('role','tablist'); tabs.setAttribute('aria-label','Benutzerbereiche'); box.append(tabs);
+    const panels = {};
+    for (const name of ['Konto','Berechtigungen','Aktionen']) {
+      const button = action(name, async () => { if (name === activeTab || !await leave()) return; activeTab = name; render(); });
+      const id = `person-${person.id}-${name}`;
+      button.id = `${id}-tab`; button.setAttribute('role','tab'); button.setAttribute('aria-selected',String(activeTab === name)); button.setAttribute('aria-controls',id); tabs.append(button);
+      const panel = node('div',undefined,'cloud-person-panel'); panel.id=id; panel.setAttribute('role','tabpanel'); panel.setAttribute('aria-labelledby',button.id); panel.hidden=activeTab!==name; panels[name]=panel; box.append(panel);
+    }
+    const original = box; box = panels.Konto;
+    box.append(node('h4','Kontoinformationen'),node('p',person.email),node('p',person.is_admin ? 'Plattform-Administrator' : 'Benutzer'));
     box.append(node('p', `${person.is_admin ? 'Administrator · ' : ''}${person.upload_enabled ? 'Uploads erlaubt' : 'Nur Lesen'} · ${mb(person.used)} / ${mb(person.quota)}`));
     const draft = drafts.get(person.id) ?? { enabled: person.upload_enabled, quota: person.quota / 1000000 }; drafts.set(person.id, draft);
-    const form = node('form'); box.append(form);
+    box = panels.Berechtigungen;
+    box.append(node('h4','Cloud-Freigabe'), node('p','Die Upload-Freigabe gilt für neue Figuren und neue Bibliotheken. Lesen bleibt möglich.','small muted'));
+    const form = node('form'), saveError = node('p','','error'); saveError.setAttribute('role','alert'); saveError.hidden=true; box.append(form,saveError);
     let save;
-    const dirty = () => { if (save) save.disabled = draft.enabled === person.upload_enabled && Number(draft.quota) === person.quota / 1000000; };
+    const dirty = () => { if (save) save.disabled = draft.enabled === person.upload_enabled && Number(draft.quota) === person.quota / 1000000 && !Object.keys(draft.members || {}).length; };
     const fields = permissions(form, draft, dirty);
     if (person.id === state().me.id) { fields.enabled.disabled = true; form.append(node('p', 'Die eigene Upload-Freigabe kann hier nicht entzogen werden.', 'small muted')); }
     save = action('Änderungen speichern', async () => {
       if (!form.reportValidity()) return;
       if (person.upload_enabled && !draft.enabled && !await confirm({ title: `${person.email}: Uploads deaktivieren?`, message: 'Neue Uploads und neue Bibliotheken werden gesperrt. Bestehende Cloud-Figuren und Leserechte bleiben erhalten. Mitwirken ist ohne Upload-Freigabe nicht mehr nutzbar; eigene Bibliotheken bleiben verwaltbar.', ok: 'Uploads deaktivieren', destructive: true })) return;
-      await run('Freigabe speichern …', async () => { await call('admin_user', { email: person.email, enabled: draft.enabled, quota: Math.floor(Number(draft.quota) * 1000000) }); drafts.delete(person.id); await refresh(); });
+      await run('Freigabe speichern …', async () => { await call('admin_user', { email: person.email, enabled: draft.enabled, quota: Math.floor(Number(draft.quota) * 1000000) });
+        for (const [library, role] of Object.entries(draft.members || {})) { await call('member', {library, email:person.email, role}); delete draft.members[library]; }
+        drafts.delete(person.id); await refresh(); const target = host.querySelector('.cloud-person-details'); if (target) notice(target, 'Änderungen gespeichert.'); }, saveError);
     }); save.className = 'primary'; form.append(save); dirty(); form.onsubmit = e => e.preventDefault();
-    const access = node('div'); box.append(access, node('h4', 'Anmeldung'));
-    const linkBox = node('div', undefined, 'cloud-login-link');
+    const access = node('div'); panels.Berechtigungen.append(access); box = panels.Aktionen;
+    if (person.id === state().me.id && person.is_admin) box.append(action('Passwort unter „Mein Konto“ ändern', account));
+    box.append(node('h4', 'Anmeldung'));
+    const linkBox = node('div', undefined, 'cloud-login-link'), linkError = node('p','','error'); linkError.hidden=true; linkError.setAttribute('role','alert');
     box.append(action('Neuen Anmeldelink erstellen', () => run('Anmeldelink erstellen …', async () => {
       linkBox.replaceChildren(); const result = await call('admin_link', { email: person.email });
       const link = field(linkBox, 'Einmaliger persönlicher Anmeldelink', result.link); link.readOnly = true; link.autocomplete = 'off';
@@ -56,14 +78,14 @@ export function createPeopleView({ node, action, field, select, checkbox, call, 
       notice(linkBox, expiry && Number.isFinite(expiry.getTime()) ? `Einmalig verwendbar · gültig bis ${expiry.toLocaleString('de-CH')}` : 'Einmalig und zeitlich begrenzt. Die genaue Ablaufzeit ist derzeit nicht bestätigt.');
       linkBox.append(action('Anmeldelink kopieren', async () => { try { await navigator.clipboard.writeText(link.value); notice(linkBox, 'Anmeldelink kopiert.'); } catch { link.focus(); link.select(); notice(linkBox, 'Bitte den markierten Link kopieren.'); } }));
       if (navigator.share) linkBox.append(action('Anmeldelink teilen', async () => { try { await navigator.share({ title: 'Dein persönlicher Anmeldelink', text: 'Einmalig und zeitlich begrenzt. Persönlich verwenden.', url: link.value }); } catch (e) { if (e.name !== 'AbortError') throw e; } }));
-    })), node('p', 'Persönlich weitergeben. Es wird keine E-Mail versendet. Alte Links werden hier nicht angezeigt.', 'small muted'), linkBox);
+    }, linkError)), node('p', 'Persönlich weitergeben. Es wird keine E-Mail versendet. Alte Links werden hier nicht angezeigt.', 'small muted'), linkBox, linkError);
     const loading = node('p', 'Bibliothekszugriffe werden geladen …'); access.append(node('h4', 'Bibliotheken'), loading);
     try {
       const result = await call('admin_access', { id: person.id });
-      if (!box.isConnected) return;
-      loading.remove(); membershipEditor(access, person, result.memberships, refresh);
+      if (!original.isConnected) return;
+      loading.remove(); membershipEditor(access, person, result.memberships, refresh, draft, dirty);
       if (!state().libraries.length) access.append(node('p', 'Noch keine Bibliotheken vorhanden.'));
-    } catch (error) { if (box.isConnected) { loading.textContent = 'Bibliothekszugriffe konnten nicht geladen werden.'; access.append(action('Erneut versuchen', refresh)); report(error); } }
+    } catch (error) { if (original.isConnected) { loading.textContent = 'Bibliothekszugriffe konnten nicht geladen werden.'; access.append(action('Erneut versuchen', async()=>{if(await leave())await refresh();})); report(error); } }
   }
   function wizard(box) {
     const d = adding;
@@ -113,27 +135,36 @@ export function createPeopleView({ node, action, field, select, checkbox, call, 
     host.replaceChildren();
     if (!state()?.me?.is_admin) return;
     if (adding) { wizard(host); return; }
-    const heading = node('div', undefined, 'cloud-person-heading'); heading.append(node('h3', 'Personen & Zugriff'), action('Person hinzufügen', () => { adding = { step: 0, email: '', enabled: false, quota: 250, libraries: {}, done: {}, created: false }; render(); })); host.append(heading);
-    const search = field(host, 'Personen suchen', query, 'search'); search.autocomplete = 'off';
+    const heading = node('div', undefined, 'cloud-person-heading'); heading.append(node('h3', 'Benutzer'), action('Person hinzufügen', async () => { if (!await leave()) return; adding = { step: 0, email: '', enabled: false, quota: 250, libraries: {}, done: {}, created: false }; render(); })); host.append(heading);
+    const search = field(host, 'Benutzer suchen', query, 'search'); search.autocomplete = 'off'; search.placeholder = 'Name oder E-Mail';
+    const filters = node('div',undefined,'cloud-person-filters'); filters.setAttribute('aria-label','Benutzer filtern'); host.append(filters);
+    for (const name of ['Alle','Admins','Gesperrt']) { const button = action(name,async()=>{ if (!await leave()) return; filter=name; render(); }); button.setAttribute('aria-pressed',String(filter===name)); filters.append(button); }
+    if (filter==='Gesperrt') host.append(node('p','Zeigt Benutzer mit gesperrten Uploads. Das Konto bleibt zum Lesen nutzbar.','small muted'));
     const list = node('div', undefined, 'cloud-people-list'); host.append(list);
     function drawList() {
       list.replaceChildren();
-      const people = [...state().people].sort((a, b) => a.email.localeCompare(b.email)).filter(p => p.email.toLowerCase().includes(query.toLowerCase()));
+      const people = [...state().people].sort((a, b) => (a.name || a.email).localeCompare(b.name || b.email, 'de')).filter(p => `${p.name || ''} ${p.email}`.toLowerCase().includes(query.toLowerCase()) && (filter !== 'Admins' || p.is_admin) && (filter !== 'Gesperrt' || !p.upload_enabled));
       for (const p of people) {
         const entry = node('article', undefined, 'cloud-person-entry'), button = node('button', undefined, 'cloud-person-summary'), copy = node('span'); button.type = 'button';
-        copy.append(node('strong', p.email), node('span', `${p.is_admin ? 'Administrator · ' : ''}${p.upload_enabled ? 'Uploads erlaubt' : 'Nur Lesen'} · ${mb(p.used)} / ${mb(p.quota)}`));
+        copy.append(node('strong', p.name || p.email)); if (p.name) copy.append(node('span',p.email));
+        const badges = node('span',undefined,'cloud-person-badges');
+        for (const text of [p.is_admin ? 'Admin' : 'Benutzer', p.upload_enabled ? 'Uploads erlaubt' : 'Nur Lesen', ...(p.id===state().me.id ? ['Du'] : [])]) badges.append(node('span',text,'cloud-person-badge')); copy.append(badges);
         const open = expanded?.email === p.email; button.append(copy, node('span', open ? '⌃' : '⌄')); button.setAttribute('aria-expanded', String(open)); button.setAttribute('aria-controls', `person-details-${p.id}`); entry.append(button); list.append(entry);
-        button.onclick = () => { if (busyView()) return; expanded = open ? null : { email: p.email }; drawList(); list.querySelector(`[aria-controls="person-details-${p.id}"]`)?.focus({ preventScroll: true }); };
+        button.onclick = async () => { if (busyView() || !await leave()) return; activeTab='Konto'; expanded = open ? null : { email: p.email }; drawList(); list.querySelector(`[aria-controls="person-details-${p.id}"]`)?.focus({ preventScroll: true }); };
         if (open) { const content = node('div', undefined, 'cloud-person-details'); content.id = `person-details-${p.id}`; entry.append(content); void details(content, p); }
       }
       if (!people.length) list.append(node('p', 'Keine Personen gefunden.'));
     }
     const busyView = () => !!host.closest('[inert]');
-    search.oninput = () => { query = search.value; drawList(); }; drawList();
-    const limits = node('details', undefined, 'cloud-platform-limits'); limits.append(node('summary', 'Plattform-Speicherlimit')); host.append(limits);
+    search.onchange = async () => { if (!await leave()) { search.value=query; return; } query = search.value; drawList(); };
+    search.oninput = () => { if (!dirty() && !adding && platformDraft === null) { query=search.value; drawList(); } }; drawList();
+    more = node('details',undefined,'cloud-platform-limits'); more.append(node('summary','Weitere Verwaltung')); host.append(more);
+    const extra = extraManagement(); if (extra) more.append(extra);
+    const limits = node('section'); limits.append(node('h4','Plattform-Speicherlimit')); more.append(limits);
     limits.append(node('p', `${mb(state().settings.used)} / ${mb(state().settings.total_limit)} insgesamt belegt`));
-    const total = field(limits, 'Gesamtlimit in MB (maximal 1000)', state().settings.total_limit / 1000000, 'number'); total.min = '0'; total.max = '1000';
-    limits.append(action('Gesamtlimit speichern', () => run('Speichern …', async () => { if (!total.reportValidity()) return; await call('admin_limit', { bytes: Math.floor(Number(total.value) * 1000000) }); await refresh(); })));
+    const total = field(limits, 'Gesamtlimit in MB (maximal 1000)', state().settings.total_limit / 1000000, 'number'); total.min = '0'; total.max = '1000'; total.step='1'; total.required=true;
+    total.oninput=()=>{ platformDraft=Number(total.value)===state().settings.total_limit/1000000 ? null : total.value; };
+    limits.append(action('Gesamtlimit speichern', () => run('Speichern …', async () => { if (!total.reportValidity()) return; await call('admin_limit', { bytes: Math.floor(Number(total.value) * 1000000) }); platformDraft=null; await refresh(); })));
   }
-  return { mount(box) { host = box; render(); }, reset() { expanded = null; adding = null; drafts.clear(); query = ''; } };
+  return { get more() { return more; }, get dirty() { return dirty() || !!adding || platformDraft !== null; }, leave, mount(box) { host = box; render(); }, reset() { expanded = null; adding = null; drafts.clear(); platformDraft = null; query = ''; filter = 'Alle'; activeTab = 'Konto'; } };
 }
