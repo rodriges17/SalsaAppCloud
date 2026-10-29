@@ -706,8 +706,12 @@ function ownFigures() {
   if (!state.own_figures.some(f => f.id === ownFigureSelection.id)) ownFigureSelection.id = null;
   if (!state.own_figures.length) body.append(node('p', 'Noch keine eigenen Cloud-Figuren. Lade eine lokale Figur über „In Cloud veröffentlichen“ hoch.'));
   const list = node('div', undefined, 'cloud-own-list'); body.append(list);
-  for (const f of state.own_figures) {
-    const revisions = [...f.revisions].sort((a, b) => (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0));
+  const collator = new Intl.Collator('de', { sensitivity: 'base', numeric: true });
+  const figures = state.own_figures.map(f => ({ ...f, revisions: [...f.revisions].sort((a, b) => (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0)) }));
+  const title = f => f.revisions[0]?.title ?? 'Noch nicht fertig hochgeladene Figur';
+  figures.sort((a, b) => collator.compare(title(a), title(b)));
+  for (const f of figures) {
+    const revisions = f.revisions;
     const latest = revisions[0], card = node('details', undefined, 'cloud-own-figure'); card.dataset.ownFigure = f.id;
     const summary = node('summary', undefined, 'cloud-own-summary');
     const picture = node('span', undefined, 'cloud-library-picture'); if (latest?.videos?.length) thumbnail(picture, latest);
