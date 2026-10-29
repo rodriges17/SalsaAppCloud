@@ -1,7 +1,18 @@
 import { clearCloudCache } from './cloud-cache.js';
 import { CLOUD_URL, CLOUD_KEY } from './cloud-config.js';
 const SESSION_KEY = `salsa-cloud-session:${new URL('./', import.meta.url).pathname}:v1`;
-let session = null, refreshing = null, loginEpoch = 0;
+let session = null, refreshing = null, loginEpoch = 0, linkAttempt = null;
+let confirmLinkLogin = async () => false;
+export function setLinkLoginConfirmation(confirm) { confirmLinkLogin = confirm; }
+export function cancelLinkLogin() {
+  loginEpoch++;
+  linkAttempt?.abort(); linkAttempt = null;
+}
+async function discardLinkSession(candidate) {
+  const current = storedSession();
+  if (!candidate?.access_token || current?.access_token === candidate.access_token || current?.refresh_token === candidate.refresh_token) return;
+  await fetch(`${CLOUD_URL}/auth/v1/logout?scope=local`, { method: 'POST', headers: { apikey: CLOUD_KEY, Authorization: `Bearer ${candidate.access_token}` }, signal: AbortSignal.timeout(10000) }).catch(() => {});
+}
 function storedSession() { try { return JSON.parse(localStorage.getItem(SESSION_KEY) ?? 'null'); } catch { return session; } }
 session = storedSession();
 export function cloudIdentity() {
@@ -11,7 +22,7 @@ export function cloudIdentity() {
   return `session:${session.cache_id}`;
 }
 async function replaceSession(next, expired = false) {
-  loginEpoch++;
+  cancelLinkLogin();
   const previous = cloudIdentity();
   session = next ? { ...next, cache_id: crypto.randomUUID() } : null;
   if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session)); else localStorage.removeItem(SESSION_KEY);
@@ -25,15 +36,13 @@ globalThis.addEventListener?.('storage', event => {
   if (event.key !== SESSION_KEY) return;
   let old, next; try { old = JSON.parse(event.oldValue ?? 'null'); next = JSON.parse(event.newValue ?? 'null'); } catch {}
   if (old?.cache_id && old.cache_id === next?.cache_id) return; // Token rotation is the same account/session.
-  loginEpoch++;
+  cancelLinkLogin();
   if (old?.cache_id) void clearCloudCache(`session:${old.cache_id}`);
   globalThis.dispatchEvent?.(new CustomEvent('cloud-session-changed', { detail: { external: true } }));
 });
-// Capture Supabase's callback before the local player replaces the hash route.
+// Legacy token fragments are untrusted input, never an authentication callback.
 const callback = new URLSearchParams(location.hash.slice(1));
-if (callback.has('access_token') && callback.has('refresh_token')) {
-  const next = { access_token: callback.get('access_token'), refresh_token: callback.get('refresh_token'), expires_at: Date.now() + Number(callback.get('expires_in') ?? 3600) * 1000 };
-  void replaceSession(next);
+if (callback.has('access_token') || callback.has('refresh_token')) {
   history.replaceState(null, '', location.pathname + location.search);
 }
 async function parse(response) {
@@ -105,20 +114,44 @@ let pendingLogin = (() => {
   const link = url.href; url.searchParams.delete('token_hash'); url.searchParams.delete('type');
   history.replaceState(null, '', url.pathname + url.search + url.hash); return link;
 })();
-export async function loginWithLink(link) {
-  const epoch = ++loginEpoch, owner = cloudIdentity();
-  let url; try { url = new URL(link); } catch { throw new Error('Bitte den vollständigen persönlichen Anmeldelink einfügen.'); }
-  const token = url.searchParams.get('token_hash');
-  if (!token || url.searchParams.get('type') !== 'magiclink') throw new Error('Das ist kein gültiger persönlicher Anmeldelink.');
-  const data = await parse(await fetch(`${CLOUD_URL}/auth/v1/verify`, { method: 'POST', headers: { apikey: CLOUD_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ token_hash: token, type: 'magiclink' }), signal: AbortSignal.timeout(30000) }));
-  if (!data.access_token || !data.refresh_token) throw new Error('Anmeldung unvollständig. Bitte einen neuen Link anfordern.');
-  if (epoch !== loginEpoch || owner !== cloudIdentity()) throw new Error('Diese Anmeldung wurde inzwischen abgebrochen.');
-  await replaceSession({ ...data, expires_at: Date.now() + data.expires_in * 1000 });
+export async function loginWithLink(link, confirm = confirmLinkLogin) {
+  cancelLinkLogin();
+  const epoch = loginEpoch, owner = cloudIdentity(), attempt = new AbortController();
+  linkAttempt = attempt;
+  const active = () => !attempt.signal.aborted && epoch === loginEpoch && owner === cloudIdentity();
+  const check = () => { if (!active()) throw new Error('Diese Anmeldung wurde inzwischen abgebrochen.'); };
+  let data, adopted = false;
+  try {
+    let url; try { url = new URL(link); } catch { throw new Error('Bitte den vollständigen persönlichen Anmeldelink einfügen.'); }
+    const token = url.searchParams.get('token_hash');
+    if (!token || url.searchParams.get('type') !== 'magiclink') throw new Error('Das ist kein gültiger persönlicher Anmeldelink.');
+    data = await parse(await fetch(`${CLOUD_URL}/auth/v1/verify`, { method: 'POST', headers: { apikey: CLOUD_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ token_hash: token, type: 'magiclink' }), signal: AbortSignal.timeout(30000) }));
+    check();
+    if (!data.access_token || !data.refresh_token || !(data.expires_in > 0) || !data.user?.id || !data.user?.email) throw new Error('Anmeldung unvollständig. Bitte einen neuen Link anfordern.');
+    let previousUser = null;
+    if (storedSession()) {
+      // Read the current identity from Auth, never from the link or an unverified JWT.
+      const previousToken = await accessToken(); check();
+      previousUser = await parse(await fetch(`${CLOUD_URL}/auth/v1/user`, { headers: { apikey: CLOUD_KEY, Authorization: `Bearer ${previousToken}` }, signal: AbortSignal.timeout(30000) }));
+      check();
+      if (!previousUser.id || !previousUser.email) throw new Error('Das bisherige Konto konnte nicht geprüft werden. Bitte erneut versuchen.');
+    }
+    const accepted = await confirm({ email: data.user.email, previousEmail: previousUser?.email ?? null, sameAccount: previousUser?.id === data.user.id, signal: attempt.signal });
+    check();
+    if (accepted !== true) throw new Error('Anmeldung abgebrochen. Der geprüfte Einmallink ist verbraucht. Bitte einen neuen persönlichen Anmeldelink anfordern.');
+    // No asynchronous gap between the last identity check and session adoption.
+    adopted = true;
+    await replaceSession({ ...data, expires_at: Date.now() + data.expires_in * 1000 });
+  } finally {
+    if (linkAttempt === attempt) linkAttempt = null;
+    if (data && !adopted) await discardLinkSession(data);
+  }
 }
 // Authenticate with Supabase first, then verify the database-backed platform role
 // before publishing the candidate session or exposing cached admin content.
 export async function loginWithPassword(email, password) {
-  const epoch = ++loginEpoch, owner = cloudIdentity();
+  cancelLinkLogin();
+  const epoch = loginEpoch, owner = cloudIdentity();
   email = String(email ?? '').trim().toLowerCase();
   if (!email.includes('@') || !password) throw new Error('Bitte E-Mail-Adresse und Passwort eingeben.');
   let data, adopted = false;

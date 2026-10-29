@@ -8,7 +8,7 @@ import { videoHash } from './cloud-dedup.js';
 import { createMemberView } from './cloud-members.js';
 import { createPeopleView } from './cloud-people.js';
 import { cloudReadState, contentState } from './cloud-read-state.js';
-import { cloudCall, signedIn, uploadMedia, logout, loginWithLink, loginWithPassword, setAdminPassword, cloudIdentity } from './cloud-api.js';
+import { cloudCall, signedIn, uploadMedia, logout, loginWithLink, loginWithPassword, setAdminPassword, cloudIdentity, setLinkLoginConfirmation } from './cloud-api.js';
 import { CLOUD_FILE_LIMIT } from './cloud-config.js';
 import { figureVideos, figureMedia, listFigures, saveFigure, storageSettings } from './storage.js';
 import { downloadLibrary, downloadFigure, inspectCloudVideo, enrichCloudMetadata } from './cloud-library-download.js';
@@ -924,6 +924,32 @@ function publicLibraries() {
   }
   if (!catalog.childElementCount) catalog.append(node('p', 'Noch keine öffentlichen Bibliotheken.'));
 }
+// Separate from the busy login form so Escape and Android Back remain available.
+function confirmLinkAccount({ email, previousEmail, sameAccount, signal }) {
+  if (signal.aborted) return Promise.resolve(false);
+  return new Promise(resolve => {
+    const prompt = node('dialog', undefined, 'cloud-login-dialog');
+    prompt.id = 'cloudLoginConfirmation'; prompt.setAttribute('aria-labelledby', 'cloudLoginConfirmationTitle');
+    const title = node('h3', previousEmail ? (sameAccount ? 'Anmeldung erneuern?' : 'Konto wechseln?') : 'Anmeldung bestätigen');
+    title.id = 'cloudLoginConfirmationTitle';
+    const message = previousEmail && !sameAccount ? `Von ${previousEmail} zu ${email} wechseln?` : (sameAccount ? `Anmeldung als ${email} erneuern?` : `Als ${email} anmelden?`);
+    prompt.append(title, node('p', message), node('p', 'Erst nach deiner Bestätigung wird diese Anmeldung aktiv. Beim Abbrechen ist der geprüfte Einmallink verbraucht; du benötigst danach einen neuen Link.'));
+    let settled = false;
+    const finish = accepted => {
+      if (settled) return; settled = true;
+      signal.removeEventListener('abort', aborted);
+      prompt.close(); prompt.remove(); resolve(accepted);
+    };
+    const aborted = () => finish(false);
+    const cancel = action('Abbrechen', () => finish(false));
+    const accept = action(previousEmail ? (sameAccount ? 'Anmeldung erneuern' : 'Konto wechseln') : 'Anmelden', () => finish(true)); accept.className = 'primary';
+    const actions = node('div', undefined, 'actions'); actions.append(cancel, accept); prompt.append(actions);
+    prompt.addEventListener('cancel', event => { event.preventDefault(); finish(false); });
+    prompt.addEventListener('close', () => finish(false));
+    signal.addEventListener('abort', aborted, { once: true });
+    document.body.append(prompt); prompt.showModal(); cancel.focus();
+  });
+}
 function dismissLogin() {
   if (!loginDialog?.open) return;
   loginDialog.close(); loginDialog.replaceChildren();
@@ -1019,6 +1045,7 @@ function extraManagement() {
   }));
 }
 export function initCloud(callbacks) {
+  setLinkLoginConfirmation(confirmLinkAccount);
   hooks = callbacks;
   const refreshLocal = () => { if (dialog.open) void refreshLocalFigures().catch(() => {}); };
   addEventListener('local-figures-changed', refreshLocal);

@@ -4,11 +4,11 @@ const key = `salsa-cloud-session:${new URL('../pwa/', import.meta.url).pathname}
 const expired = () => ({ access_token: 'old-access', refresh_token: 'old-refresh', expires_at: Date.now() - 1000 });
 const renewed = () => ({ access_token: 'new-access', refresh_token: 'new-refresh', expires_in: 3600 });
 let sequence = 0;
-async function setup(fetcher, locks) {
+async function setup(fetcher, locks, hash = "") {
  const values = new Map([[key, JSON.stringify(expired())]]);
  globalThis.localStorage = { getItem: k => values.get(k) ?? null, setItem: (k,v) => values.set(k,v), removeItem: k => values.delete(k) };
- globalThis.location = { hash: '', href: 'https://example.test/pwa/', pathname: '/pwa/', search: '' }; globalThis.history = { replaceState() {} };
- Object.defineProperty(globalThis,'navigator',{configurable:true,value:{onLine:true,locks}});globalThis.fetch=fetcher;
+ globalThis.location = { hash, href: 'https://example.test/pwa/', pathname: '/pwa/', search: '' }; globalThis.history = { replaceState() {} };
+ Object.defineProperty(globalThis,'navigator',{configurable:true,value:{onLine:true,locks}});globalThis.fetch=(url,init)=>String(url).endsWith('/auth/v1/user')&&(!init?.method||init.method==='GET')?Promise.resolve(json({id:'old',email:'old@example.test'})):fetcher(url,init);
  const api=await import(`../pwa/cloud-api.js?test=${++sequence}`);return {api,values};
 }
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json'}});
@@ -46,8 +46,8 @@ test('cloud session: late magic-link verification cannot undo logout',async()=>{
  const pending=api.loginWithLink('https://example.test/?token_hash=one&type=magiclink');await api.logout();release();await assert.rejects(pending,/abgebrochen/);assert.equal(api.signedIn(),false);
 });
 test('cloud session: superseded magic-link verification cannot replace newer login',async()=>{
- let release,calls=0;const gate=new Promise(r=>release=r);const {api,values}=await setup(async()=>++calls===1?(await gate,json({...renewed(),access_token:'late'})):json({...renewed(),access_token:'latest'}));
- const first=api.loginWithLink('https://example.test/?token_hash=one&type=magiclink');await api.loginWithLink('https://example.test/?token_hash=two&type=magiclink');release();await assert.rejects(first,/abgebrochen/);assert.equal(JSON.parse(values.get(key)).access_token,'latest');
+ let release,calls=0;const gate=new Promise(r=>release=r);const {api,values}=await setup(async()=>++calls===1?(await gate,json({...renewed(),access_token:'late'})):json({...renewed(),access_token:'latest',user:{id:'candidate',email:'new@example.test'}}));
+ const first=api.loginWithLink('https://example.test/?token_hash=one&type=magiclink');await api.loginWithLink('https://example.test/?token_hash=two&type=magiclink',async()=>true);release();await assert.rejects(first,/abgebrochen/);assert.equal(JSON.parse(values.get(key)).access_token,'latest');
 });
 test('cloud session: changed identity during token refresh prevents sending cloud request',async()=>{
  let release,calls=0;const gate=new Promise(r=>release=r);const {api}=await setup(async url=>{if(String(url).includes('/logout'))return json({});calls++;await gate;return json(renewed());});
@@ -83,4 +83,51 @@ test('password setup checks admin rights and identity and sends secrets only to 
 test('password setup blocks short passwords and non-admins before sending a password update',async()=>{
  let puts=0;const {api}=await setup(async(url,init)=>{if(init.method==='PUT')puts++;return String(url).includes('/token')?json(renewed()):json({me:{is_admin:false}});});
  await assert.rejects(api.setAdminPassword('short'),/12 Zeichen/);await assert.rejects(api.setAdminPassword('long-password-here'),/Nur Plattform-Admins/);assert.equal(puts,0);
+});
+
+ test('URL token fragments cannot silently replace the current account', async () => {
+ const {api,values}=await setup(async()=>json({}),undefined,'#access_token=attacker&refresh_token=attacker-refresh');
+ assert.equal(JSON.parse(values.get(key)).access_token,'old-access');
+ assert.equal(api.signedIn(),true);
+ });
+test('magic link waits for explicit verified account confirmation without exposing the candidate to cloud calls',async()=>{
+ let release,shown;const gate=new Promise(r=>release=r),sent=[];
+ const {api,values}=await setup(async(url,init)=>{
+  if(String(url).includes('/verify'))return json({...renewed(),user:{id:'candidate',email:'new@example.test'}});
+  if(String(url).endsWith('/auth/v1/user'))return json({id:'old',email:'old@example.test'});
+  if(String(url).includes('/token'))return json(renewed());
+  sent.push(init.headers.Authorization);return json({});
+ });
+ values.set(key,JSON.stringify({...expired(),expires_at:Date.now()+3600000}));
+ api.cloudIdentity();const before=values.get(key);
+ const pending=api.loginWithLink('https://example.test/?token_hash=one&type=magiclink',async info=>{shown=info;await gate;return true;});
+ for(let i=0;i<20&&!shown;i++)await new Promise(r=>setImmediate(r));
+ assert.equal(shown?.email,'new@example.test');assert.equal(shown?.previousEmail,'old@example.test');
+ assert.equal(JSON.parse(values.get(key)).access_token,JSON.parse(before).access_token);
+ await api.cloudCall('state');await api.uploadMedia('reserved-path',new Blob(['video'],{type:'video/mp4'}));
+ assert.deepEqual(sent,['Bearer old-access','Bearer old-access']);
+ release();await pending;assert.equal(JSON.parse(values.get(key)).access_token,'new-access');
+});
+test('declined magic link never replaces or revokes the current account',async()=>{
+ const revoked=[];const {api,values}=await setup(async(url,init)=>{
+  if(String(url).includes('/verify'))return json({...renewed(),user:{id:'new',email:'new@example.test'}});
+  if(String(url).includes('/logout'))revoked.push(init.headers.Authorization);
+  return json({});
+ });
+ values.set(key,JSON.stringify({...expired(),expires_at:Date.now()+3600000}));api.cloudIdentity();const before=values.get(key);
+ await assert.rejects(api.loginWithLink('https://example.test/?token_hash=one&type=magiclink',async()=>false),/Einmallink ist verbraucht/);
+ assert.equal(values.get(key),before);assert.deepEqual(revoked,['Bearer new-access']);
+});
+test('invalid personal links do not alter an existing account',async()=>{
+ const {api,values}=await setup(async()=>json({msg:'Token has expired',error_code:'otp_expired'},403));api.cloudIdentity();const before=values.get(key);
+ await assert.rejects(api.loginWithLink('https://example.test/?token_hash=expired&type=magiclink'),/expired/);assert.equal(values.get(key),before);
+});
+test('unconfirmed candidates are not restored by reloading the module',async()=>{
+ let release,shown=false;const gate=new Promise(r=>release=r);
+ const {api,values}=await setup(async url=>String(url).includes('/verify')?json({...renewed(),user:{id:'new',email:'new@example.test'}}):json({}));
+ values.set(key,JSON.stringify({...expired(),expires_at:Date.now()+3600000}));
+ const pending=api.loginWithLink('https://example.test/?token_hash=once&type=magiclink',async()=>{shown=true;await gate;return true;});const rejected=assert.rejects(pending,/abgebrochen/);
+ for(let i=0;i<20&&!shown;i++)await new Promise(r=>setImmediate(r));
+ const reloaded=await import(`../pwa/cloud-api.js?test=${++sequence}`);assert.equal(await reloaded.accessToken(),'old-access');
+ api.cancelLinkLogin();release();await rejected;assert.equal(await reloaded.accessToken(),'old-access');
 });
