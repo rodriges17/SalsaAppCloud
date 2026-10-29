@@ -519,3 +519,8 @@ a.cloud-library-card:active{background:var(--selection)}
 #tagOptions button::after{content:"";position:absolute;inset:-5px 0}
 #tagOptions button svg{width:17px;height:17px;flex-shrink:0}
 #tagOptions button[aria-pressed=true]{background:var(--selection);color:var(--text);border-color:var(--lavender)}
+
+#activeTag{padding-bottom:5px}
+#activeTag button{position:relative;display:inline-flex;align-items:center;gap:7px;min-height:34px;max-width:100%;padding:4px 12px;border-radius:18px;font-size:14px;font-weight:500;background:var(--selection);color:var(--text);border-color:var(--lavender);overflow-wrap:anywhere}
+#activeTag button::after{content:"";position:absolute;inset:-5px 0}
+#activeTag button svg{width:17px;height:17px;flex-shrink:0}

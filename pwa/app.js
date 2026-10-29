@@ -114,7 +114,14 @@ function renderOverview() {
   const visible = filterFigures(figures, { query: $('search').value, status: statusFilter, tag: selectedTag, sort: $('sort').value });
   $('figureCount').textContent = `${visible.length} Figuren`;
   $('figureList').replaceChildren(); $('activeTag').replaceChildren();
-  if (selectedTag) $('activeTag').append(button(`${selectedTag} ×`, () => { selectedTag = ''; renderOverview(); }));
+  if (selectedTag) {
+    const pill = button('', () => { selectedTag = ''; renderOverview(); });
+    pill.setAttribute('aria-label', `Tagfilter „${selectedTag}“ entfernen`);
+    pill.innerHTML = tagIcon;
+    pill.append(el('span', '', selectedTag));
+    const remove = el('span', '', '×'); remove.setAttribute('aria-hidden', 'true'); pill.append(remove);
+    $('activeTag').append(pill);
+  }
   $('empty').hidden = visible.length > 0;
   $('empty').replaceChildren(el('span', 'dance-icon', '♪'), el('h2', '', figures.length ? 'Keine Treffer' : 'Deine erste Figur'), el('p', '', figures.length ? 'Ändere deine Suche oder die Filter.' : 'Füge eigene Videos hinzu und übe in deinem Tempo.'));
   for (const figure of visible) {
