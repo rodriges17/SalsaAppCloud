@@ -15,7 +15,8 @@ export async function runTagPickerCase(page, {root, fixture, scenario, seed}) {
  await input.fill('   ');assert(await input.getAttribute('aria-expanded')==='false','Whitespace must not show suggestions');
  await input.fill('PAS');await input.fill('');assert(await input.getAttribute('aria-expanded')==='false','Clearing the search must hide suggestions');
  await input.fill('PASITO');await page.getByRole('option',{name:'Pasito',exact:true}).click();
- assert(await input.getAttribute('aria-expanded')==='true','Multiselect closed after selection');
+ assert(await input.inputValue()==='','Selecting a tag must clear the search');
+ assert(await input.getAttribute('aria-expanded')==='false','Empty search must hide suggestions');
  await input.fill('pasito');await page.getByRole('button',{name:'Neues Tag „pasito“ anlegen',exact:true}).click();
  await input.fill('sito');assert(await page.locator('.tag-picker-options').getByRole('option').count()===2,'Substring search must find both case variants');
  assert(await page.getByRole('option',{name:'Pasito',exact:true}).getAttribute('aria-selected')==='true','Uppercase variant lost selection');
@@ -76,7 +77,7 @@ export async function runTagCatalogCase(page,{root,seed}){
  await edit();const input=page.locator('#figureTags');await input.fill('FER');
  await page.getByRole('option',{name:'Fern',exact:true}).waitFor({timeout:5000});assert(requests>0,'Editor did not fetch the accessible Cloud catalog');
  await page.getByRole('option',{name:'Fern',exact:true}).click();
- remote=['Cloud-Neu'];await page.getByRole('button',{name:'Tag-Vorschläge aktualisieren',exact:true}).click();await page.getByText('Cloud-Tags aktuell.',{exact:true}).waitFor();
+ await input.fill('FER');remote=['Cloud-Neu'];await page.getByRole('button',{name:'Tag-Vorschläge aktualisieren',exact:true}).click();await page.getByText('Cloud-Tags aktuell.',{exact:true}).waitFor();
  assert(await input.inputValue()==='FER','Refreshing suggestions lost the search');assert(await page.getByRole('button',{name:'Tag „Fern“ entfernen',exact:true}).count()===1,'Refresh removed selection');
  await input.fill('Entzogen');assert(await page.getByRole('option',{name:'Entzogen',exact:true}).count()===0,'Revoked suggestion remained after refresh');
  fail=true;await page.context().setOffline(true);await page.getByRole('button',{name:'Tag-Vorschläge aktualisieren',exact:true}).click();await page.getByText('Cloud-Liste möglicherweise unvollständig. Lokal bekannte und zuletzt geladene Tags bleiben verfügbar.',{exact:true}).waitFor();

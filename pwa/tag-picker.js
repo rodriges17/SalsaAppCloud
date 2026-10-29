@@ -21,7 +21,7 @@ export function mountTagPicker(input, {value = [], suggestions = [], onChange = 
   if(selected.includes(tag))selected=selected.filter(t=>t!==tag);
   else if(selected.length>=100){message.textContent='Maximal 100 Tags pro Figur.';return;}
   else selected.push(tag);
-  message.textContent='';render();change();input.focus({preventScroll:true});
+  input.value='';message.textContent='';render();change();input.focus({preventScroll:true});
  }
  function render(){
   chips.replaceChildren();
