@@ -115,3 +115,16 @@ test('expanding library details reveals their end only when outside the usable s
  assert.equal(scroller.scrollTop,0,'a closed card cannot trigger a delayed scroll');
  delete scroller.getBoundingClientRect;delete card.getBoundingClientRect;
 });
+
+test('My Cloud Figures sorts by the latest displayed title with German alphabetical and numeric order',async()=>{
+ await closeCloud();
+ snapshot.own_figures=[
+  {id:'ocho',owner_id:'me',revisions:[{id:'ocho-r',title:'Ocho',videos:[]}]},
+  {id:'ten',owner_id:'me',revisions:[{id:'ten-r',title:'Figur 10',videos:[]}]},
+  {id:'renamed',owner_id:'me',revisions:[{id:'old-r',title:'Zulu',created_at:'2025-01-01T00:00:00Z',videos:[]},{id:'new-r',title:'drehung',created_at:'2026-01-01T00:00:00Z',videos:[]}]},
+  {id:'umlaut',owner_id:'me',revisions:[{id:'umlaut-r',title:'Ähre',videos:[]}]},
+  {id:'two',owner_id:'me',revisions:[{id:'two-r',title:'Figur 2',videos:[]}]}
+ ];
+ await openCloud();await click(document.querySelector('.cloud-refresh-trigger'));
+ assert.deepEqual([...document.querySelectorAll('.cloud-own-name h3')].map(n=>n.textContent),['Ähre','drehung','Figur 2','Figur 10','Ocho']);
+});
