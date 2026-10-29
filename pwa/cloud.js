@@ -504,13 +504,13 @@ function libraryDownloadControls(parent, entries) {
   const failures = node('ul'); failures.hidden = true;
   const progress = document.getElementById('cloudDownloadProgress');
   const start = action('Alle Figuren lokal verfügbar machen', async () => {
-    if (!await hooks.confirm({ title: 'Alle Figuren lokal verfügbar machen?', message: 'Alle veröffentlichten Figuren direkt im gewählten lokalen Speicher sichern. Vorhandene Videos werden wiederverwendet; bestehende Lernstände und Notizen bleiben erhalten.', ok: 'Herunterladen' })) return;
+    if (!await hooks.confirm({ title: 'Alle Figuren lokal verfügbar machen?', message: 'Alle veröffentlichten Figuren direkt im gewählten lokalen Speicher sichern. Vorhandene Videos werden wiederverwendet; bestehende Lernstände und Notizen bleiben erhalten.', ok: 'Lokal verfügbar machen' })) return;
     return run('Lokalen Bestand prüfen …', async () => {
     if (librarySession?.dirty) throw new Error('Bitte zuerst die Bibliothek speichern, bevor du alle Figuren lokal verfügbar machst.');
     const settings = await storageSettings();
     if (settings.activeFolder && settings.folders.find(folder => folder.id === settings.activeFolder)?.access !== 'granted') throw new Error('Bitte den gewählten Geräteordner in den Einstellungen freigeben, bevor du die Bibliothek herunterlädst.');
     controller = new AbortController(); const signal = controller.signal;
-    const cancel = document.getElementById('cloudCancelUpload'); cancel.textContent = 'Download abbrechen'; cancel.hidden = false;
+    const cancel = document.getElementById('cloudCancelUpload'); cancel.textContent = 'Abbrechen'; cancel.hidden = false;
     progress.hidden = false; progress.max = revisions.length; progress.value = 0; resultText.hidden = false; failures.replaceChildren(); failures.hidden = true;
     try {
       const result = await downloadLibrary(revisions, {
@@ -572,7 +572,7 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
   const chosen = [], multiple = rev.videos.length > 1;
   const localStatus = node('p', '', 'cloud-local-status'); localStatus.hidden = true; localStatus.setAttribute('role', 'status');
   if(box.firstElementChild)box.firstElementChild.after(localStatus);else box.append(localStatus);
-  const choiceHeading = multiple ? node('h4', 'Videos zum Herunterladen auswählen') : null; if (choiceHeading) box.append(choiceHeading);
+  const choiceHeading = multiple ? node('h4', 'Videos für die lokale Kopie auswählen') : null; if (choiceHeading) box.append(choiceHeading);
   for (const v of rev.videos) {
     const row=node('div',undefined,'cloud-video-row');box.append(row);
     const check = multiple ? checkbox(row, `Video „${v.name || 'Ohne Namen'}“ lokal übernehmen`, true) : null;
@@ -584,7 +584,7 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
     play.append(uiIcon('play'),copy);row.append(play);
   }
   const fingerprint = selected => `cloud:${rev.id}:${selected.map(v => v.id).join(',')}`;
-  const label = own ? 'Lokal übernehmen' : multiple ? 'Ausgewählte Videos in meine Figuren übernehmen' : 'In meine Figuren übernehmen';
+  const label = 'Lokal verfügbar machen';
   const download = async (replace = false) => {
     await refreshLocalFigures();
     const linked = localIndex.resolve(rev, localFigures, { revisionIds }).current;
@@ -593,7 +593,7 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
       if (!saved) return;
       await hooks.localChanged?.(); await close(); if (!dialog.open) return hooks.openLocal?.(saved); return;
     }
-    return run('Videos herunterladen …', async () => {
+    return run('Figur wird lokal verfügbar gemacht …', async () => {
     if (librarySession?.dirty) throw new Error('Bitte zuerst die Bibliothek speichern, bevor du eine Figur übernimmst.');
     const selected = chosen.filter(([check]) => !check || check.checked).map(([, v]) => v);
     if (!selected.length) throw new Error('Bitte mindestens ein Video auswählen.');
@@ -604,7 +604,7 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
     const settings = await storageSettings();
     if (!target.figure && settings.activeFolder && settings.folders.find(folder => folder.id === settings.activeFolder)?.access !== 'granted') throw new Error('Bitte den gewählten Geräteordner in den Einstellungen freigeben.');
     controller = new AbortController(); const signal = controller.signal;
-    const cancel = document.getElementById('cloudCancelUpload'); cancel.textContent = 'Download abbrechen'; cancel.hidden = false;
+    const cancel = document.getElementById('cloudCancelUpload'); cancel.textContent = 'Abbrechen'; cancel.hidden = false;
     try {
       await downloadFigure({ ...rev, videos: selected }, {
         listFigures, readMedia: figureMedia, readCloudMedia: cloudMediaHash, confirmReplace: figure => hooks.confirm({ title: 'Lokale Änderungen überschreiben?', message: `„${figure.title}“ wurde lokal geändert. Mit der Cloud-Version überschreiben?`, ok: 'Mit Cloud-Version überschreiben' }), inspectVideo: inspectCloudVideo, saveFigure,
@@ -629,7 +629,7 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
   };
   const take = action(label, () => download());
   // Keep recovery available when files were removed or modified outside the app.
-  const repair = action('Cloud-Version übernehmen', () => download(true)); repair.className = 'subtle'; repair.hidden = true;
+  const repair = action('Lokale Kopie aktualisieren', () => download(true)); repair.className = 'subtle'; repair.hidden = true;
   if (own) take.className = 'primary';
   const openOlder = action('Ältere lokale Figur öffnen', async () => {
     await refreshLocalFigures();
@@ -649,7 +649,8 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
     chosen.forEach(([check]) => {
       if (check) check.parentElement.hidden = local.available;
     });
-    take.textContent = local.available ? 'Lokal öffnen' : label;
+    take.textContent = local.available ? 'Lokal öffnen' : local.kind === 'outdated' ? 'Lokale Kopie aktualisieren' : label;
+    take.classList.toggle('cloud-local-open', !own && local.available);
     take.disabled = accessRequired;
     repair.hidden = !local.modified;
     take.title = local.available ? 'Die zugehörige lokale Figur öffnen.' : '';
