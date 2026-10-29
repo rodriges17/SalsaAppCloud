@@ -2,6 +2,9 @@
 
 ## Sprache
 
+**Cloud-Navigation**:
+Der gemeinsame Ablauf für Öffnen, Bereichswechsel, Zurück, Schließen und Einstellungen im Cloud-Speicher. Er koordiniert Rückfragen und Bibliotheks-Bearbeitungssitzungen, ignoriert zusätzliche Navigationsaktionen während eines Übergangs und gibt Kontowechseln sowie endgültig ungültigen Anmeldungen Vorrang. Eine erfolgreiche Token-Erneuerung desselben Kontos beginnt keine neue Cloud-Navigation.
+
 **Figur**:
 Eine benannte Tanzbewegung oder Kombination mit zugehörigen Videos und Angaben.
 
