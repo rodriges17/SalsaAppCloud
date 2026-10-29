@@ -524,3 +524,6 @@ a.cloud-library-card:active{background:var(--selection)}
 #activeTag button{position:relative;display:inline-flex;align-items:center;gap:7px;min-height:34px;max-width:100%;padding:4px 12px;border-radius:18px;font-size:14px;font-weight:500;background:var(--selection);color:var(--text);border-color:var(--lavender);overflow-wrap:anywhere}
 #activeTag button::after{content:"";position:absolute;inset:-5px 0}
 #activeTag button svg{width:17px;height:17px;flex-shrink:0}
+
+.filter-row .chips button{position:relative;min-height:34px;padding:4px 10px;margin-block:5px;font-weight:500}
+.filter-row .chips button::after{content:"";position:absolute;inset:-5px 0}
