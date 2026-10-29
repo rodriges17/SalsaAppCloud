@@ -119,14 +119,20 @@ async function cloudBack() {
   if (busy) return;
   if (loginDialog?.open) { dismissLogin(); return; }
   if (librarySession?.suspended) { await run('Bibliotheksbearbeitung wird geladen …', () => resumeLibraryUpload()); return; }
-  if (librarySession?.active) {
-    const id = librarySession.id;
-    if (!await leaveLibraryDraft()) return;
-    clearLibrarySession(); await load(id); return;
-  }
+  if (librarySession?.active) { await leaveLibraryEditor(); return; }
   if (area === 'admin') { if (!await peopleView.leave()) return; area = initialArea(state); await load(null); renderAccount(); accountDialog.showModal(); accountTrigger.setAttribute('aria-expanded', 'true'); return; }
   if (current) { await navigate('libraries'); return; }
   await close();
+}
+
+async function leaveLibraryEditor() {
+  const editor = librarySession;
+  if (!editor?.active) return;
+  const original = editor.detail, id = editor.id;
+  if (!await leaveLibraryDraft()) return;
+  clearLibrarySession();
+  if (editor.phase === 'saved') await load(id);
+  else await renderCloud(id, original);
 }
 
 function dismissAccount() {
@@ -322,6 +328,17 @@ function libraryShare(id, lib) {
     catch { link.focus(); link.select(); report(new Error('Bitte den markierten Link kopieren.')); }
   })); box.append(row);
 }
+function revealLibraryFigure(card) {
+  // Measure after mounting details and collapsing the previous figure.
+  requestAnimationFrame(() => {
+    if (!card.isConnected || !card.open) return;
+    const scroller = card.closest('.cloud-scroll');
+    if (!scroller) return;
+    const viewport = scroller.getBoundingClientRect(), end = card.getBoundingClientRect().bottom;
+    const bottom = Math.min(viewport.bottom, window.innerHeight) - 8;
+    if (end > bottom || end < viewport.top) scroller.scrollTop += end - bottom;
+  });
+}
 async function libraryView(id, detail) {
   for (const entry of detail.entries) localIndex.observe(entry.published ?? entry.pending);
   const lib = detail.library, manage = !!state.me && !!detail.manage;
@@ -367,6 +384,7 @@ async function libraryView(id, detail) {
         if (entry.pending && entry.pending.id !== entry.published?.id) revisionCard(content, { ...entry.pending, figure_id: entry.figure_id }, 'Zur Freigabe', rev.title, true, rev.id === entry.pending.id);
         if (!entry.published && entry.pending) content.append(node('p', 'Diese Figur ist noch nicht für Besucher freigegeben.'));
       }
+      revealLibraryFigure(box);
     };
     entriesBox.append(box);
     if (savedLibraryFigure === entry.figure_id) { box.open = true; savedLibraryFigure = null; }
@@ -432,10 +450,7 @@ function renderLibraryEditor(id) {
     if (outcome.kind !== 'saved' || librarySession !== editor) return;
     clearLibrarySession(); source = null; await load(id);
   });
-  const footer = node('div', undefined, 'cloud-library-editor-footer'); footer.append(dirtyText, action('Abbrechen', async () => {
-    const original = editor.detail;
-    if (await leaveLibraryDraft()) { clearLibrarySession(); if (editor.phase === 'saved') await load(id); else await renderCloud(id, original); }
-  }), action('Bibliothek speichern', save)); footer.lastChild.className = 'primary'; body.append(footer);
+  const footer = node('div', undefined, 'cloud-library-editor-footer'); footer.append(dirtyText, action('Abbrechen', leaveLibraryEditor), action('Bibliothek speichern', save)); footer.lastChild.className = 'primary'; body.append(footer);
   drawRows(); chooseTab(editor.tab);
 }
 function libraryAddPicker(editor, redraw) {
