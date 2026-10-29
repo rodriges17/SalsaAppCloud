@@ -397,7 +397,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   assert(!await page.getByLabel('Anmeldelink einfügen',{exact:true}).isVisible(),'Only selected login method should be visible');
   if(native)await page.evaluate(()=>AndroidAppUI.back());else await page.keyboard.press('Escape');
   assert(!await login.isVisible()&&await page.locator('#cloudDialog').isVisible(),'Back from login must only close login');
-  await page.locator('a.cloud-library-card').click();await page.getByRole('heading',{name:library.title,exact:true}).waitFor();
+  await page.locator('a.cloud-library-card').click();await page.locator('.cloud-library-title').filter({hasText:library.title}).waitFor();
   assert(await trigger.isVisible()&&!await login.isVisible(),'Library details must offer the header login icon');
   assert(await page.locator('.cloud-tabs').count()===0,'Guest library details must not show an account switch');
   if(native)await page.evaluate(()=>AndroidAppUI.back());else await page.keyboard.press('Escape');
