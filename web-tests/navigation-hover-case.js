@@ -6,7 +6,10 @@ export async function runNavigationHoverCase(page, { root, native = false, cloud
  await sort.dispatchEvent('pointerdown',{pointerType:'touch'});
  await sort.focus();
  await sort.evaluate(e=>{e.selectedIndex=(e.selectedIndex+1)%e.options.length;e.dispatchEvent(new Event('change',{bubbles:true}));});
- assert(await sort.evaluate(e=>document.activeElement!==e),'Touch sorting retained the focus frame');
+ assert(await sort.evaluate(e=>getComputedStyle(e).outlineStyle==='none'&&getComputedStyle(e).boxShadow==='none'),'Sorting retained a selection frame');
+ // Choosing the existing option produces no change event.
+ await sort.focus();
+ assert(await sort.evaluate(e=>getComputedStyle(e).outlineStyle==='none'&&getComputedStyle(e).boxShadow==='none'),'Unchanged sorting retained a selection frame');
  await sort.focus();await sort.press('ArrowDown');
  await sort.dispatchEvent('change');
  assert(await sort.evaluate(e=>document.activeElement===e),'Sorting removed keyboard focus');

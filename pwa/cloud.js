@@ -930,8 +930,7 @@ async function publishForm() {
 function publicLibraries() {
   const intro = node('div', undefined, 'cloud-public-intro');
   const heading = node('div', undefined, 'cloud-public-heading');
-  const refresh = action('↻', () => load(null, 'refresh')); refresh.className = 'cloud-public-refresh'; refresh.setAttribute('aria-label', 'Bibliotheken aktualisieren'); refresh.title = 'Bibliotheken aktualisieren';
-  heading.append(node('h3', 'Öffentliche Bibliotheken'), refresh);
+  heading.append(node('h3', 'Öffentliche Bibliotheken'));
   intro.append(heading, node('p', 'Entdecke Figuren und übernimm sie zum Üben auf dein Gerät. Öffentliche Bibliotheken sind ohne Anmeldung lesbar.'));
   body.append(intro);
   const catalog = node('div', undefined, 'cloud-public-libraries');

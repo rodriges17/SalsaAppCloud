@@ -189,21 +189,18 @@ function changed() { channel?.postMessage('changed'); dispatchEvent(new Event('l
 channel?.addEventListener('message', () => { dispatchEvent(new Event('local-figures-changed')); void refresh(); });
 window.addEventListener('focus', () => refresh());
 $('search').addEventListener('input', renderOverview);
-// Native select pickers can retain :focus-visible after a touch selection.
-// Keep focus for keyboard users, but dismiss the completed touch interaction.
-let sortPointerType = '';
-$('sort').addEventListener('pointerdown', event => { sortPointerType = event.pointerType; });
-$('sort').addEventListener('keydown', () => { sortPointerType = ''; });
-$('sort').addEventListener('change', () => {
-  renderOverview();
-  if (sortPointerType === 'touch' || sortPointerType === 'pen') $('sort').blur();
-  sortPointerType = '';
-});
+$('sort').addEventListener('change', renderOverview);
 document.addEventListener('click', event => { if (!event.target.closest('.card-menu,.card-options')) closeMenus(); });
 $('tagsButton').onclick = () => {
   const tags = [...new Set(figures.flatMap(f => f.tags))].sort((a, b) => a.localeCompare(b, 'de'));
-  $('tagOptions').replaceChildren(button('Alle Tags', () => { selectedTag = ''; $('tagsDialog').close(); renderOverview(); }));
-  tags.forEach(tag => $('tagOptions').append(button(tag, () => { selectedTag = tag; $('tagsDialog').close(); renderOverview(); })));
+  const option = (label, tag) => {
+    const pill = button(label, () => { selectedTag = tag; $('tagsDialog').close(); renderOverview(); });
+    pill.setAttribute('aria-pressed', String(selectedTag === tag));
+    if (tag) { pill.innerHTML = tagIcon; pill.append(el('span', '', label)); }
+    return pill;
+  };
+  $('tagOptions').replaceChildren(option('Alle Tags', ''));
+  tags.forEach(tag => $('tagOptions').append(option(tag, tag)));
   if (!tags.length) $('tagOptions').append(el('p', 'muted', 'Tags kannst du beim Bearbeiten einer Figur hinzufügen.'));
   $('tagsDialog').showModal();
 };

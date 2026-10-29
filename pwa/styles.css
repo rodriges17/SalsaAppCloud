@@ -254,7 +254,6 @@ button.storage-choice:disabled{opacity:1;cursor:default}
 
 .cloud-public-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .cloud-public-heading h3 { flex: 1; }
-.cloud-public-refresh { width: 42px; min-height: 42px; flex-shrink: 0; padding: 6px; border-color: var(--border); background: transparent; color: var(--muted); font-size: 23px; }
 .cloud-public-back { justify-self: start; padding: 6px 0; min-height: 42px; border: 0; background: transparent; color: var(--lavender); font-size: 14px; }
 
 .cloud-library-download { display: grid; gap: 12px; padding-top: 16px; margin-top: 8px; border-top: 1px solid var(--border); }
@@ -510,3 +509,13 @@ a.cloud-library-card:active{background:var(--selection)}
 .cloud-library-name .cloud-tag-pill{flex:0 1 auto;min-width:0;padding:1px 6px;font-size:10px;line-height:16px;height:18px;overflow:hidden}
 .cloud-library-name .cloud-tag-pill svg{width:11px;height:11px}
 .cloud-library-name .cloud-tag-pill span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Native sorting pickers may keep focus after selecting the current value. */
+#sort,#sort:focus,#sort:focus-visible,#sort:active{outline:none;box-shadow:none;border:0;-webkit-tap-highlight-color:transparent}
+
+/* Compact tag filters retain a 44px touch target around the visible pill. */
+#tagOptions{gap:12px 8px;padding-block:5px}
+#tagOptions button{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:34px;max-width:100%;padding:4px 12px;border-radius:18px;font-size:14px;font-weight:500;color:var(--lavender);overflow-wrap:anywhere}
+#tagOptions button::after{content:"";position:absolute;inset:-5px 0}
+#tagOptions button svg{width:17px;height:17px;flex-shrink:0}
+#tagOptions button[aria-pressed=true]{background:var(--selection);color:var(--text);border-color:var(--lavender)}
