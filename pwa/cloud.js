@@ -1,3 +1,4 @@
+import { createCloudNavigation } from './cloud-navigation.js';
 import { connectTagSuggestions } from './tag-suggestions.js';
 import { mountTagPicker } from './tag-picker.js';
 import { createFigureUpload } from './cloud-upload.js';
@@ -17,7 +18,15 @@ import { cloudLocalIndex as localIndex } from './cloud-local.js';
 import { createPosterView, posterPayload } from './cloud-posters.js';
 const node = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
 const MB = value => `${(Number(value ?? 0) / 1000000).toFixed(1)} MB`;
-const action = (label, work) => { const b = node('button', label, 'secondary'); b.type = 'button'; b.onclick = () => Promise.resolve().then(work).catch(report); return b; };
+const action = (label, work) => {
+  const button = node('button', label, 'secondary'); button.type = 'button';
+  button.onclick = () => {
+    const active = navigation.capture();
+    return Promise.resolve().then(() => { if (active()) return work(); })
+      .catch(error => { if (active()) report(error); });
+  };
+  return button;
+};
 // Lucide icon shapes (ISC), kept local so Cloud UI also works offline.
 const UI_ICONS = {"play":[["path",{"d":"M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"}]],"tag":[["path",{"d":"M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"}],["circle",{"cx":"7.5","cy":"7.5","r":".5","fill":"currentColor"}]],"settings":[["path",{"d":"M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"}],["circle",{"cx":"12","cy":"12","r":"3"}]],"refresh-cw":[["path",{"d":"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"}],["path",{"d":"M21 3v5h-5"}],["path",{"d":"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"}],["path",{"d":"M8 16H3v5"}]],"user-round":[["circle",{"cx":"12","cy":"8","r":"5"}],["path",{"d":"M20 21a8 8 0 0 0-16 0"}]],"library":[["path",{"d":"m16 6 4 14"}],["path",{"d":"M12 6v14"}],["path",{"d":"M8 8v12"}],["path",{"d":"M4 4v16"}]],"copy-plus":[["line",{"x1":"15","x2":"15","y1":"12","y2":"18"}],["line",{"x1":"12","x2":"18","y1":"15","y2":"15"}],["rect",{"width":"14","height":"14","x":"8","y":"8","rx":"2","ry":"2"}],["path",{"d":"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"}]],"shield-check":[["path",{"d":"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"}],["path",{"d":"m9 12 2 2 4-4"}]],"shield-off":[["path",{"d":"m2 2 20 20"}],["path",{"d":"M5 5a1 1 0 0 0-1 1v7c0 5 3.5 7.5 7.67 8.94a1 1 0 0 0 .67.01c2.35-.82 4.48-1.97 5.9-3.71"}],["path",{"d":"M9.309 3.652A12.252 12.252 0 0 0 11.24 2.28a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1v7a9.784 9.784 0 0 1-.08 1.264"}]],"trash-2":[["path",{"d":"M10 11v6"}],["path",{"d":"M14 11v6"}],["path",{"d":"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"}],["path",{"d":"M3 6h18"}],["path",{"d":"M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"}]]};
 function uiIcon(name) {
@@ -39,7 +48,7 @@ function beginLibrarySession(detail){
  librarySession=createLibrarySession({detail,owner:cloudIdentity(),identity:cloudIdentity,commit:payload=>cloudCall('library_commit',payload),read:id=>cloudCall('library',{id}),readState:()=>cloudCall('state')});
  return librarySession;
 }
-async function leaveLibraryDraft(){
+async function leaveLibraryDraft(active = navigation.capture()){
  const session=librarySession;
  if(!session?.active){clearLibrarySession();return true;}
  if(!session.dirty){clearLibrarySession();return true;}
@@ -51,7 +60,7 @@ async function leaveLibraryDraft(){
   prompt.oncancel=event=>{event.preventDefault();finish('stay');};
   document.body.append(prompt);prompt.showModal();
  });
- if(librarySession!==session||!session.active)return false;
+ if(!active()||librarySession!==session||!session.active)return false;
  let outcome;
  const leave=async()=>{
   outcome=await session.leave(choice);
@@ -87,19 +96,56 @@ function libraryCard(library, parent = body) {
   card.append(node('h3', library.title)); parent.append(card);
   card.onclick = event => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    event.preventDefault(); if (!busy) void load(library.id, true).catch(report);
+    event.preventDefault(); void navigate('libraries', library.id).catch(report);
   };
   return card;
 }
-async function run(message, work, errorTarget = errorBox, retainStatus = false) {
-  if (busy) return; busy = true; statusBox.closest('footer').setAttribute('aria-busy', 'true'); errorBox.hidden = true; errorTarget.hidden = true; statusBox.textContent = message;
-  body.inert = true; if (loginDialog) loginDialog.inert = true; if (accountDialog) accountDialog.inert = true; document.getElementById('cloudBack').disabled = true; dialog.querySelectorAll('[data-nav], #cloudNavigation button, .cloud-refresh-trigger, #cloudAccountOpen, #cloudSettings').forEach(button => { button.disabled = true; });
-  try { return await work(); } catch (error) { if (error.accessChanged) { clearLibrarySession(); await recoverAccess(); } if (retainStatus) statusBox.textContent = error?.message ?? 'Download fehlgeschlagen.'; report(error, errorTarget.isConnected ? errorTarget : errorBox); }
-  finally { busy = false; statusBox.closest('footer').setAttribute('aria-busy', 'false'); body.inert = false; if (loginDialog) loginDialog.inert = false; if (accountDialog) accountDialog.inert = false; document.getElementById('cloudBack').disabled = false; dialog.querySelectorAll('[data-nav], #cloudNavigation button, .cloud-refresh-trigger, #cloudAccountOpen, #cloudSettings').forEach(button => { button.disabled = false; }); if (!retainStatus) statusBox.textContent = ''; focusUploadedFigure(); if (authReloadPending && dialog.open) { authReloadPending = false; source = null; area = 'initial'; void load(null, true); } }
+function setCloudBusy(value) {
+  busy = value; statusBox.closest('footer').setAttribute('aria-busy', String(value));
+  body.inert = value; if (loginDialog) loginDialog.inert = value; if (accountDialog) accountDialog.inert = value;
+  document.getElementById('cloudBack').disabled = value;
+  dialog.querySelectorAll('[data-nav], #cloudNavigation button, .cloud-refresh-trigger, #cloudAccountOpen, #cloudSettings').forEach(button => { button.disabled = value; });
 }
+let pendingConfirmations = 0;
+async function confirmCloud(options) {
+  const active = navigation.capture(); pendingConfirmations++;
+  try { const accepted = await hooks.confirm(options); return active() && accepted; }
+  finally { pendingConfirmations--; }
+}
+async function run(message, work, errorTarget = errorBox, retainStatus = false) {
+  if (busy) return;
+  const active = navigation.capture(); setCloudBusy(true);
+  errorBox.hidden = true; errorTarget.hidden = true; statusBox.textContent = message;
+  try { const result = await work(active); return active() ? result : undefined; }
+  catch (error) {
+    if (!active()) return;
+    if (error.accessChanged) { clearLibrarySession(); await recoverAccess(); }
+    if (!active()) return;
+    if (retainStatus) statusBox.textContent = error?.message ?? 'Download fehlgeschlagen.';
+    report(error, errorTarget.isConnected ? errorTarget : errorBox);
+  } finally {
+    if (active()) { setCloudBusy(false); if (!retainStatus) statusBox.textContent = ''; focusUploadedFigure(); }
+  }
+}
+function resetCloudSession() {
+  controller?.abort(); controller = null; uploadWorkflow?.cancel();
+  uploadRecovery.hidden = true; uploadRecovery.replaceChildren();
+  document.querySelectorAll('.cloud-unsaved-dialog').forEach(prompt => prompt.dispatchEvent(new Event('cancel', { cancelable: true })));
+  if (pendingConfirmations && document.getElementById('confirmDialog')?.open) document.getElementById('confirmDialog').dispatchEvent(new Event('cancel', { cancelable: true }));
+  document.querySelectorAll('.cloud-library-picker').forEach(picker => { picker.close(); picker.remove(); });
+  peopleView.reset(); resetOwnFigures(); savedLibraryFigure = null; renderedView = null; state = null; displayedOwner = null;
+  localInventoryEpoch++; localFigures = []; localUpdates = [];
+  disposeUploadTags(); cancelThumbnails(); clearPreviews(body); body.replaceChildren();
+  cloudNavigation.replaceChildren(); cloudNavigation.hidden = true; errorBox.hidden = true; cacheStatus('');
+  if (loginTrigger) loginTrigger.hidden = signedIn();
+  dismissLogin(); dismissAccount(); accountTrigger.hidden = true; accountDialog.replaceChildren();
+  const cancel = document.getElementById('cloudCancelUpload'); cancel.hidden = true; cancel.disabled = false;
+  document.getElementById('cloudDownloadProgress').hidden = true; setCloudBusy(false);
+}
+
 async function recoverAccess() {
-  const owner = cloudIdentity(), epoch = viewEpoch;
-  const active = () => owner === cloudIdentity() && epoch === viewEpoch && dialog.open;
+  const owner = cloudIdentity(), epoch = navigation.revision;
+  const active = () => owner === cloudIdentity() && epoch === navigation.revision && dialog.open;
   const inputs = [...body.querySelectorAll('label')].map(label => { const input = label.querySelector('input,textarea,select'); return input && input.type !== 'password' ? { label: label.firstChild?.textContent, value: input.value, checked: input.checked } : null; }).filter(Boolean);
   try {
     const refreshed = await cloudCall('state'); if (!active()) return; let detail;
@@ -112,28 +158,10 @@ async function recoverAccess() {
 }
 const hasOwnArea = value => !!value?.me && (value.me.upload_enabled || value.own_figures?.length > 0);
 const initialArea = value => hasOwnArea(value) ? 'figures' : 'libraries';
-async function close() { if (busy || !await peopleView.leave() || !await leaveLibraryDraft()) return; clearLibrarySession(); disposeUploadTags(); viewEpoch++; renderedView = null; clearTimeout(statusTimer); cancelThumbnails(); dialog.close(); body.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); }); source = null; hooks.closed?.(); }
-async function cloudBack() {
-  if (busy) return;
-  if (accountDialog?.open) { dismissAccount(); return; }
-  if (busy) return;
-  if (loginDialog?.open) { dismissLogin(); return; }
-  if (librarySession?.suspended) { await run('Bibliotheksbearbeitung wird geladen …', () => resumeLibraryUpload()); return; }
-  if (librarySession?.active) { await leaveLibraryEditor(); return; }
-  if (area === 'admin') { if (!await peopleView.leave()) return; area = initialArea(state); await load(null); renderAccount(); accountDialog.showModal(); accountTrigger.setAttribute('aria-expanded', 'true'); return; }
-  if (current) { await navigate('libraries'); return; }
-  await close();
-}
-
-async function leaveLibraryEditor() {
-  const editor = librarySession;
-  if (!editor?.active) return;
-  const original = editor.detail, id = editor.id;
-  if (!await leaveLibraryDraft()) return;
-  clearLibrarySession();
-  if (editor.phase === 'saved') await load(id);
-  else await renderCloud(id, original);
-}
+let navigation;
+const close = () => navigation.close();
+const cloudBack = () => navigation.back();
+const leaveLibraryEditor = () => navigation.leaveEditor();
 
 function dismissAccount() {
   if (!accountDialog?.open) return;
@@ -154,22 +182,19 @@ function renderAccount() {
     const passwordAction = action('Passwort einrichten / ändern', () => { passwordPanel.hidden = !passwordPanel.hidden; passwordAction.setAttribute('aria-expanded', String(!passwordPanel.hidden)); if (!passwordPanel.hidden) { passwordPanel.replaceChildren(); adminPasswordForm(passwordPanel); } else passwordPanel.replaceChildren(); });
     passwordAction.setAttribute('aria-expanded', 'false'); accountDialog.append(passwordAction, passwordPanel, action('Plattformverwaltung', () => { dismissAccount(); return navigate('admin'); }));
   }
-  accountDialog.append(action('Abmelden', async () => { if (!await peopleView.leave()) return; dismissAccount(); if (!await leaveLibraryDraft()) return; await run('Abmelden …', async () => { await logout(); source = null; area = 'initial'; await load(null); }); }));
+  accountDialog.append(action('Abmelden', () => navigation.logout()));
 }
 
 function cloudStatusLabel(target, text, modified = false) {
   const icon = node('span', undefined, 'cloud-status-icon'); icon.innerHTML = cloudIcon(modified);
   target.replaceChildren(icon, node('span', text));
 }
-async function navigate(next, library = null) {
-  if (!await peopleView.leave() || !await leaveLibraryDraft()) return;
-  if (next === 'figures' || next === 'initial') resetOwnFigures();
-  clearLibrarySession(); source = null; area = next; if (['admin', 'create'].includes(next)) await run('Laden …', () => load(library)); else await load(library, true);
-}
+const navigate = (next, library = null) => navigation.show(next, library);
+
 function focusSection(box) {
   box.tabIndex = -1; box.focus(); box.scrollIntoView({ block: 'start' });
 }
-let viewEpoch = 0, statusTimer, displayedOwner = null, renderedView = null, authReloadPending = false;
+let statusTimer, displayedOwner = null, renderedView = null;
 let localUpdates = [], localInventoryEpoch = 0;
 async function refreshLocalFigures() {
   const epoch = ++localInventoryEpoch;
@@ -212,14 +237,13 @@ async function load(library = current, allowCache = false) {
     }
     if (!await leaveLibraryDraft()) return;
   }
-  let epoch = ++viewEpoch;
+  const epoch = navigation.invalidateView();
   let owner, cached, detail, available;
   try {
-    const beforeLogin = cloudIdentity(); owner = await cloudReadState.open();
-    if (beforeLogin !== owner && dialog.open) epoch = ++viewEpoch;
-    if (epoch !== viewEpoch || !dialog.open) return;
+    owner = await cloudReadState.open();
+    if (epoch !== navigation.revision || !dialog.open) return;
     current = library;
-    const active = () => epoch === viewEpoch && dialog.open && owner === cloudIdentity();
+    const active = () => epoch === navigation.revision && dialog.open && owner === cloudIdentity();
     void refreshLocalFigures().catch(() => {});
     const reusable = !!allowCache && !source && ['initial', 'figures', 'libraries'].includes(area);
     if (reusable) {
@@ -250,9 +274,9 @@ async function load(library = current, allowCache = false) {
     if (active() && !busy) { errorBox.hidden = true; cacheStatus(editing && changed ? 'Änderungen geladen – bitte nach Abschluss deines Vorgangs aktualisieren.' : 'Alles aktuell', !editing); }
     maintainCloud(owner, snapshot.value.me);
   } catch (error) {
-    if (epoch !== viewEpoch || !dialog.open || owner && owner !== cloudIdentity()) return;
+    if (epoch !== navigation.revision || !dialog.open || owner && owner !== cloudIdentity()) return;
     if (error.cacheCleared && owner) {
-      if (epoch !== viewEpoch || !dialog.open || owner !== cloudIdentity()) return;
+      if (epoch !== navigation.revision || !dialog.open || owner !== cloudIdentity()) return;
       clearLibrarySession(); disposeUploadTags(); cancelThumbnails(); clearPreviews(body); body.replaceChildren(); state = null; displayedOwner = null; cached = null; cloudNavigation.replaceChildren(); cloudNavigation.hidden = true; renderAccount();
     }
     if (cached) cacheStatus(`Aktualisierung nicht möglich – letzter geladener Stand wird angezeigt. ${lastStand(cached.updatedAt)}`);
@@ -431,12 +455,12 @@ function renderLibraryEditor(id) {
   const sync = () => { Object.assign(model.data, { title: name.value, description: description.value, visibility: visibility.value, collaborative: collaborative.checked, moderated: moderated.checked }); dirtyText.textContent = model.dirty ? 'Ungespeicherte Änderungen' : 'Noch keine Änderungen'; };
   form.addEventListener('input', sync); form.addEventListener('change', sync);
   const memberBox = section('Mitglieder & Zugriff', settings);
-  createMemberView({ box: memberBox, lib, members: detail.members, me: state.me, people: state.people ?? [], node, action, field, select, call: cloudCall, run: async (...args) => { if (await leaveLibraryDraft()) return run(...args); }, confirm: options => hooks.confirm(options), refresh: async () => { const fresh = await cloudCall('library', { id }); if (!fresh.manage) throw Object.assign(new Error('Keine Berechtigung.'), { accessChanged: true }); beginLibrarySession(fresh).tab = 'settings'; await renderCloud(id, fresh); } });
+  createMemberView({ box: memberBox, lib, members: detail.members, me: state.me, people: state.people ?? [], node, action, field, select, call: cloudCall, run: async (...args) => { if (await leaveLibraryDraft()) return run(...args); }, confirm: options => confirmCloud(options), refresh: async () => { const fresh = await cloudCall('library', { id }); if (!fresh.manage) throw Object.assign(new Error('Keine Berechtigung.'), { accessChanged: true }); beginLibrarySession(fresh).tab = 'settings'; await renderCloud(id, fresh); } });
   const danger = section('Gefahrenbereich', settings); danger.classList.add('danger-zone');
   danger.append(node('p', 'Die Bibliothek und ihre Mitgliedschaften werden entfernt. Cloud-Figuren, Videos und lokale Kopien bleiben erhalten.'));
   danger.append(action('Bibliothek löschen', async () => {
     if (!await leaveLibraryDraft()) return;
-    if (await hooks.confirm({ title: `Bibliothek „${lib.title}“ löschen?`, message: 'Cloud-Figuren, Videos und lokale Kopien bleiben erhalten.', ok: 'Bibliothek löschen', destructive: true })) {
+    if (await confirmCloud({ title: `Bibliothek „${lib.title}“ löschen?`, message: 'Cloud-Figuren, Videos und lokale Kopien bleiben erhalten.', ok: 'Bibliothek löschen', destructive: true })) {
       clearLibrarySession(); await run('Löschen …', async () => { await cloudCall('library_delete', { id }); area = 'libraries'; await load(null); });
     }
   }));
@@ -483,7 +507,7 @@ async function libraryUploadPicker(editor) {
 function showLibraryConflict(){const box=body.querySelector('.cloud-library-conflict');if(box)box.hidden=false;}
 async function reloadLibrarySession(){
  const session=librarySession;if(!session?.active)return;
- if(!await hooks.confirm({title:'Aktuellen Stand laden?',message:'Deine ungespeicherten Bibliotheksänderungen werden verworfen. Hochgeladene Cloud-Figuren bleiben erhalten.',ok:'Neu laden'}))return;
+ if(!await confirmCloud({title:'Aktuellen Stand laden?',message:'Deine ungespeicherten Bibliotheksänderungen werden verworfen. Hochgeladene Cloud-Figuren bleiben erhalten.',ok:'Neu laden'}))return;
  if(librarySession!==session||!session.active)return;
  await run('Aktuellen Stand laden …',async()=>{
   const outcome=await session.reload(true);if(outcome.error)throw outcome.error;
@@ -504,17 +528,18 @@ function libraryDownloadControls(parent, entries) {
   const failures = node('ul'); failures.hidden = true;
   const progress = document.getElementById('cloudDownloadProgress');
   const start = action('Alle Figuren lokal verfügbar machen', async () => {
-    if (!await hooks.confirm({ title: 'Alle Figuren lokal verfügbar machen?', message: 'Alle veröffentlichten Figuren direkt im gewählten lokalen Speicher sichern. Vorhandene Videos werden wiederverwendet; bestehende Lernstände und Notizen bleiben erhalten.', ok: 'Lokal verfügbar machen' })) return;
-    return run('Lokalen Bestand prüfen …', async () => {
+    if (!await confirmCloud({ title: 'Alle Figuren lokal verfügbar machen?', message: 'Alle veröffentlichten Figuren direkt im gewählten lokalen Speicher sichern. Vorhandene Videos werden wiederverwendet; bestehende Lernstände und Notizen bleiben erhalten.', ok: 'Lokal verfügbar machen' })) return;
+    return run('Lokalen Bestand prüfen …', async active => {
     if (librarySession?.dirty) throw new Error('Bitte zuerst die Bibliothek speichern, bevor du alle Figuren lokal verfügbar machst.');
     const settings = await storageSettings();
     if (settings.activeFolder && settings.folders.find(folder => folder.id === settings.activeFolder)?.access !== 'granted') throw new Error('Bitte den gewählten Geräteordner in den Einstellungen freigeben, bevor du die Bibliothek herunterlädst.');
-    controller = new AbortController(); const signal = controller.signal;
+    if (!active()) return;
+    const downloadController = new AbortController(); controller = downloadController; const signal = downloadController.signal;
     const cancel = document.getElementById('cloudCancelUpload'); cancel.textContent = 'Abbrechen'; cancel.hidden = false;
     progress.hidden = false; progress.max = revisions.length; progress.value = 0; resultText.hidden = false; failures.replaceChildren(); failures.hidden = true;
     try {
       const result = await downloadLibrary(revisions, {
-        listFigures, readMedia: figureMedia, readCloudMedia: cloudMediaHash, confirmReplace: figure => hooks.confirm({ title: 'Lokale Änderungen überschreiben?', message: `„${figure.title}“ wurde lokal geändert. Mit der Cloud-Version überschreiben?`, ok: 'Mit Cloud-Version überschreiben' }), inspectVideo: inspectCloudVideo, saveFigure,
+        listFigures, readMedia: figureMedia, readCloudMedia: cloudMediaHash, confirmReplace: figure => confirmCloud({ title: 'Lokale Änderungen überschreiben?', message: `„${figure.title}“ wurde lokal geändert. Mit der Cloud-Version überschreiben?`, ok: 'Mit Cloud-Version überschreiben' }), inspectVideo: inspectCloudVideo, saveFigure,
         async fetchVideo(revision, video, signal) {
           const signed = await cloudCall('media_url', { revision: revision.id, media: video.id }); signal.throwIfAborted();
           const response = await fetch(signed.url, { signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]) });
@@ -528,17 +553,19 @@ function libraryDownloadControls(parent, entries) {
           return value.poster ? new Blob([Uint8Array.from(atob(value.poster), character => character.charCodeAt(0))], { type: 'image/jpeg' }) : null;
         }
       }, { signal, targetFolder: settings.activeFolder ?? null, progress: state => {
+        if (!active()) return;
         progress.value = state.done;
         const phase = { index: 'Lokalen Bestand prüfen', check: 'Vorhandene Videos prüfen', download: `Video ${state.video} von ${state.videos} laden`, save: 'Figur speichern', saved: 'Figur gespeichert', skip: 'Bereits vorhanden', error: 'Figur konnte nicht gespeichert werden', done: 'Abgeschlossen', cancelled: 'Abgebrochen' }[state.phase];
         resultText.textContent = `${phase}${state.title ? `: ${state.title}` : ''} · ${state.done} / ${state.total} Figuren`;
       } });
+      if (!active()) return;
       resultText.textContent = `${result.cancelled ? 'Abgebrochen' : 'Fertig'}: ${result.saved} gespeichert · ${result.skipped} bereits vorhanden${result.failed.length ? ` · ${result.failed.length} fehlgeschlagen` : ''}.`;
       if (result.failed.length) { failures.hidden = false; result.failed.forEach(error => failures.append(node('li', `${error.title}: ${error.message}`))); }
       if (result.remaining) resultText.textContent += ` ${result.remaining} Figuren noch offen.`;
       if (result.cancelled || result.failed.length) resultText.textContent += ' Erneut starten lädt nur die noch fehlenden Figuren.';
       await hooks.localChanged?.();
       await refreshLocalFigures();
-    } finally { controller = null; cancel.hidden = true; cancel.textContent = 'Upload abbrechen'; progress.hidden = true; }
+    } finally { if (controller === downloadController) { controller = null; cancel.hidden = true; cancel.textContent = 'Upload abbrechen'; progress.hidden = true; } }
   }, errorBox, true);
   });
   start.className = 'primary';
@@ -586,28 +613,30 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
   const fingerprint = selected => `cloud:${rev.id}:${selected.map(v => v.id).join(',')}`;
   const label = 'Lokal verfügbar machen';
   const download = async (replace = false) => {
-    await refreshLocalFigures();
+    const activeDownload = navigation.capture();
+    await refreshLocalFigures(); if (!activeDownload()) return;
     const linked = localIndex.resolve(rev, localFigures, { revisionIds }).current;
     if (linked && !replace) {
       const saved = await run('Angaben ergänzen …', () => enrichCloudMetadata(linked, rev, { readMedia: figureMedia, saveFigure }));
       if (!saved) return;
-      await hooks.localChanged?.(); await close(); if (!dialog.open) return hooks.openLocal?.(saved); return;
+      await hooks.localChanged?.(); if (!activeDownload()) return; await close(); if (activeDownload() && !dialog.open) return hooks.openLocal?.(saved); return;
     }
-    return run('Figur wird lokal verfügbar gemacht …', async () => {
+    return run('Figur wird lokal verfügbar gemacht …', async active => {
     if (librarySession?.dirty) throw new Error('Bitte zuerst die Bibliothek speichern, bevor du eine Figur übernimmst.');
     const selected = chosen.filter(([check]) => !check || check.checked).map(([, v]) => v);
     if (!selected.length) throw new Error('Bitte mindestens ein Video auswählen.');
     if (selected.reduce((n, v) => n + v.size, 0) > 250 * 1024 * 1024) throw new Error('Bitte weniger Videos wählen: maximal 250 MB pro Übernahme.');
     const resolved = localIndex.resolve(rev, localFigures, { revisionIds });
     const target = resolved.figure && !resolved.modified ? { figure: resolved.figure } : await hooks.chooseImport({ title: rev.title, fingerprint: fingerprint(selected), revisionIds, figureId: rev.figure_id });
-    if (!target) return;
+    if (!target || !active()) return;
     const settings = await storageSettings();
     if (!target.figure && settings.activeFolder && settings.folders.find(folder => folder.id === settings.activeFolder)?.access !== 'granted') throw new Error('Bitte den gewählten Geräteordner in den Einstellungen freigeben.');
-    controller = new AbortController(); const signal = controller.signal;
+    if (!active()) return;
+    const downloadController = new AbortController(); controller = downloadController; const signal = downloadController.signal;
     const cancel = document.getElementById('cloudCancelUpload'); cancel.textContent = 'Abbrechen'; cancel.hidden = false;
     try {
       await downloadFigure({ ...rev, videos: selected }, {
-        listFigures, readMedia: figureMedia, readCloudMedia: cloudMediaHash, confirmReplace: figure => hooks.confirm({ title: 'Lokale Änderungen überschreiben?', message: `„${figure.title}“ wurde lokal geändert. Mit der Cloud-Version überschreiben?`, ok: 'Mit Cloud-Version überschreiben' }), inspectVideo: inspectCloudVideo, saveFigure,
+        listFigures, readMedia: figureMedia, readCloudMedia: cloudMediaHash, confirmReplace: figure => confirmCloud({ title: 'Lokale Änderungen überschreiben?', message: `„${figure.title}“ wurde lokal geändert. Mit der Cloud-Version überschreiben?`, ok: 'Mit Cloud-Version überschreiben' }), inspectVideo: inspectCloudVideo, saveFigure,
         async fetchVideo(revision, video, signal) {
           const signed = await cloudCall('media_url', { revision: revision.id, media: video.id }); signal.throwIfAborted();
           const response = await fetch(signed.url, { signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]) });
@@ -620,10 +649,12 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
           const value = await cloudCall('poster_get', { revision: revision.id });
           return value.poster ? new Blob([Uint8Array.from(atob(value.poster), character => character.charCodeAt(0))], { type: 'image/jpeg' }) : null;
         }
-      }, { signal, target: target.figure ?? null, targetFolder: settings.activeFolder ?? null, progress: text => { statusBox.textContent = text; } });
+      }, { signal, target: target.figure ?? null, targetFolder: settings.activeFolder ?? null, progress: text => { if (active()) statusBox.textContent = text; } });
+      if (!active()) return;
       await hooks.localChanged?.();
-      busy = false; close(); hooks.localSaved?.();
-    } finally { controller = null; cancel.hidden = true; cancel.textContent = 'Upload abbrechen'; }
+      if (!active()) return;
+      busy = false; await close(); if (active()) hooks.localSaved?.();
+    } finally { if (controller === downloadController) { controller = null; cancel.hidden = true; cancel.textContent = 'Upload abbrechen'; } }
 
   });
   };
@@ -661,7 +692,7 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
 }
 async function attachForm(revision) {
   if (!await leaveLibraryDraft()) return;
-  viewEpoch++; renderedView = null;
+  navigation.invalidateView(); renderedView = null;
   disposeUploadTags(); cancelThumbnails(); clearPreviews(body); body.replaceChildren();
   body.append(action('Zurück zu Meine Cloud-Figuren', () => navigate('figures')));
   const box = section(`„${revision.title}“ zuordnen`);
@@ -683,7 +714,7 @@ function managementAction(label,icon,work,destructive=false){
 function variantButton(box, revision) {
   box.append(managementAction('Variante erstellen','copy-plus', async () => {
     if (!await leaveLibraryDraft()) return;
-    if (!await hooks.confirm({ title: 'Variante erstellen?', message: 'Die Variante ist unabhängig bearbeitbar. Vorhandene Videos und Bilder werden ohne zusätzliche Dateikopie referenziert.', ok: 'Variante erstellen' })) return;
+    if (!await confirmCloud({ title: 'Variante erstellen?', message: 'Die Variante ist unabhängig bearbeitbar. Vorhandene Videos und Bilder werden ohne zusätzliche Dateikopie referenziert.', ok: 'Variante erstellen' })) return;
     await run('Variante erstellen …', async () => { await cloudCall('variant', { revision: revision.id }); area = 'figures'; await load(null); });
   }));
 }
@@ -764,12 +795,12 @@ function ownFigures() {
         variantButton(actions,latest);
       }
       if(f.owner_id===state.me?.id)actions.append(managementAction(f.public_allowed?'Freigabe widerrufen':'Freigabe erlauben',f.public_allowed?'shield-off':'shield-check',()=>run('Freigabe ändern …',async()=>{
-        if(f.public_allowed && !await hooks.confirm({title:'Öffentliche Freigabe widerrufen?',message:'Alle Zuordnungen zu öffentlichen Bibliotheken werden entfernt. Private Zuordnungen bleiben bestehen.',ok:'Freigabe widerrufen'}))return;
+        if(f.public_allowed && !await confirmCloud({title:'Öffentliche Freigabe widerrufen?',message:'Alle Zuordnungen zu öffentlichen Bibliotheken werden entfernt. Private Zuordnungen bleiben bestehen.',ok:'Freigabe widerrufen'}))return;
         await cloudCall('public_permission',{figure:f.id,allowed:!f.public_allowed});await load(null);
       })));
       if(f.owner_id===state.me?.id || state.me?.is_admin)actions.append(managementAction('Cloud-Figur löschen','trash-2',async()=>{
         const affected=await cloudCall('delete_preview',{figure:f.id});
-        if(!await hooks.confirm({title:'Cloud-Figur löschen?',message:`Die Cloud-Figur und ihre Videos werden gelöscht und aus folgenden Bibliotheken entfernt: ${affected.libraries.join(', ') || 'keinen'}. Lokale Kopien bleiben erhalten.`,ok:'Cloud-Figur löschen',destructive:true}))return;
+        if(!await confirmCloud({title:'Cloud-Figur löschen?',message:`Die Cloud-Figur und ihre Videos werden gelöscht und aus folgenden Bibliotheken entfernt: ${affected.libraries.join(', ') || 'keinen'}. Lokale Kopien bleiben erhalten.`,ok:'Cloud-Figur löschen',destructive:true}))return;
         await run('Cloud-Figur löschen …',async()=>{await cloudCall('delete_figure',{figure:f.id,expected_token:f.content_token});await load(null);});
       },true));
       chooseTab(ownFigureSelection.id === f.id ? ownFigureSelection.tab : 'videos');
@@ -812,9 +843,9 @@ async function publishForm() {
   const me = state.me;
   if (!me?.upload_enabled) { body.append(node('p', 'Für Cloud-Uploads brauchst du die Freischaltung des Administrators.')); return; }
   if (librarySession?.suspended) body.append(action('Zurück zur Bibliotheksbearbeitung', () => run('Bibliotheksbearbeitung wird geladen …', () => resumeLibraryUpload())));
-  const local = source, account = cloudIdentity(), epoch = viewEpoch;
+  const local = source, account = cloudIdentity(), epoch = navigation.revision;
   const records = await figureVideos(local);
-  if (!dialog.open || source !== local || account !== cloudIdentity() || epoch !== viewEpoch) return;
+  if (!dialog.open || source !== local || account !== cloudIdentity() || epoch !== navigation.revision) return;
   const libs = state.libraries.filter(l => l.contribute);
   const box = section(`„${local.title}“ hochladen`), selected = [];
   const step = (number, title) => { const group = node('div', undefined, 'upload-step'); group.append(node('h4', `${number} · ${title}`)); box.append(group); return group; };
@@ -899,7 +930,7 @@ async function publishForm() {
     };
     try {
       const result = await workflow.start({ owner, local:{...local,tags:tags.value}, videos, target: targets.find(f => f.id === figure.value), library: libraryId, variant: explicitVariant.checked, allowed: allowed.checked, remoteChanged: localIndex.remoteChanged(local), publicLibrary: state.libraries.find(l => l.id === libraryId)?.visibility === 'public', fileLimit: CLOUD_FILE_LIMIT }, {
-        confirm: hooks.confirm,
+        confirm: confirmCloud,
         progress: value => {
           if (!workflow.currentAccount) return;
           statusBox.textContent = value.message;
@@ -922,8 +953,7 @@ async function publishForm() {
       else if (result.kind === 'cancelled') report(new Error('Upload abgebrochen.'), uploadError);
       else renderUploadRecovery(afterSaved);
     } finally {
-      document.getElementById('cloudCancelUpload').hidden = true;
-      document.getElementById('cloudCancelUpload').disabled = false;
+      if (account === cloudIdentity()) { document.getElementById('cloudCancelUpload').hidden = true; document.getElementById('cloudCancelUpload').disabled = false; }
     }
   }, uploadError));
   upload.className = 'primary'; box.append(upload, uploadError);
@@ -1066,35 +1096,38 @@ function extraManagement() {
 export function initCloud(callbacks) {
   setLinkLoginConfirmation(confirmLinkAccount);
   hooks = callbacks;
+  navigation = createCloudNavigation({ identity: cloudIdentity, view: {
+    context: () => ({ open: dialog.open, busy, signedIn: signedIn(), area, library: current, account: accountDialog?.open, login: loginDialog?.open }),
+    enter: enterCloud,
+    hide() { clearLibrarySession(); disposeUploadTags(); renderedView = null; clearTimeout(statusTimer); cancelThumbnails(); dialog.close(); clearPreviews(body); source = null; hooks.closed?.(); },
+    select(next, library = null) { source = null; area = next; current = library; },
+    initialArea: () => initialArea(state), resetFigures: resetOwnFigures,
+    load, render: renderCloud, run, logout, resetSession: resetCloudSession,
+    dismissAccount, dismissLogin, showLogin: showGuestLogin,
+    showAccount() { renderAccount(); if (state?.me) { accountDialog.showModal(); accountTrigger.setAttribute('aria-expanded', 'true'); } },
+    settings() { document.getElementById('cloudSettings').focus({ preventScroll: true }); hooks.settings?.(); }
+  }, drafts: {
+    peopleLeave: active => peopleView.leave(active), library: () => librarySession,
+    leaveLibrary: leaveLibraryDraft, clearLibrary: clearLibrarySession, resumeLibrary: resumeLibraryUpload
+  } });
   const refreshLocal = () => { if (dialog.open) void refreshLocalFigures().catch(() => {}); };
   addEventListener('local-figures-changed', refreshLocal);
   addEventListener('focus', refreshLocal);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshLocal(); });
   addEventListener('storage', refreshLocal);
   addEventListener('beforeunload', event => { if (librarySession?.dirty || peopleView.dirty) { event.preventDefault(); event.returnValue = ''; } });
-  peopleView = createPeopleView({ node, action, field, select, checkbox, call: cloudCall, run, confirm: options => hooks.confirm(options), state: () => state, refresh: () => load(null), report, section, extraManagement, account: () => { renderAccount(); accountDialog.showModal(); accountTrigger.setAttribute('aria-expanded', 'true'); } });
+  peopleView = createPeopleView({ node, action, field, select, checkbox, call: cloudCall, run, confirm: options => confirmCloud(options), state: () => state, refresh: () => load(null), report, section, extraManagement, account: () => { renderAccount(); accountDialog.showModal(); accountTrigger.setAttribute('aria-expanded', 'true'); } });
   dialog = document.getElementById('cloudDialog'); body = document.getElementById('cloudBody'); errorBox = document.getElementById('cloudError'); statusBox = document.getElementById('cloudStatus');
   const downloadProgress = node('progress'); downloadProgress.id = 'cloudDownloadProgress'; downloadProgress.setAttribute('aria-label', 'Bibliothek lokal verfügbar machen'); downloadProgress.hidden = true; statusBox.after(downloadProgress);
   cloudNavigation = node('div', undefined, 'cloud-navigation'); cloudNavigation.id = 'cloudNavigation'; cloudNavigation.hidden = true; dialog.querySelector('.screen-header').after(cloudNavigation);
-  const settingsTrigger = document.getElementById('infoButton').cloneNode(true); settingsTrigger.id = 'cloudSettings'; settingsTrigger.onclick = () => { if (!busy) void peopleView.leave().then(ok => { if (ok) { settingsTrigger.focus({preventScroll:true}); hooks.settings?.(); } }); }; settingsTrigger.replaceChildren(uiIcon('settings')); dialog.querySelector('.cloud-brand-header').append(settingsTrigger);
+  const settingsTrigger = document.getElementById('infoButton').cloneNode(true); settingsTrigger.id = 'cloudSettings'; settingsTrigger.onclick = () => navigation.settings(); settingsTrigger.replaceChildren(uiIcon('settings')); dialog.querySelector('.cloud-brand-header').append(settingsTrigger);
   document.getElementById('infoButton').replaceChildren(uiIcon('settings'));
-  const refreshTrigger = action('Aktualisieren', async () => { if (!busy && await peopleView.leave()) return load(current, 'refresh'); }); refreshTrigger.className = 'cloud-refresh-trigger'; refreshTrigger.setAttribute('aria-label', 'Aktualisieren'); refreshTrigger.title = 'Aktualisieren'; refreshTrigger.replaceChildren(uiIcon('refresh-cw')); dialog.querySelector('.screen-header').append(refreshTrigger);
+  const refreshTrigger = action('Aktualisieren', () => navigation.refresh()); refreshTrigger.className = 'cloud-refresh-trigger'; refreshTrigger.setAttribute('aria-label', 'Aktualisieren'); refreshTrigger.title = 'Aktualisieren'; refreshTrigger.replaceChildren(uiIcon('refresh-cw')); dialog.querySelector('.screen-header').append(refreshTrigger);
   uploadRecovery = node('section', undefined, 'cloud-card'); uploadRecovery.id = 'cloudUploadRecovery'; uploadRecovery.setAttribute('role', 'status'); uploadRecovery.hidden = true; body.before(uploadRecovery);
-  addEventListener('cloud-session-changed', event => {
-    uploadWorkflow?.cancel(); uploadRecovery.hidden = true; uploadRecovery.replaceChildren();
-    clearLibrarySession(); document.querySelectorAll('.cloud-unsaved-dialog').forEach(prompt => prompt.dispatchEvent(new Event('cancel', { cancelable: true }))); document.querySelectorAll('.cloud-library-picker').forEach(picker => { picker.close(); picker.remove(); }); peopleView.reset(); viewEpoch++; renderedView = null; state = null; displayedOwner = null; localInventoryEpoch++; localFigures = []; localUpdates = [];
-    disposeUploadTags(); cancelThumbnails(); clearPreviews(body); body.replaceChildren(); cloudNavigation.replaceChildren(); cloudNavigation.hidden = true; errorBox.hidden = true; cacheStatus('');
-    if (loginTrigger) loginTrigger.hidden = signedIn();
-    dismissAccount(); accountTrigger.hidden = true; accountDialog.replaceChildren();
-    // Explicit login/logout reload their own destination; token rotation leaves forms intact.
-    if ((event.detail?.external || event.detail?.expired) && dialog.open) {
-      if (busy) authReloadPending = true;
-      else { source = null; area = 'initial'; void load(null, true); }
-    }
-  });
+  addEventListener('cloud-session-changed', event => { void navigation.sessionChanged(event.detail).catch(report); });
   loginDialog = node('dialog', undefined, 'cloud-login-dialog'); loginDialog.id = 'cloudLoginDialog'; loginDialog.setAttribute('aria-labelledby', 'cloudLoginTitle');
   loginDialog.addEventListener('cancel', event => { event.preventDefault(); if (!busy) dismissLogin(); }); document.body.append(loginDialog);
-  loginTrigger = action('', showGuestLogin); loginTrigger.id = 'cloudLoginOpen'; loginTrigger.className = 'cloud-login-trigger'; loginTrigger.hidden = true;
+  loginTrigger = action('', () => navigation.login()); loginTrigger.id = 'cloudLoginOpen'; loginTrigger.className = 'cloud-login-trigger'; loginTrigger.hidden = true;
   loginTrigger.setAttribute('aria-label', 'Anmeldedialog öffnen'); loginTrigger.title = 'Anmelden'; loginTrigger.setAttribute('aria-haspopup', 'dialog'); loginTrigger.setAttribute('aria-controls', loginDialog.id);
   loginTrigger.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5M3 12h12m-4-4 4 4-4 4"/></svg>';
   dialog.querySelector('.screen-header').append(loginTrigger);
@@ -1102,7 +1135,7 @@ export function initCloud(callbacks) {
   accountDialog.addEventListener('cancel', event => { event.preventDefault(); event.stopPropagation(); if (!busy) dismissAccount(); });
   accountDialog.addEventListener('click', event => { if (event.target !== accountDialog) return; const rect = accountDialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dismissAccount(); });
   accountDialog.addEventListener('close', () => accountTrigger.setAttribute('aria-expanded', 'false'));
-  accountTrigger = action('', () => { if (busy) return; renderAccount(); if (state?.me) { accountDialog.showModal(); accountTrigger.setAttribute('aria-expanded', 'true'); } });
+  accountTrigger = action('', () => navigation.account());
   accountTrigger.id = 'cloudAccountOpen'; accountTrigger.className = 'cloud-login-trigger'; accountTrigger.hidden = true; accountTrigger.title = 'Mein Konto'; accountTrigger.setAttribute('aria-label', 'Kontomenü öffnen'); accountTrigger.setAttribute('aria-haspopup', 'dialog'); accountTrigger.setAttribute('aria-controls', accountDialog.id); accountTrigger.setAttribute('aria-expanded', 'false');
   accountTrigger.replaceChildren(uiIcon('user-round')); dialog.querySelector('.screen-header').append(accountTrigger);
   document.getElementById('cloudBack').onclick = cloudBack;
@@ -1113,14 +1146,14 @@ export function initCloud(callbacks) {
   document.getElementById('cloudButton').onclick = () => openCloud();
   const query = new URLSearchParams(location.search); if (query.has('library') || query.has('cloud')) setTimeout(() => openCloud(null, query.get('library')), 0);
 }
-export async function openCloud(local = null, library = null) {
-  if (busy || dialog.open) return; if (local && !signedIn()) return; resetOwnFigures(); source = local; current = library; area = 'initial';
+async function enterCloud(local, library) {
+  source = local; current = library; area = 'initial';
   errorBox.hidden = true; if (displayedOwner !== cloudIdentity()) { cloudNavigation.replaceChildren(); cloudNavigation.hidden = true; } if (displayedOwner !== cloudIdentity() || local) { disposeUploadTags(); cancelThumbnails(); clearPreviews(body); body.replaceChildren(); }
   // Do not let dialog focus restoration reopen the search keyboard on return.
   if (document.activeElement?.matches('input, textarea, [contenteditable=true]')) document.activeElement.blur();
   loginTrigger.hidden = signedIn(); accountTrigger.hidden = !state?.me || displayedOwner !== cloudIdentity();
   dialog.showModal();
-  if (local) await run('Cloud-Inhalte werden geladen …', () => load(library)); else await load(library, true);
 }
+export const openCloud = (local = null, library = null) => navigation.open(local, library);
 
 export { close as closeCloud };

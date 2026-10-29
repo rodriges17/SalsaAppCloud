@@ -2,9 +2,10 @@
 export function createPeopleView({ node, action, field, select, checkbox, call, run, confirm, state, refresh, report, account, extraManagement = () => null }) {
   let expanded = null, adding = null, query = '', filter = 'Alle', activeTab = 'Konto', more, platformDraft = null;
   const dirty = () => [...drafts].some(([id,d]) => { const p = state()?.people?.find(p => p.id === id); return p && (d.enabled !== p.upload_enabled || Number(d.quota) !== p.quota / 1000000 || Object.keys(d.members || {}).length); });
-  async function leave() {
+  async function leave(active = () => true) {
     if (!dirty() && !adding && platformDraft === null) return true;
     if (!await confirm({title:'Ungespeicherte Änderungen', message:'Möchtest du die Änderungen verwerfen oder weiter bearbeiten?', ok:'Verwerfen', cancel:'Weiter bearbeiten', destructive:true})) return false;
+    if (!active()) return false;
     drafts.clear(); adding = null; platformDraft = null; return true;
   }
   const drafts = new Map();

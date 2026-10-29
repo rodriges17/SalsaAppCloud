@@ -5,7 +5,7 @@ import {Window} from 'happy-dom';
 
 const window=new Window({url:'http://localhost/pwa/',settings:{disableCSSFileLoading:true,disableJavaScriptFileLoading:true}});
 globalThis.window=window;
-for(const key of ['document','location','history','localStorage','CustomEvent','Image','IntersectionObserver'])globalThis[key]=window[key];
+for(const key of ['document','location','history','localStorage','Event','CustomEvent','Image','IntersectionObserver'])globalThis[key]=window[key];
 Object.defineProperty(globalThis,'navigator',{configurable:true,value:window.navigator});
 for(const key of ['addEventListener','dispatchEvent','requestAnimationFrame'])globalThis[key]=window[key].bind(window);
 window.HTMLElement.prototype.scrollIntoView=function(){};
@@ -15,17 +15,18 @@ localStorage.setItem(sessionKey,JSON.stringify({access_token:'test',refresh_toke
 const revision={id:'revision',figure_id:'figure',title:'Drehung',description:'Figurenbeschreibung',tags:['Salsa','Figur'],videos:[{id:'video',name:'Video',type:'video/mp4',size:20}]};
 const library={id:'library',title:'Kurs',description:'Bibliotheksbeschreibung',visibility:'public',owner_id:'me',edit_version:'v1'};
 const snapshot={me:{id:'me',email:'me@test.ch',upload_enabled:true,is_admin:false,used:0,quota:100},own_figures:[{id:'figure',owner_id:'me',public_allowed:true,revisions:[revision]}],libraries:[library]};
-const calls=[];
+const calls=[];let holdState=null;
 globalThis.fetch=async(_url,options)=>{
  const {action,payload}=JSON.parse(options.body);
  if(action==='library_commit')library.title=payload.title;
  calls.push(action);
- const result=action==='state'?snapshot:action==='library'?{library,manage:true,members:[],entries:[{figure_id:'figure',published:revision}]}:{};
+ const result=action==='state'?structuredClone(snapshot):action==='library'?{library,manage:true,members:[],entries:[{figure_id:'figure',published:revision}]}:{};
+ if(action==='state'&&holdState){const hold=holdState;holdState=null;await hold();}
  return new Response(JSON.stringify(result),{headers:{'Content-Type':'application/json'}});
 };
 const {initCloud,openCloud,closeCloud}=await import('../pwa/cloud.js');
 const prompts=[];
-initCloud({localFigures:async()=>[],confirm:async options=>{prompts.push(options);return false;}});
+initCloud({localFigures:async()=>[],chooseImport:async()=>({}),confirm:async options=>{prompts.push(options);return false;}});
 const button=name=>[...document.querySelectorAll('button')].find(b=>b.textContent===name);
 const click=async el=>{assert.ok(el,'control exists');await el.onclick();};
 
@@ -116,6 +117,52 @@ test('expanding library details reveals their end only when outside the usable s
  delete scroller.getBoundingClientRect;delete card.getBoundingClientRect;
 });
 
+test('screen Back, system Back and tabs cannot duplicate a pending library leave prompt',async()=>{
+ await click(button('Bibliothek bearbeiten')); await click(button('Einstellungen'));
+ const name=document.querySelector('.cloud-library-settings input');name.value='Nicht verwerfen';name.dispatchEvent(new window.Event('input',{bubbles:true}));
+ const leaving=click(document.getElementById('cloudBack'));
+ for(let i=0;i<30&&!button('Weiter bearbeiten');i++)await new Promise(r=>setTimeout(r,5));
+ document.getElementById('cloudDialog').dispatchEvent(new window.Event('cancel',{cancelable:true}));
+ await click(button('Meine Figuren')); await click(document.getElementById('cloudBack'));
+ assert.equal(document.querySelectorAll('.cloud-unsaved-dialog').length,1);
+ await click(button('Weiter bearbeiten')); await leaving;
+ assert.equal(document.querySelector('.cloud-library-settings input').value,'Nicht verwerfen');
+ const discard=click(document.getElementById('cloudBack'));
+ for(let i=0;i<30&&!button('Verwerfen');i++)await new Promise(r=>setTimeout(r,5));
+ await click(button('Verwerfen'));await discard;
+});
+
+test('a local storage failure during a single figure download leaves navigation usable',async()=>{
+ const card=document.querySelector('.cloud-library-figure');card.open=true;card.ontoggle();
+ globalThis.indexedDB={open(){const request={error:new Error('Speicher gesperrt')};queueMicrotask(()=>request.onerror());return request;}};
+ await click(button('Lokal verfügbar machen'));
+ assert.equal(document.getElementById('cloudError').textContent,'Speicher gesperrt');
+ assert.equal(document.getElementById('cloudBack').disabled,false);
+ assert.equal(document.getElementById('cloudBody').inert,false);
+ delete globalThis.indexedDB;
+});
+
+test('account change dismisses a private draft prompt and late navigation never restores it',async()=>{
+ await click(button('Bibliothek bearbeiten'));await click(button('Einstellungen'));
+ const name=document.querySelector('.cloud-library-settings input');name.value='Alter privater Entwurf';name.dispatchEvent(new window.Event('input',{bubbles:true}));
+ const leaving=click(document.getElementById('cloudBack'));
+ for(let i=0;i<30&&!button('Weiter bearbeiten');i++)await new Promise(r=>setTimeout(r,5));
+ localStorage.removeItem(sessionKey);
+ const old=snapshot.me;snapshot.me=null;snapshot.own_figures=[];snapshot.libraries=[];
+ dispatchEvent(new CustomEvent('cloud-session-changed',{detail:{external:true}}));
+ await leaving;
+ for(let i=0;i<30&&!document.querySelector('.cloud-public-libraries');i++)await new Promise(r=>setTimeout(r,5));
+ assert.equal(document.querySelector('.cloud-unsaved-dialog'),null);
+ assert.equal(document.querySelector('.cloud-library-settings'),null);
+ assert.equal(document.getElementById('cloudBody').textContent.includes('Alter privater Entwurf'),false);
+ assert.equal(document.getElementById('cloudDialog').open,true);
+ assert.equal(document.getElementById('cloudBack').disabled,false);
+ snapshot.me=old;
+ localStorage.setItem(sessionKey,JSON.stringify({access_token:'new',refresh_token:'new',expires_at:Date.now()+3600000,cache_id:'next-account'}));
+ dispatchEvent(new CustomEvent('cloud-session-changed',{detail:{external:true}}));
+ await closeCloud();
+});
+
 test('My Cloud Figures sorts by the latest displayed title with German alphabetical and numeric order',async()=>{
  await closeCloud();
  snapshot.own_figures=[
@@ -127,4 +174,21 @@ test('My Cloud Figures sorts by the latest displayed title with German alphabeti
  ];
  await openCloud();await click(document.querySelector('.cloud-refresh-trigger'));
  assert.deepEqual([...document.querySelectorAll('.cloud-own-name h3')].map(n=>n.textContent),['Ähre','drehung','Figur 2','Figur 10','Ocho']);
+});
+
+test('session expiry replaces an in-flight private refresh and its late response cannot restore figures',async()=>{
+ let release,started;
+ const waiting=new Promise(resolve=>started=resolve);
+ holdState=()=>{started();return new Promise(resolve=>release=resolve);};
+ const refresh=click(document.querySelector('.cloud-refresh-trigger'));await waiting;
+ localStorage.removeItem(sessionKey);snapshot.me=null;snapshot.own_figures=[];snapshot.libraries=[];
+ dispatchEvent(new CustomEvent('cloud-session-changed',{detail:{expired:true}}));
+ for(let i=0;i<30&&!document.querySelector('.cloud-public-libraries');i++)await new Promise(r=>setTimeout(r,5));
+ assert.equal(document.querySelector('.cloud-own-figure'),null);
+ release();await refresh;
+ assert.equal(document.querySelector('.cloud-own-figure'),null);
+ assert.equal(document.getElementById('cloudAccountOpen').hidden,true);
+ assert.equal(document.getElementById('cloudError').hidden,true);
+ assert.equal(document.getElementById('cloudBack').disabled,false);
+ await closeCloud();assert.equal(document.getElementById('cloudDialog').open,false);
 });
