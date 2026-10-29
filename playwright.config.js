@@ -6,7 +6,8 @@ export default defineConfig({
   reporter: [['list'], ['html', { open: 'never' }]],
   use: { baseURL: 'http://127.0.0.1:4173', trace: 'on-first-retry', screenshot: 'only-on-failure', video: 'on-first-retry' },
   projects: [
-    { name: 'chromium-mobile', use: { browserName: 'chromium', channel: 'chrome', ...devices['Pixel 7'] } },
+    // CI's official Playwright image contains Chromium; local runs still use Chrome.
+    { name: 'chromium-mobile', use: { browserName: 'chromium', channel: process.env.PLAYWRIGHT_CHROMIUM_CHANNEL || 'chrome', ...devices['Pixel 7'] } },
     { name: 'webkit-iphone', use: { browserName: 'webkit', ...devices['iPhone 13'] } }
   ],
   webServer: { command: 'python3 -u web-tests/server.py', url: 'http://127.0.0.1:4173/pwa/', reuseExistingServer: false, timeout: 120000, stdout: 'pipe', stderr: 'pipe' }

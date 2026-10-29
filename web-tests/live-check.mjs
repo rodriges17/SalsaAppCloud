@@ -10,7 +10,7 @@ for (const [name, engine, options] of [
   ['chrome', chromium, { ...devices['Pixel 7'] }],
   ['webkit', webkit, { ...devices['iPhone 13'] }]
 ]) {
-  const browser = await engine.launch(name === 'chrome' ? { channel: 'chrome' } : {});
+  const browser = await engine.launch(name === 'chrome' ? { channel: process.env.PLAYWRIGHT_CHROMIUM_CHANNEL || 'chrome' } : {});
   try {
     const context = await browser.newContext(options), page = await context.newPage(), errors = [];
     page.on('pageerror', error => errors.push(error.message));
