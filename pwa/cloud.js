@@ -254,6 +254,7 @@ async function load(library = current, allowCache = false) {
         const sameView = renderedView?.owner === owner && renderedView.area === (area === 'initial' ? 'figures' : area) && renderedView.library === library;
         if (!sameView) { state = cached.value; displayedOwner = owner; await renderCloud(library, detail?.value); }
         if (!active()) return;
+        navigation.viewReady(epoch);
         if (!saved.online) { cacheStatus(`Offline – ${lastStand(cached.updatedAt)}`); return; }
         if (allowCache !== 'refresh' && saved.fresh) { cacheStatus(''); maintainCloud(owner, state.me); return; }
       } else cached = null;
@@ -270,6 +271,7 @@ async function load(library = current, allowCache = false) {
       const scroll = cached ? body.parentElement.scrollTop : 0;
       state = snapshot.value; displayedOwner = owner;
       await renderCloud(library, freshDetail?.value); body.parentElement.scrollTop = scroll;
+      navigation.viewReady(epoch);
     }
     if (active() && !busy) { errorBox.hidden = true; cacheStatus(editing && changed ? 'Änderungen geladen – bitte nach Abschluss deines Vorgangs aktualisieren.' : 'Alles aktuell', !editing); }
     maintainCloud(owner, snapshot.value.me);

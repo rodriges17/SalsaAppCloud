@@ -6,13 +6,14 @@ function fixture() {
   const screen = { open: false, busy: false, signedIn: true, area: 'figures', library: null, source: null, account: false, login: false };
   const shown = [];
   let editor = null, peopleLeave = async () => true, owner = 'account-a';
+  let load = async (library, mode) => { screen.library = library; shown.push({ library, mode }); };
   const nav = createCloudNavigation({ identity: () => owner, view: {
     context: () => screen,
     enter(local, library) { Object.assign(screen, { open: true, source: local, library, area: 'initial' }); },
     hide() { screen.open = false; },
     select(area, library = null) { Object.assign(screen, { area, library, source: null }); },
     initialArea: () => 'figures', resetFigures() {},
-    async load(library, mode) { screen.library = library; shown.push({ library, mode }); },
+    load: (...args) => load(...args),
     async render(library, detail) { screen.library = library; shown.push(detail.library.title); },
     dismissAccount() { screen.account = false; }, dismissLogin() { screen.login = false; },
     showAccount() { screen.account = true; }, settings() {},
@@ -24,6 +25,7 @@ function fixture() {
     clearLibrary() { editor = null; }, resumeLibrary: async () => {},
   } });
   return { nav, screen, shown, setEditor: value => editor = value, setPeopleLeave: value => peopleLeave = value,
+    setLoad: value => load = value,
     changeOwner(value) { owner = value; screen.signedIn = value !== 'public'; return nav.sessionChanged({ external: true }); } };
 }
 
@@ -78,4 +80,16 @@ test('a failed leave releases navigation and keeps the current screen', async ()
   assert.equal(f.screen.area, 'initial'); assert.equal(f.screen.open, true);
   f.setPeopleLeave(async () => true); await f.nav.close();
   assert.equal(f.screen.open, false);
+});
+
+test('an already displayed cached screen allows navigation while its background refresh waits', async () => {
+  const f = fixture(); await f.nav.open(); let release, painted;
+  const visible = new Promise(resolve => painted = resolve);
+  f.setLoad(async () => {
+    f.nav.viewReady(f.nav.revision); painted();
+    await new Promise(resolve => release = resolve);
+  });
+  const opening = f.nav.show('libraries'); await visible;
+  await f.nav.close(); assert.equal(f.screen.open, false);
+  release(); await opening; assert.equal(f.screen.open, false);
 });

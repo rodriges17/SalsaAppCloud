@@ -13,6 +13,10 @@ export function createCloudNavigation({ identity, view, drafts }) {
     try { return await work(capture()); }
     finally { if (pending === token) pending = null; }
   }
+  async function load(library, mode) {
+    if (pending) pending.loading = true;
+    return view.load(library, mode);
+  }
   const leave = async active => await drafts.peopleLeave(active) && active() && await drafts.leaveLibrary(active) && active();
   async function close(active) {
     if (context().busy || !await leave(active)) return;
@@ -23,7 +27,7 @@ export function createCloudNavigation({ identity, view, drafts }) {
     if (area === 'figures' || area === 'initial') view.resetFigures();
     drafts.clearLibrary(); view.select(area, library);
     if (['admin', 'create'].includes(area)) await view.run('Laden …', () => view.load(library));
-    else await view.load(library, true);
+    else await load(library, true);
   }
   async function leaveEditor(active) {
     const editor = drafts.library();
@@ -36,6 +40,7 @@ export function createCloudNavigation({ identity, view, drafts }) {
     get revision() { return revision; },
     capture,
     invalidateView() { return ++revision; },
+    viewReady(epoch) { if (epoch === revision && pending?.loading) pending = null; },
     close: () => transition(close),
     show: (area, library = null) => transition(active => show(area, library, active)),
     leaveEditor: () => transition(leaveEditor),
@@ -45,7 +50,12 @@ export function createCloudNavigation({ identity, view, drafts }) {
       view.resetFigures(); await view.enter(local, library);
       if (!active() || !context().open) return;
       if (local) await view.run('Cloud-Inhalte werden geladen …', () => view.load(library));
-      else await view.load(library, true);
+      else {
+        // The shell is already visible. Loading is not a navigation transition:
+        // Back must work even before the first network response arrives.
+        pending = null;
+        await view.load(library, true);
+      }
     }),
     back: () => transition(async active => {
       const screen = context();
@@ -62,7 +72,7 @@ export function createCloudNavigation({ identity, view, drafts }) {
       await close(active);
     }),
     refresh: () => transition(async active => {
-      if (!context().busy && await drafts.peopleLeave(active) && active()) await view.load(context().library, 'refresh');
+      if (!context().busy && await drafts.peopleLeave(active) && active()) await load(context().library, 'refresh');
     }),
     settings: () => transition(async active => {
       if (!context().busy && await drafts.peopleLeave(active) && active()) view.settings();
