@@ -488,7 +488,8 @@ a.cloud-library-card:active{background:var(--selection)}
 .cloud-person-tabs,.cloud-person-filters{display:flex;gap:6px;flex-wrap:wrap}
 .cloud-person-tabs{border-bottom:1px solid var(--border);padding-bottom:10px}
 .cloud-person-tabs button{flex:1;min-width:0;padding:10px 5px;font-size:13px;border:0;background:transparent}
-.cloud-person-tabs button[aria-selected=true],.cloud-person-filters button[aria-pressed=true]{background:var(--selection);color:var(--lavender);box-shadow:inset 0 -2px var(--lavender)}
+.cloud-person-tabs button[aria-selected=true],.cloud-person-filters button[aria-pressed=true]{background:transparent;color:var(--lavender);box-shadow:none}
+.cloud-person-filters button[aria-pressed=true]{border-color:var(--lavender)}
 .cloud-person-filters button{min-height:40px;font-size:13px}
 .cloud-person-panel{display:grid;gap:14px;min-width:0}
 .cloud-person-panel h4{margin:0;color:var(--lavender)}
