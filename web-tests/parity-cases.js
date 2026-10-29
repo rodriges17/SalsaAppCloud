@@ -364,14 +364,14 @@ export async function runParityCase(page, { root, fixture, native = false, scena
    await page.getByRole('button',{name:'Cloud eins lernen',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#learningVideo').videoWidth>0);
    return;
   }
-  await openLibrary();await page.getByRole('button',{name:'Alle Figuren lokal verfügbar machen',exact:true}).click();
+  await openLibrary();await page.getByRole('button',{name:'Alle Figuren lokal verfügbar machen',exact:true}).click();await page.locator('#confirmOK').click();
   await page.waitForFunction(()=>document.querySelector('#cloudStatus')?.textContent.startsWith('Fertig: 1 gespeichert · 1 bereits vorhanden'));
   await page.waitForFunction(()=>!document.getElementById('cloudBody').inert);
   assert(downloads===1,'Shared video content was downloaded more than once');
   assert(!await page.locator('#editor').isVisible(),'Bulk downloads must not open one editor per figure');
   const saved=await page.evaluate(async root=>{const s=await import(root+'storage.js');const figures=await s.listFigures();return {count:figures.length,status:figures[0].status,duration:(await s.figureVideos(figures[0]))[0].duration};},root);
   assert(saved.count===1&&saved.status==='Neu'&&saved.duration>0,'Bulk download did not save usable local video metadata');
-  await page.locator('#cloudDialog [data-nav=figures]').click();await openLibrary();await page.getByRole('button',{name:'Alle Figuren lokal verfügbar machen',exact:true}).click();
+  await page.locator('#cloudDialog [data-nav=figures]').click();await openLibrary();await page.getByRole('button',{name:'Alle Figuren lokal verfügbar machen',exact:true}).click();await page.locator('#confirmOK').click();
   await page.waitForFunction(()=>document.querySelector('#cloudStatus')?.textContent.startsWith('Fertig: 0 gespeichert · 2 bereits vorhanden'));
   assert(downloads===1,'Repeated bulk download fetched already available video content');
   return;

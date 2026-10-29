@@ -502,3 +502,11 @@ a.cloud-library-card:active{background:var(--selection)}
 .cloud-account-menu input{width:100%;min-width:0}.cloud-account-menu form p{font-size:13px}
 .cloud-account-menu [role=status][aria-busy=true]::before{content:'';display:inline-block;width:16px;height:16px;margin-right:8px;border:2px solid var(--border);border-top-color:var(--lavender);border-radius:50%;animation:cloud-progress-spin .8s linear infinite;vertical-align:middle}
 @media(prefers-reduced-motion:reduce){.cloud-account-menu [role=status][aria-busy=true]::before{animation:none}}
+
+/* Keep library summaries at their existing height: title and tags share the 38px thumbnail height. */
+.cloud-library-name{flex:1;min-width:0;display:grid;gap:2px}
+.cloud-library-summary .cloud-library-name h3{margin:0;line-height:18px}
+.cloud-library-name .cloud-tag-pills{flex-wrap:nowrap;gap:4px;height:18px;overflow:hidden}
+.cloud-library-name .cloud-tag-pill{flex:0 1 auto;min-width:0;padding:1px 6px;font-size:10px;line-height:16px;height:18px;overflow:hidden}
+.cloud-library-name .cloud-tag-pill svg{width:11px;height:11px}
+.cloud-library-name .cloud-tag-pill span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
