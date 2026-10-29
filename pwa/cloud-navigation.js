@@ -47,13 +47,15 @@ export function createCloudNavigation({ identity, view, drafts }) {
     open: (local = null, library = null) => transition(async active => {
       const screen = context();
       if (screen.busy || screen.open || local && !screen.signedIn) return;
-      view.resetFigures(); await view.enter(local, library);
-      if (!active() || !context().open) return;
+      view.resetFigures();
+      const entering = view.enter(local, library), openingRevision = revision;
+      if (!local) pending = null; // The modal is visible before Android's paint yield.
+      await entering;
+      if (!active() || !context().open || revision !== openingRevision) return;
       if (local) await view.run('Cloud-Inhalte werden geladen …', () => view.load(library));
       else {
         // The shell is already visible. Loading is not a navigation transition:
         // Back must work even before the first network response arrives.
-        pending = null;
         await view.load(library, true);
       }
     }),

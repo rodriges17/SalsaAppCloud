@@ -7,9 +7,10 @@ function fixture() {
   const shown = [];
   let editor = null, peopleLeave = async () => true, owner = 'account-a';
   let load = async (library, mode) => { screen.library = library; shown.push({ library, mode }); };
+  let enter = (local, library) => { Object.assign(screen, { open: true, source: local, library, area: 'initial' }); };
   const nav = createCloudNavigation({ identity: () => owner, view: {
     context: () => screen,
-    enter(local, library) { Object.assign(screen, { open: true, source: local, library, area: 'initial' }); },
+    enter: (...args) => enter(...args),
     hide() { screen.open = false; },
     select(area, library = null) { Object.assign(screen, { area, library, source: null }); },
     initialArea: () => 'figures', resetFigures() {},
@@ -26,6 +27,7 @@ function fixture() {
   } });
   return { nav, screen, shown, setEditor: value => editor = value, setPeopleLeave: value => peopleLeave = value,
     setLoad: value => load = value,
+    setEnter: value => enter = value,
     changeOwner(value) { owner = value; screen.signedIn = value !== 'public'; return nav.sessionChanged({ external: true }); } };
 }
 
@@ -92,4 +94,13 @@ test('an already displayed cached screen allows navigation while its background 
   const opening = f.nav.show('libraries'); await visible;
   await f.nav.close(); assert.equal(f.screen.open, false);
   release(); await opening; assert.equal(f.screen.open, false);
+});
+
+test('system Back closes a visible Cloud shell before the Android opening paint finishes', async () => {
+  const f = fixture(); let finishPaint;
+  f.setEnter(() => { f.screen.open = true; return new Promise(resolve => finishPaint = resolve); });
+  const opening = f.nav.open();
+  await f.nav.back(); assert.equal(f.screen.open, false);
+  finishPaint(); await opening;
+  assert.deepEqual(f.shown, [], 'late opening paint must not start another load');
 });
