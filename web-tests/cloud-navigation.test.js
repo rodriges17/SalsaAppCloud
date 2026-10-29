@@ -4,6 +4,7 @@ import {readFile} from 'node:fs/promises';
 import {Window} from 'happy-dom';
 
 const window=new Window({url:'http://localhost/pwa/',settings:{disableCSSFileLoading:true,disableJavaScriptFileLoading:true}});
+globalThis.window=window;
 for(const key of ['document','location','history','localStorage','CustomEvent','Image','IntersectionObserver'])globalThis[key]=window[key];
 Object.defineProperty(globalThis,'navigator',{configurable:true,value:window.navigator});
 for(const key of ['addEventListener','dispatchEvent','requestAnimationFrame'])globalThis[key]=window[key].bind(window);
@@ -12,11 +13,14 @@ document.body.innerHTML=await readFile(new URL('../pwa/index.html',import.meta.u
 const sessionKey=`salsa-cloud-session:${new URL('../pwa/',import.meta.url).pathname}:v1`;
 localStorage.setItem(sessionKey,JSON.stringify({access_token:'test',refresh_token:'test',expires_at:Date.now()+3600000,cache_id:'navigation-test'}));
 const revision={id:'revision',figure_id:'figure',title:'Drehung',description:'Figurenbeschreibung',tags:['Salsa','Figur'],videos:[{id:'video',name:'Video',type:'video/mp4',size:20}]};
-const library={id:'library',title:'Kurs',description:'Bibliotheksbeschreibung',visibility:'public',owner_id:'other'};
+const library={id:'library',title:'Kurs',description:'Bibliotheksbeschreibung',visibility:'public',owner_id:'me',edit_version:'v1'};
 const snapshot={me:{id:'me',email:'me@test.ch',upload_enabled:true,is_admin:false,used:0,quota:100},own_figures:[{id:'figure',owner_id:'me',public_allowed:true,revisions:[revision]}],libraries:[library]};
+const calls=[];
 globalThis.fetch=async(_url,options)=>{
- const {action}=JSON.parse(options.body);
- const result=action==='state'?snapshot:action==='library'?{library,entries:[{figure_id:'figure',published:revision}]}:{};
+ const {action,payload}=JSON.parse(options.body);
+ if(action==='library_commit')library.title=payload.title;
+ calls.push(action);
+ const result=action==='state'?snapshot:action==='library'?{library,manage:true,members:[],entries:[{figure_id:'figure',published:revision}]}:{};
  return new Response(JSON.stringify(result),{headers:{'Content-Type':'application/json'}});
 };
 const {initCloud,openCloud,closeCloud}=await import('../pwa/cloud.js');
@@ -53,4 +57,61 @@ test('library shows description and compact figure tags; bulk download explains 
  assert.match(prompts[0].message,/Lernstände und Notizen bleiben erhalten/);
  assert.equal(document.getElementById('cloudDownloadProgress').hidden,true,'cancel leaves download idle');
  assert.notEqual(document.getElementById('cloudStatus').closest('footer').getAttribute('aria-busy'),'true');
+});
+
+test('Back and Cancel leave unchanged library editing without cloud reads',async()=>{
+ for(const exit of ['Abbrechen','Zurück','System-Zurück']){
+  await click(button('Bibliothek bearbeiten'));
+  calls.length=0;
+  if(exit==='System-Zurück'){
+   document.getElementById('cloudDialog').dispatchEvent(new window.Event('cancel',{cancelable:true}));
+   for(let i=0;i<30&&!button('Bibliothek bearbeiten');i++)await new Promise(r=>setTimeout(r,5));
+  }else await click(exit==='Zurück'?document.getElementById('cloudBack'):button(exit));
+  assert.ok(button('Bibliothek bearbeiten'),exit+' returns to the library');
+  assert.deepEqual(calls.filter(a=>a==='state'||a==='library'),[],exit+' must reuse the current library');
+ }
+});
+
+
+test('library Back preserves edits when staying, discards without reads, and refreshes after saving',async()=>{
+ for(const exit of ['Abbrechen','Zurück']){
+  await click(button('Bibliothek bearbeiten'));await click(button('Einstellungen'));
+  const name=document.querySelector('.cloud-library-settings input');name.value='Geänderter Kurs';name.dispatchEvent(new window.Event('input',{bubbles:true}));
+  const leave=()=>click(exit==='Zurück'?document.getElementById('cloudBack'):button(exit));
+  calls.length=0;const staying=leave();
+  for(let i=0;i<30&&!button('Weiter bearbeiten');i++)await new Promise(r=>setTimeout(r,5));
+  await click(button('Weiter bearbeiten'));await staying;
+  assert.equal(document.querySelector('.cloud-library-settings input').value,'Geänderter Kurs');
+  assert.deepEqual(calls,[],'staying does not read or save');
+  const discarding=leave();
+  for(let i=0;i<30&&!button('Verwerfen');i++)await new Promise(r=>setTimeout(r,5));
+  await click(button('Verwerfen'));await discarding;
+  assert.equal(document.querySelector('.cloud-library-title').textContent,'Kurs');
+  assert.deepEqual(calls,[],'discard returns the original library without reads');
+ }
+ await click(button('Bibliothek bearbeiten'));await click(button('Einstellungen'));
+ const name=document.querySelector('.cloud-library-settings input');name.value='Gespeicherter Kurs';name.dispatchEvent(new window.Event('input',{bubbles:true}));
+ calls.length=0;const saving=click(document.getElementById('cloudBack'));
+ for(let i=0;i<30&&!button('Speichern');i++)await new Promise(r=>setTimeout(r,5));
+ await click(button('Speichern'));await saving;
+ assert.ok(calls.includes('library_commit'),'save commits changes');
+ assert.ok(calls.includes('state')&&calls.includes('library'),'save refreshes the visible library');
+ assert.equal(document.querySelector('.cloud-library-title').textContent,'Gespeicherter Kurs');
+});
+
+test('expanding library details reveals their end only when outside the usable scroll area',async()=>{
+ const scroller=document.querySelector('.cloud-scroll'),card=document.querySelector('.cloud-library-figure'),summary=card.querySelector('summary');
+ // DOM layout is supplied by the browser boundary; Happy DOM has no layout engine.
+ scroller.getBoundingClientRect=()=>({top:100,bottom:400});
+ let end=500;card.getBoundingClientRect=()=>({top:150-scroller.scrollTop,bottom:end-scroller.scrollTop});
+ scroller.scrollTop=0;summary.click();await new Promise(requestAnimationFrame);
+ assert.equal(scroller.scrollTop,108,'500px end is revealed above the 400px footer edge with 8px space');
+ summary.click();await new Promise(requestAnimationFrame);assert.equal(scroller.scrollTop,108,'collapse does not scroll');
+ scroller.scrollTop=0;end=300;summary.click();await new Promise(requestAnimationFrame);
+ assert.equal(scroller.scrollTop,0,'already visible details do not move');
+ summary.click();end=800;summary.click();await new Promise(requestAnimationFrame);
+ assert.equal(scroller.scrollTop,408,'long details reveal their end');
+ summary.click();scroller.scrollTop=0;summary.click();summary.click();await new Promise(requestAnimationFrame);
+ assert.equal(scroller.scrollTop,0,'a closed card cannot trigger a delayed scroll');
+ delete scroller.getBoundingClientRect;delete card.getBoundingClientRect;
 });

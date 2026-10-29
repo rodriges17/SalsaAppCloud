@@ -1,9 +1,10 @@
+import { runLibraryNavigationCase } from './library-navigation-case.js';
 import {runCloudPurCase} from './cloud-pur-case.js';
 import { runTagPickerCase, runTagUploadCase, runTagCatalogCase, runTagLimitsCase } from './tag-picker-case.js';
 import { runNavigationHoverCase } from './navigation-hover-case.js';
 import { runStorageSettingsCase } from './storage-settings-case.js';
 // The same behavior contract runs against the PWA and the bundled Android UI.
-export const PARITY_CASES = ['cloud-pur-header', 'cloud-pur-figure', 'cloud-pur-manage', 'cloud-pur-manage-readonly', 'cloud-pur-manage-admin', 'tag-picker-limits', 'tag-picker-cloud-catalog', 'tag-picker-editor', 'tag-picker-upload', 'navigation-return-hover', 'storage-settings-status', 'library-share-links', 'zip-save-feedback', 'menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change', 'cloud-cache-frame-reuse', 'cloud-guest-public-first', 'cloud-library-download', 'cloud-guest-no-publish', 'cloud-single-direct-download', 'cloud-library-order', 'cloud-local-state', 'cloud-library-edit-session', 'cloud-library-edit-upload', 'cloud-library-edit-duplicate'];
+export const PARITY_CASES = ['cloud-library-back', 'cloud-library-expand-scroll', 'cloud-pur-header', 'cloud-pur-figure', 'cloud-pur-manage', 'cloud-pur-manage-readonly', 'cloud-pur-manage-admin', 'tag-picker-limits', 'tag-picker-cloud-catalog', 'tag-picker-editor', 'tag-picker-upload', 'navigation-return-hover', 'storage-settings-status', 'library-share-links', 'zip-save-feedback', 'menus-and-short-windows', 'cloud-repair-missing', 'cloud-repair-modified', 'player-orientation-and-exit', 'csp-and-storage-styles', 'cloud-cache-fast-reopen', 'cloud-cache-refresh', 'cloud-cache-account-isolation', 'cloud-cache-permission-change', 'cloud-cache-frame-reuse', 'cloud-guest-public-first', 'cloud-library-download', 'cloud-guest-no-publish', 'cloud-single-direct-download', 'cloud-library-order', 'cloud-local-state', 'cloud-library-edit-session', 'cloud-library-edit-upload', 'cloud-library-edit-duplicate'];
 export async function runParityCase(page, { root, fixture, native = false, scenario, consoleErrors = [], browserName = 'chromium' }) {
  const assert = (value, message) => { if (!value) throw new Error(message); };
  const frame = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -18,6 +19,7 @@ export async function runParityCase(page, { root, fixture, native = false, scena
   },{root,fixture,count,fingerprint});
   await page.waitForFunction(count=>document.querySelectorAll('.figure-card').length===count,count);
  };
+ if(['cloud-library-back','cloud-library-expand-scroll'].includes(scenario))return runLibraryNavigationCase(page,{root,native,scenario});
  if(scenario.startsWith('cloud-pur-'))return runCloudPurCase(page,{root,fixture,scenario});
  if(scenario==='tag-picker-limits')return runTagLimitsCase(page,{root,seed});
  if(scenario==='tag-picker-cloud-catalog')return runTagCatalogCase(page,{root,seed});
