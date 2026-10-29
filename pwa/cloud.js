@@ -93,9 +93,9 @@ function libraryCard(library, parent = body) {
 }
 async function run(message, work, errorTarget = errorBox, retainStatus = false) {
   if (busy) return; busy = true; statusBox.closest('footer').setAttribute('aria-busy', 'true'); errorBox.hidden = true; errorTarget.hidden = true; statusBox.textContent = message;
-  body.inert = true; if (loginDialog) loginDialog.inert = true; document.getElementById('cloudBack').disabled = true; dialog.querySelectorAll('[data-nav], #cloudNavigation button, .cloud-refresh-trigger, #cloudAccountOpen, #cloudSettings').forEach(button => { button.disabled = true; });
+  body.inert = true; if (loginDialog) loginDialog.inert = true; if (accountDialog) accountDialog.inert = true; document.getElementById('cloudBack').disabled = true; dialog.querySelectorAll('[data-nav], #cloudNavigation button, .cloud-refresh-trigger, #cloudAccountOpen, #cloudSettings').forEach(button => { button.disabled = true; });
   try { return await work(); } catch (error) { if (error.accessChanged) { clearLibrarySession(); await recoverAccess(); } if (retainStatus) statusBox.textContent = error?.message ?? 'Download fehlgeschlagen.'; report(error, errorTarget.isConnected ? errorTarget : errorBox); }
-  finally { busy = false; statusBox.closest('footer').setAttribute('aria-busy', 'false'); body.inert = false; if (loginDialog) loginDialog.inert = false; document.getElementById('cloudBack').disabled = false; dialog.querySelectorAll('[data-nav], #cloudNavigation button, .cloud-refresh-trigger, #cloudAccountOpen, #cloudSettings').forEach(button => { button.disabled = false; }); if (!retainStatus) statusBox.textContent = ''; if (authReloadPending && dialog.open) { authReloadPending = false; source = null; area = 'initial'; void load(null, true); } }
+  finally { busy = false; statusBox.closest('footer').setAttribute('aria-busy', 'false'); body.inert = false; if (loginDialog) loginDialog.inert = false; if (accountDialog) accountDialog.inert = false; document.getElementById('cloudBack').disabled = false; dialog.querySelectorAll('[data-nav], #cloudNavigation button, .cloud-refresh-trigger, #cloudAccountOpen, #cloudSettings').forEach(button => { button.disabled = false; }); if (!retainStatus) statusBox.textContent = ''; if (authReloadPending && dialog.open) { authReloadPending = false; source = null; area = 'initial'; void load(null, true); } }
 }
 async function recoverAccess() {
   const owner = cloudIdentity(), epoch = viewEpoch;
@@ -112,8 +112,9 @@ async function recoverAccess() {
 }
 const hasOwnArea = value => !!value?.me && (value.me.upload_enabled || value.own_figures?.length > 0);
 const initialArea = value => hasOwnArea(value) ? 'figures' : 'libraries';
-async function close() { if (busy || !await leaveLibraryDraft()) return; clearLibrarySession(); disposeUploadTags(); viewEpoch++; renderedView = null; clearTimeout(statusTimer); cancelThumbnails(); dialog.close(); body.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); }); source = null; hooks.closed?.(); }
+async function close() { if (busy || !await peopleView.leave() || !await leaveLibraryDraft()) return; clearLibrarySession(); disposeUploadTags(); viewEpoch++; renderedView = null; clearTimeout(statusTimer); cancelThumbnails(); dialog.close(); body.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); }); source = null; hooks.closed?.(); }
 async function cloudBack() {
+  if (busy) return;
   if (accountDialog?.open) { dismissAccount(); return; }
   if (busy) return;
   if (loginDialog?.open) { dismissLogin(); return; }
@@ -123,6 +124,7 @@ async function cloudBack() {
     if (!await leaveLibraryDraft()) return;
     clearLibrarySession(); await load(id); return;
   }
+  if (area === 'admin') { if (!await peopleView.leave()) return; area = initialArea(state); await load(null); renderAccount(); accountDialog.showModal(); accountTrigger.setAttribute('aria-expanded', 'true'); return; }
   if (current) { await navigate('libraries'); return; }
   await close();
 }
@@ -141,8 +143,12 @@ function renderAccount() {
   accountDialog.append(heading, node('p', me.email, 'cloud-account-email'), node('p', me.is_admin ? 'Plattform-Administrator' : me.upload_enabled ? 'Figuren hochladen erlaubt' : 'Lesen erlaubt, Uploads gesperrt', 'cloud-account-role'));
   const usage = node('div', undefined, 'cloud-account-usage'), meter = node('meter'); meter.min = 0; meter.max = Math.max(1, Number(me.quota) || 0); meter.value = Math.max(0, Number(me.used) || 0); meter.setAttribute('aria-label', 'Belegter Cloud-Speicher'); meter.setAttribute('aria-valuetext', `${MB(me.used)} / ${MB(me.quota)} belegt`);
   usage.append(node('h4', 'Cloud-Speicher'), meter, node('p', `${MB(me.used)} / ${MB(me.quota)} belegt`)); accountDialog.append(usage);
-  if (me.is_admin) accountDialog.append(action('Plattformverwaltung', () => { dismissAccount(); return navigate('admin'); }));
-  accountDialog.append(action('Abmelden', async () => { dismissAccount(); if (!await leaveLibraryDraft()) return; await run('Abmelden …', async () => { await logout(); source = null; area = 'initial'; await load(null); }); }));
+  if (me.is_admin) {
+    const passwordPanel = node('div'); passwordPanel.hidden = true;
+    const passwordAction = action('Passwort einrichten / ändern', () => { passwordPanel.hidden = !passwordPanel.hidden; passwordAction.setAttribute('aria-expanded', String(!passwordPanel.hidden)); if (!passwordPanel.hidden) { passwordPanel.replaceChildren(); adminPasswordForm(passwordPanel); } else passwordPanel.replaceChildren(); });
+    passwordAction.setAttribute('aria-expanded', 'false'); accountDialog.append(passwordAction, passwordPanel, action('Plattformverwaltung', () => { dismissAccount(); return navigate('admin'); }));
+  }
+  accountDialog.append(action('Abmelden', async () => { if (!await peopleView.leave()) return; dismissAccount(); if (!await leaveLibraryDraft()) return; await run('Abmelden …', async () => { await logout(); source = null; area = 'initial'; await load(null); }); }));
 }
 
 function cloudStatusLabel(target, text, modified = false) {
@@ -150,7 +156,7 @@ function cloudStatusLabel(target, text, modified = false) {
   target.replaceChildren(icon, node('span', text));
 }
 async function navigate(next, library = null) {
-  if (!await leaveLibraryDraft()) return;
+  if (!await peopleView.leave() || !await leaveLibraryDraft()) return;
   clearLibrarySession(); source = null; area = next; if (['admin', 'create'].includes(next)) await run('Laden …', () => load(library)); else await load(library, true);
 }
 function focusSection(box) {
@@ -261,8 +267,10 @@ async function renderCloud(library, detail) {
   for (const [key, label] of [...(hasOwnArea(state) ? [['figures', 'Meine Figuren']] : []), ['libraries', 'Bibliotheken']]) {
     const button = action(label, () => navigate(key)); if (key === 'figures') button.setAttribute('aria-label', 'Meine Cloud-Figuren'); button.setAttribute('aria-pressed', String(!source && (current ? key === 'libraries' : area === key || (area === 'create' && key === 'libraries')))); toolbar.append(button);
   }
-  cloudNavigation.replaceChildren(); cloudNavigation.hidden = !state.me;
-  if (state.me) cloudNavigation.append(toolbar);
+  cloudNavigation.replaceChildren(); cloudNavigation.hidden = !state.me || area === 'admin';
+  if (state.me && area !== 'admin') cloudNavigation.append(toolbar);
+  dialog.querySelector('.screen-header h2').textContent = area === 'admin' ? 'Plattformverwaltung' : 'Cloud-Speicher';
+  document.getElementById('cloudBack').setAttribute('aria-label', area === 'admin' ? 'Zurück zu Mein Konto' : 'Zurück aus der Cloud');
   renderAccount();
   if (!state.me) {
     if (current) {
@@ -952,16 +960,16 @@ function adminLoginForm(parent, finish) {
   };
   form.append(action('Als Admin anmelden', submit), error);
   form.onsubmit = event => { event.preventDefault(); void submit(); };
-  const help = node('details'); help.append(node('summary', 'Erstes Passwort oder Passwort vergessen?'), node('p', 'Wenn du noch angemeldet bist: Plattformverwaltung → Admin-Passwort. Sonst einmalig mit einem neuen persönlichen Anmeldelink anmelden und dort ein Passwort setzen. Einen neuen Link kann ein anderer Plattform-Admin erzeugen; wenn niemand mehr angemeldet ist, erfolgt die Wiederherstellung über Supabase.'));
+  const help = node('details'); help.append(node('summary', 'Erstes Passwort oder Passwort vergessen?'), node('p', 'Wenn du noch angemeldet bist: Mein Konto → Passwort einrichten / ändern. Sonst einmalig mit einem neuen persönlichen Anmeldelink anmelden und dort ein Passwort setzen. Einen neuen Link kann ein anderer Plattform-Admin erzeugen; wenn niemand mehr angemeldet ist, erfolgt die Wiederherstellung über Supabase.'));
   parent.append(help);
 }
-function adminPasswordForm() {
-  const box = section('Admin-Passwort'), form = node('form'); box.append(form);
+function adminPasswordForm(parent) {
+  const box = section('Passwort einrichten / ändern', parent), form = node('form'); box.append(form);
   box.append(node('p', 'Einmal einrichten und nach dem Abmelden mit E-Mail und Passwort zurückkehren. Dein Passwort gilt für dein eigenes Admin-Konto in Cloud-PWA und Android.'));
-  const email = field(form, 'Deine Admin-E-Mail-Adresse', state.me.email, 'email'); email.readOnly = true; email.autocomplete = 'username';
+  const email = field(form, 'Deine E-Mail-Adresse', state.me.email, 'email'); email.readOnly = true; email.autocomplete = 'username';
   const current = field(form, 'Bisheriges Passwort (falls bereits gesetzt)', '', 'password'); current.autocomplete = 'current-password';
-  const password = field(form, 'Neues Admin-Passwort', '', 'password'); password.autocomplete = 'new-password'; password.minLength = 12; password.required = true;
-  const repeat = field(form, 'Neues Admin-Passwort wiederholen', '', 'password'); repeat.autocomplete = 'new-password'; repeat.required = true;
+  const password = field(form, 'Neues Passwort', '', 'password'); password.autocomplete = 'new-password'; password.minLength = 12; password.required = true;
+  const repeat = field(form, 'Neues Passwort wiederholen', '', 'password'); repeat.autocomplete = 'new-password'; repeat.required = true;
   form.append(node('p', 'Mindestens 12 Zeichen. Du kannst ein Passwort aus deinem Passwortmanager einfügen.'));
   const error = node('p', '', 'error'); error.setAttribute('role', 'alert'); error.hidden = true;
   const status = node('p'); status.setAttribute('role', 'status');
@@ -969,23 +977,25 @@ function adminPasswordForm() {
     status.textContent = ''; error.hidden = true;
     if (!form.reportValidity()) return;
     if (password.value !== repeat.value) { report(new Error('Die neuen Passwörter stimmen nicht überein.'), error); return; }
-    await run('Admin-Passwort speichern …', async () => {
+    status.textContent = 'Passwort wird gespeichert …'; status.setAttribute('aria-busy', 'true');
+    await run('Passwort speichern …', async () => {
       try { await setAdminPassword(password.value, current.value); status.textContent = 'Passwort gespeichert. Du kannst dich jetzt mit deiner E-Mail-Adresse und diesem Passwort wieder anmelden.'; }
-      finally { current.value = ''; password.value = ''; repeat.value = ''; }
+      finally { current.value = ''; password.value = ''; repeat.value = ''; status.setAttribute('aria-busy', 'false'); if (status.textContent === 'Passwort wird gespeichert …') status.textContent = ''; }
     }, error);
   };
-  form.append(action('Admin-Passwort speichern', submit), error, status);
+  form.append(action('Passwort speichern', submit), error, status);
   form.onsubmit = event => { event.preventDefault(); void submit(); };
 }
 function adminForm() {
-  adminPasswordForm();
-  const box = section('Plattformverwaltung');
+  const box = node('section', undefined, 'cloud-admin'); body.append(box);
   peopleView.mount(box);
-  box.append(action('Bestehende Videos auf Duplikate prüfen', () => run('Videos prüfen …', async () => {
+}
+function extraManagement() {
+  return action('Bestehende Videos auf Duplikate prüfen', () => run('Videos prüfen …', async () => {
     let result;
     do { result = await cloudCall('admin_optimize'); statusBox.textContent = 'Vorhandene Videos werden geprüft und zusammengeführt …'; } while (result.processed > 0);
     await load(null);
-  })));
+  }));
 }
 export function initCloud(callbacks) {
   hooks = callbacks;
@@ -994,14 +1004,14 @@ export function initCloud(callbacks) {
   addEventListener('focus', refreshLocal);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshLocal(); });
   addEventListener('storage', refreshLocal);
-  addEventListener('beforeunload', event => { if (librarySession?.dirty) { event.preventDefault(); event.returnValue = ''; } });
-  peopleView = createPeopleView({ node, action, field, select, checkbox, call: cloudCall, run, confirm: options => hooks.confirm(options), state: () => state, refresh: () => load(null), report, section });
+  addEventListener('beforeunload', event => { if (librarySession?.dirty || peopleView.dirty) { event.preventDefault(); event.returnValue = ''; } });
+  peopleView = createPeopleView({ node, action, field, select, checkbox, call: cloudCall, run, confirm: options => hooks.confirm(options), state: () => state, refresh: () => load(null), report, section, extraManagement, account: () => { renderAccount(); accountDialog.showModal(); accountTrigger.setAttribute('aria-expanded', 'true'); } });
   dialog = document.getElementById('cloudDialog'); body = document.getElementById('cloudBody'); errorBox = document.getElementById('cloudError'); statusBox = document.getElementById('cloudStatus');
   const downloadProgress = node('progress'); downloadProgress.id = 'cloudDownloadProgress'; downloadProgress.setAttribute('aria-label', 'Bibliothek lokal verfügbar machen'); downloadProgress.hidden = true; statusBox.after(downloadProgress);
   cloudNavigation = node('div', undefined, 'cloud-navigation'); cloudNavigation.id = 'cloudNavigation'; cloudNavigation.hidden = true; dialog.querySelector('.screen-header').after(cloudNavigation);
-  const settingsTrigger = document.getElementById('infoButton').cloneNode(true); settingsTrigger.id = 'cloudSettings'; settingsTrigger.onclick = () => { if (!busy) { settingsTrigger.focus({preventScroll:true}); hooks.settings?.(); } }; settingsTrigger.replaceChildren(uiIcon('settings')); dialog.querySelector('.cloud-brand-header').append(settingsTrigger);
+  const settingsTrigger = document.getElementById('infoButton').cloneNode(true); settingsTrigger.id = 'cloudSettings'; settingsTrigger.onclick = () => { if (!busy) void peopleView.leave().then(ok => { if (ok) { settingsTrigger.focus({preventScroll:true}); hooks.settings?.(); } }); }; settingsTrigger.replaceChildren(uiIcon('settings')); dialog.querySelector('.cloud-brand-header').append(settingsTrigger);
   document.getElementById('infoButton').replaceChildren(uiIcon('settings'));
-  const refreshTrigger = action('Aktualisieren', () => { if (!busy) return load(current, 'refresh'); }); refreshTrigger.className = 'cloud-refresh-trigger'; refreshTrigger.setAttribute('aria-label', 'Aktualisieren'); refreshTrigger.title = 'Aktualisieren'; refreshTrigger.replaceChildren(uiIcon('refresh-cw')); dialog.querySelector('.screen-header').append(refreshTrigger);
+  const refreshTrigger = action('Aktualisieren', async () => { if (!busy && await peopleView.leave()) return load(current, 'refresh'); }); refreshTrigger.className = 'cloud-refresh-trigger'; refreshTrigger.setAttribute('aria-label', 'Aktualisieren'); refreshTrigger.title = 'Aktualisieren'; refreshTrigger.replaceChildren(uiIcon('refresh-cw')); dialog.querySelector('.screen-header').append(refreshTrigger);
   uploadRecovery = node('section', undefined, 'cloud-card'); uploadRecovery.id = 'cloudUploadRecovery'; uploadRecovery.setAttribute('role', 'status'); uploadRecovery.hidden = true; body.before(uploadRecovery);
   addEventListener('cloud-session-changed', event => {
     uploadWorkflow?.cancel(); uploadRecovery.hidden = true; uploadRecovery.replaceChildren();
@@ -1022,7 +1032,7 @@ export function initCloud(callbacks) {
   loginTrigger.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5M3 12h12m-4-4 4 4-4 4"/></svg>';
   dialog.querySelector('.screen-header').append(loginTrigger);
   accountDialog = node('dialog', undefined, 'cloud-account-menu'); accountDialog.id = 'cloudAccountMenu'; accountDialog.setAttribute('aria-labelledby', 'cloudAccountTitle'); dialog.append(accountDialog);
-  accountDialog.addEventListener('cancel', event => { event.preventDefault(); event.stopPropagation(); dismissAccount(); });
+  accountDialog.addEventListener('cancel', event => { event.preventDefault(); event.stopPropagation(); if (!busy) dismissAccount(); });
   accountDialog.addEventListener('click', event => { if (event.target !== accountDialog) return; const rect = accountDialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dismissAccount(); });
   accountDialog.addEventListener('close', () => accountTrigger.setAttribute('aria-expanded', 'false'));
   accountTrigger = action('', () => { if (busy) return; renderAccount(); if (state?.me) { accountDialog.showModal(); accountTrigger.setAttribute('aria-expanded', 'true'); } });
