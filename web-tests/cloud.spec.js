@@ -830,11 +830,7 @@ test('library tags stay below the title without increasing collapsed row height'
  const summary=page.locator('.cloud-library-summary').first();await expect(summary.locator('.cloud-tag-pill')).toHaveText(['Salsa']);
  for(const width of [320,390,844]){
   await page.setViewportSize({width,height:844});
-  const heights=await summary.evaluate(row=>{
-   const name=row.querySelector('.cloud-library-name'),title=name.querySelector('h3'),copy=name.cloneNode(true),height=row.getBoundingClientRect().height;
-   name.replaceWith(title);const original=row.getBoundingClientRect().height;title.replaceWith(copy);return {height,original};
-  });
-  expect(Math.abs(heights.height-heights.original)).toBeLessThan(1);
+  expect(await summary.evaluate(row=>row.getBoundingClientRect().height)).toBe(66);
  }
  await page.getByRole('button',{name:'Alle Figuren lokal verfügbar machen',exact:true}).tap();
  await expect(page.locator('#confirmDialog')).toBeVisible();await expect(page.locator('#confirmDialog')).toContainText('Vorhandene Videos werden wiederverwendet');

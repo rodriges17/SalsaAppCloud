@@ -29,6 +29,7 @@ export async function runCloudPurCase(page,{root,fixture,scenario}){
   await card.locator('video').waitFor();assert(calls.includes('media_url'),'Video row did not request playback');
   assert(!await card.getByRole('checkbox').first().isChecked(),'Playback changed download selection');
   await card.getByRole('button',{name:'Video „Folgen“ abspielen',exact:true}).click();
+  await card.locator('video').waitFor();
   assert(await card.locator('video').count()===1,'Selecting another video left two players');
   await page.setViewportSize({width:320,height:844});assert(await card.evaluate(n=>n.scrollWidth<=n.clientWidth+1),'Tag or video text overflows the card');
  }

@@ -9,8 +9,6 @@
 @media(min-width:760px){.overview{padding-top:40px}.tagline{margin-top:30px}.card-thumb{width:130px;height:100px}.figure-card{padding:18px}.card-title{font-size:23px}.player-description{max-height:80px}.preview-body video{max-height:none}.screen-header{padding-left:max(12px,calc((100% - 1000px)/2));padding-right:max(12px,calc((100% - 1000px)/2))}}
 @media(prefers-reduced-motion:no-preference){button{transition:background-color .12s,filter .12s}}
 
-
-
 #shareVideos { border: 0; padding: 0; max-height: 35dvh; overflow-y: auto; }
 .share-choice { display: flex; align-items: center; gap: .75rem; padding: .65rem 0; overflow-wrap: anywhere; }
 .share-choice input { width: 1.4rem; height: 1.4rem; flex-shrink: 0; accent-color: var(--lavender); }
@@ -112,7 +110,6 @@ details.settings-section{display:block}details.settings-section[open]>:not(summa
 .cloud-card:has(.cloud-history)>h3{display:flex;align-items:center;gap:12px}
 .cloud-thumbnail{width:64px;height:64px;flex-shrink:0;border-radius:10px;object-fit:cover;background:var(--surface)}
 .cloud-card:has(.cloud-history)>p{font-size:12px;color:var(--muted)}
-
 
 .player-screen{color:var(--text)}
 .player-controls{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));overflow:visible}
@@ -281,15 +278,13 @@ button.storage-choice:disabled{opacity:1;cursor:default}
 .cloud-library-edit{grid-column:2;grid-row:2;align-self:start;font-size:13px!important;background:var(--card)}
 .cloud-library-description{color:var(--muted);white-space:pre-wrap}.cloud-library-meta{font-size:12px!important;color:var(--muted)}
 .cloud-library-hero .cloud-library-download{border-top-color:var(--border);padding-top:15px;margin-top:2px}
-.cloud-library-compact{gap:10px}.cloud-library-figure{display:block;border:1px solid var(--border);border-radius:14px;background:var(--card);min-width:0}
-.cloud-library-figure[open]{border-color:var(--lavender)}
-.cloud-library-summary{list-style:none;display:flex;gap:12px;align-items:center;padding:12px 14px;cursor:pointer;min-height:68px}.cloud-library-summary::-webkit-details-marker{display:none}
-.cloud-library-summary:focus-visible{outline:3px solid var(--lavender);outline-offset:3px}
+.cloud-library-compact{gap:10px}
+
 .cloud-library-summary .cloud-order-number{background:transparent;color:var(--muted);min-width:22px;width:22px;height:30px;font-size:13px;font-weight:400}
-.cloud-library-summary h3{flex:1;min-width:0;font-size:15px;font-weight:650;overflow-wrap:anywhere}
+
 .cloud-library-picture{display:block;width:38px;height:38px;flex-shrink:0;border-radius:6px;overflow:hidden;background:var(--surface)}
 .cloud-library-picture .cloud-thumbnail,.cloud-library-picture .cloud-thumbnail-placeholder{display:block;width:38px;height:38px;min-width:0;min-height:0;max-height:38px;object-fit:cover;border-radius:6px;margin:0}
-.cloud-library-availability{font-size:11px;color:var(--muted);white-space:nowrap}.cloud-library-availability[data-local=true]{color:var(--success)}
+
 .cloud-library-chevron{font-size:20px;color:var(--muted)}.cloud-library-figure[open] .cloud-library-chevron{transform:rotate(180deg)}
 .cloud-library-content{padding:0 14px 16px;display:grid;gap:12px}.cloud-library-content:empty{display:none}
 .cloud-library-content .cloud-revision{border-top:0;padding-top:0}.cloud-library-content .revision-heading{display:none}.cloud-library-content p{font-size:13px;line-height:1.6;white-space:pre-wrap}
@@ -304,7 +299,9 @@ button.storage-choice:disabled{opacity:1;cursor:default}
 .cloud-library-editor-footer{position:sticky;bottom:0;z-index:3;display:flex;align-items:center;justify-content:flex-end;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;box-shadow:0 -3px 15px var(--shadow)}.cloud-library-editor-footer p{flex:1;font-size:11px;color:var(--muted)}.cloud-library-editor-footer button{font-size:13px}
 .cloud-library-picker{max-width:540px;width:calc(100% - 28px);max-height:85dvh;overflow:auto;border:1px solid var(--border);border-radius:16px;background:var(--card);color:var(--text);padding:22px}.cloud-library-picker::backdrop{background:#17121f88}.cloud-library-picker h3{font-size:20px;margin-bottom:9px}.cloud-library-picker p{font-size:13px;color:var(--muted);margin:10px 0 16px}.cloud-library-picker .cloud-check{display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);font-size:14px}.cloud-library-picker .cloud-check small{font-size:11px;color:var(--muted);margin-left:auto}.cloud-library-picker>button{margin:14px 7px 0 0;font-size:13px}.cloud-library-picker>button:last-child{background:var(--lavender);color:var(--bg)}
 .cloud-library-conflict{padding:15px;border:1px solid var(--lavender);border-radius:10px;font-size:13px}.cloud-library-conflict button{margin-top:10px}
-@media(max-width:540px){.cloud-library-hero{padding:19px 16px}.cloud-card .cloud-library-title{font-size:24px}.cloud-library-edit{font-size:12px!important;padding:8px;max-width:115px}.cloud-library-summary{gap:9px;padding:12px 10px}.cloud-library-summary h3{font-size:14px}.cloud-library-availability{font-size:10px}.cloud-library-content{padding:0 10px 14px}.cloud-library-editor-row{gap:6px}.cloud-library-editor-row h3{font-size:13px}.cloud-library-editor-footer{gap:7px;padding:10px}.cloud-library-editor-footer button{font-size:12px;padding:8px}.cloud-library-editor-footer p{max-width:90px}.cloud-library-editor-toolbar h3{font-size:16px}}
+@media(max-width:540px){.cloud-library-hero{padding:19px 16px}.cloud-card .cloud-library-title{font-size:24px}.cloud-library-edit{font-size:12px!important;padding:8px;max-width:115px}
+
+.cloud-library-content{padding:0 10px 14px}.cloud-library-editor-row{gap:6px}.cloud-library-editor-row h3{font-size:13px}.cloud-library-editor-footer{gap:7px;padding:10px}.cloud-library-editor-footer button{font-size:12px;padding:8px}.cloud-library-editor-footer p{max-width:90px}.cloud-library-editor-toolbar h3{font-size:16px}}
 /* One compact footer across the full figure card. */
 .figure-list{grid-template-columns:minmax(0,1fr)}
 .figure-card{min-width:0;flex-wrap:wrap;row-gap:0}
@@ -321,20 +318,15 @@ button.storage-choice:disabled{opacity:1;cursor:default}
 
 /* Selected prototype C: compact own-cloud cards, options on expansion. */
 .cloud-own-list{display:grid;gap:10px;min-width:0}
-.cloud-own-figure{border:1px solid var(--border);border-radius:14px;background:var(--card);min-width:0}
-.cloud-own-figure[open]{border-color:var(--lavender)}
-.cloud-own-summary{display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer;list-style:none;min-height:66px}
-.cloud-own-summary::-webkit-details-marker{display:none}
-.cloud-own-summary:focus-visible{outline:2px solid var(--lavender);outline-offset:-3px;border-radius:12px}
-.cloud-own-name{flex:1;min-width:0}.cloud-own-name h3{font-size:14px;overflow-wrap:anywhere;margin:0}
-.cloud-own-name small{display:block;color:var(--muted);font-size:11px;margin-top:5px}
-.cloud-own-availability{font-size:11px;color:var(--muted);text-align:right;max-width:115px}.cloud-own-availability[data-local=true]{color:var(--success)}
+
 .cloud-own-figure[open] .cloud-library-chevron{transform:rotate(180deg)}
 .cloud-own-content{padding:0 14px 16px}.cloud-own-tabs{padding:0 0 10px}.cloud-own-tabs button{font-size:13px}
 .cloud-own-panel{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.cloud-own-panel[hidden]{display:none}
 .cloud-own-panel p,.cloud-own-panel h4{flex-basis:100%;font-size:12px;line-height:1.6;margin:0}.cloud-own-panel button{font-size:12px;min-height:44px}
 .cloud-own-panel>button:last-child:not(.primary){max-width:100%}
-@media(max-width:540px){.cloud-own-summary{gap:9px;padding:12px 10px}.cloud-own-name h3{font-size:13px}.cloud-own-name small{font-size:10px}.cloud-own-availability{font-size:10px;max-width:90px}.cloud-own-content{padding:0 10px 14px}}
+@media(max-width:540px){
+
+.cloud-own-content{padding:0 10px 14px}}
 
 /* Confirmed compact status: all metadata stays beside the thumbnail. */
 .figure-card{display:grid;grid-template-columns:82px minmax(0,1fr) 28px;gap:12px;padding:12px;align-items:center}
@@ -356,8 +348,8 @@ button.storage-choice:disabled{opacity:1;cursor:default}
 .figure-card>.card-storage-warning,.figure-card>.folder-access-action,.figure-card>.card-storage-notice{grid-column:1/-1}
 .cloud-status-icon{display:inline-flex;align-items:center;justify-content:center;flex:0 0 18px;width:18px;height:20px}
 .cloud-status-icon svg{display:block;width:18px;height:18px}
-.cloud-own-availability,.cloud-library-availability,.cloud-local-status{display:flex;align-items:center;gap:5px}
-.cloud-own-availability{max-width:125px}.cloud-own-availability>span:last-child{min-width:0}
+.cloud-local-status{display:flex;align-items:center;gap:5px}
+.cloud-figure-availability>span:last-child{min-width:0}
 .cloud-login-trigger{display:grid;place-items:center;flex:0 0 44px;width:44px;height:44px;padding:10px;border:0;color:var(--lavender);margin-left:auto}
 .cloud-login-trigger svg{display:block;width:24px;height:24px}#cloudDialog>.screen-header h2{flex:1;min-width:0}
 .cloud-login-dialog{width:calc(100% - 28px);max-width:480px;max-height:85dvh;overflow:auto;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:18px;padding:22px}
@@ -381,12 +373,11 @@ button.storage-choice:disabled{opacity:1;cursor:default}
 .card-details .card-storage-status .card-provenance{flex:0 0 21px;width:21px;min-height:20px;height:20px;margin-left:auto}
 .card-details .card-provenance svg{width:19px;height:19px}.card-details .card-folder-icon{flex-basis:14px;width:14px;height:20px}.card-details .card-folder-icon svg{width:14px;height:14px}
 .figure-card>.card-options{width:22px}
-.cloud-own-summary,.cloud-library-summary{align-items:flex-start}
-.cloud-own-summary::marker,.cloud-library-summary::marker{content:''}
-.cloud-own-availability,.cloud-library-availability{align-self:flex-start;justify-content:flex-end;margin-left:auto;flex-shrink:0;white-space:nowrap;max-width:none;line-height:20px;font-size:11px}
-.cloud-own-name h3,.cloud-library-summary h3{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cloud-own-summary>.cloud-library-picture{margin-top:0}.cloud-own-name small{font-size:10px}
-@media(max-width:420px){.figure-card{grid-template-columns:72px minmax(0,1fr) 20px;gap:7px;padding:9px}.card-thumbnail-button,.card-thumbnail-button .card-thumb{width:72px;height:72px}.card-details{min-height:72px;gap:2px}.card-details .card-copy{gap:2px}.card-details .card-title{font-size:13px}.card-details .card-status{font-size:9px;padding:2px 6px}.card-learning-line{gap:5px}.card-details .card-tags{font-size:9px}.card-details .card-storage-status{font-size:9px}.figure-card>.card-options{width:20px}.cloud-own-availability,.cloud-library-availability{font-size:10px;gap:4px}.cloud-own-availability .cloud-status-icon,.cloud-library-availability .cloud-status-icon{width:16px;flex-basis:16px}.cloud-own-availability svg,.cloud-library-availability svg{width:16px;height:16px}}
+
+
+
+@media(max-width:420px){.figure-card{grid-template-columns:72px minmax(0,1fr) 20px;gap:7px;padding:9px}.card-thumbnail-button,.card-thumbnail-button .card-thumb{width:72px;height:72px}.card-details{min-height:72px;gap:2px}.card-details .card-copy{gap:2px}.card-details .card-title{font-size:13px}.card-details .card-status{font-size:9px;padding:2px 6px}.card-learning-line{gap:5px}.card-details .card-tags{font-size:9px}.card-details .card-storage-status{font-size:9px}.figure-card>.card-options{width:20px}
+.cloud-own-availability .cloud-status-icon,.cloud-library-availability .cloud-status-icon{width:16px;flex-basis:16px}.cloud-own-availability svg,.cloud-library-availability svg{width:16px;height:16px}}
 
 /* Preserve the existing short-window layout while centering the title. */
 @media(max-height:540px){.page-intro{padding-block:4px}}
@@ -409,7 +400,6 @@ a.cloud-library-card:active{background:var(--selection)}
 .card-tag-chip svg{display:block;width:12px;height:12px;flex:0 0 12px}
 .card-tag-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .card-tags-more{flex:0 0 16px;text-align:center;color:var(--muted)}
-
 
 /* Approved variant D: learning state directly before the storage-status icon. */
 .card-details .card-storage-status .card-status{flex:0 0 auto;white-space:nowrap;margin-left:auto}
@@ -505,8 +495,8 @@ a.cloud-library-card:active{background:var(--selection)}
 @media(prefers-reduced-motion:reduce){.cloud-account-menu [role=status][aria-busy=true]::before{animation:none}}
 
 /* Keep library summaries at their existing height: title and tags share the 38px thumbnail height. */
-.cloud-library-name{flex:1;min-width:0;display:grid;gap:2px}
-.cloud-library-summary .cloud-library-name h3{margin:0;line-height:18px}
+.cloud-library-name{display:grid;gap:2px}
+
 .cloud-library-name .cloud-tag-pills{flex-wrap:nowrap;gap:4px;height:18px;overflow:hidden}
 .cloud-library-name .cloud-tag-pill{flex:0 1 auto;min-width:0;padding:1px 6px;font-size:10px;line-height:16px;height:18px;overflow:hidden}
 .cloud-library-name .cloud-tag-pill svg{width:11px;height:11px}
@@ -532,11 +522,8 @@ a.cloud-library-card:active{background:var(--selection)}
 
 /* Highlight the local destination within library figure actions. */
 button.cloud-local-open,
-.cloud-library-content .cloud-revision > button:not(.subtle) { background:var(--purple); border-color:var(--purple); color:var(--primary-text); box-shadow:none; }
+.cloud-library-content .cloud-revision > button:not(.subtle) { background:var(--purple); border-color:var(--purple); color:var(--primary-text); box-shadow:none; }/* Equal vertical insets and centered card artwork, including taller summaries. */
 
-/* Equal vertical insets and centered card artwork, including taller summaries. */
-.cloud-own-summary,.cloud-library-summary{padding-block:12px}
-.cloud-library-summary>.cloud-order-number,.cloud-library-summary>.cloud-library-picture,.cloud-own-summary>.cloud-library-picture{align-self:center;margin-block:0}
 .figure-card>.card-thumbnail-button{align-self:center;margin-block:0}
 .cloud-figures-heading{display:flex;align-items:center;gap:4px;min-width:0}
 .cloud-figures-heading h3{margin:0}
@@ -550,8 +537,21 @@ button.cloud-local-open,
 .cloud-library-hero>.cloud-library-edit{display:grid;place-items:center;align-self:center;width:44px;height:44px;min-width:44px;min-height:44px;padding:10px;border:0;background:transparent;color:var(--lavender)}
 .cloud-library-edit svg{display:block;width:24px;height:24px}
 
-/* Match library summaries to the approved own-figure cards. */
-.cloud-library-summary{min-height:66px}
-.cloud-library-summary .cloud-library-name h3{font-size:14px;font-weight:700;line-height:normal}
-@media(max-width:540px){.cloud-library-summary .cloud-library-name h3{font-size:13px}}
+@media(max-width:540px){
+}
 .cloud-figure-description{white-space:pre-wrap;overflow-wrap:anywhere}
+
+/* One Cloud figure frame; context classes retain numbering and actions. */
+.cloud-figure-card{display:block;border:1px solid var(--border);border-radius:14px;background:var(--card);min-width:0}
+.cloud-figure-card[open]{border-color:var(--lavender)}
+.cloud-figure-summary{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;cursor:pointer;list-style:none;min-height:66px}
+.cloud-figure-summary::-webkit-details-marker{display:none}.cloud-figure-summary::marker{content:''}
+.cloud-figure-summary:focus-visible{outline:2px solid var(--lavender);outline-offset:-3px;border-radius:12px}
+.cloud-figure-summary>.cloud-library-picture,.cloud-figure-summary>.cloud-order-number{align-self:center;margin-block:0}
+.cloud-figure-name{flex:1;min-width:0}
+.cloud-figure-name h3{margin:0;font-size:14px;font-weight:700;line-height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cloud-figure-name small{display:block;min-width:0;color:var(--muted);font-size:10px;line-height:18px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cloud-figure-availability{align-self:flex-start;display:flex;justify-content:flex-end;gap:5px;margin-left:auto;flex-shrink:0;white-space:nowrap;max-width:none;line-height:20px;font-size:11px;color:var(--muted);text-align:right}
+.cloud-figure-availability[data-local=true]{color:var(--success)}
+@media(max-width:540px){.cloud-figure-summary{gap:9px;padding-inline:10px}.cloud-figure-name h3{font-size:13px}.cloud-figure-availability{font-size:10px}}
+@media(max-width:420px){.cloud-figure-availability{gap:4px}.cloud-figure-availability .cloud-status-icon{width:16px;flex-basis:16px}.cloud-figure-availability svg{width:16px;height:16px}}

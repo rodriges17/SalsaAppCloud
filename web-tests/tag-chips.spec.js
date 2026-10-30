@@ -1,17 +1,18 @@
 import { test, expect } from '@playwright/test';
-import { readFileSync } from 'node:fs';
-const source = readFileSync('pwa/app.js', 'utf8');
-const helper = source.slice(source.indexOf('// Tag chips share'), source.indexOf('function renderOverview()'));
-const css = readFileSync('pwa/styles.css', 'utf8');
 test('tag chips fit one line, show overflow and recover after resizing', async ({ page }) => {
-  await page.setContent('<div class="card-details" style="width:400px"><span id="target" style="min-width:0"></span></div>');
-  await page.addStyleTag({ content: css });
-  await page.evaluate(code => {
-    const el = (tag, className, text) => { const node = document.createElement(tag); node.className = className; if (text !== undefined) node.textContent = text; return node; };
-    // Exercise the shipped renderer and observer without media imports or cloud calls.
-    eval(code + '; window.addTags = tags => document.querySelector("#target").replaceChildren(createCardTags(tags));');
-    window.addTags(['Pasito', 'Footwork', 'Salsa', 'Weiterer Tag']);
-  }, helper);
+  await page.goto('/pwa/');
+  await page.evaluate(async () => {
+    const {createLocalCardsView}=await import('/pwa/figure-card.js');
+    const view=createLocalCardsView({open:()=>{},status:()=> 'local',notify:()=>{}});
+    const target=document.createElement('div');document.body.append(target);
+    window.addTags=tags=>{
+      view.reset();
+      const {card}=view.card({id:'tags',title:'Figur',tags,status:'Neu',duration:1,videoIds:['one']});
+      card.querySelector('.card-details').style.width='400px';
+      target.replaceChildren(card);
+    };
+    window.addTags(['Pasito','Footwork','Salsa','Weiterer Tag']);
+  });
   const chips = page.locator('.card-tag-chip:visible');
   const more = page.locator('.card-tags-more');
   await expect(chips).toHaveCount(3); await expect(more).toBeVisible();

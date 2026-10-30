@@ -1,8 +1,9 @@
+import { createCloudCards } from './cloud-card-view.js';
 import { createCloudNavigation } from './cloud-navigation.js';
 import { connectTagSuggestions } from './tag-suggestions.js';
 import { mountTagPicker } from './tag-picker.js';
 import { createFigureUpload } from './cloud-upload.js';
-import { cloudIcon } from './cloud-provenance.js';
+import { createCloudFigureCard, figureTags as tagPills, setCloudStatusLabel as cloudStatusLabel, appendFigureDescription } from './figure-card.js';
 import { createLibrarySession } from './cloud-library-draft.js';
 import { mountLibraryOrder } from './cloud-library-order.js';
 import { videoHash } from './cloud-dedup.js';
@@ -35,11 +36,7 @@ function uiIcon(name) {
  for(const [tag,attrs] of UI_ICONS[name]){const shape=document.createElementNS(ns,tag);for(const [key,value] of Object.entries(attrs))shape.setAttribute(key,value);svg.append(shape);}
  return svg;
 }
-function tagPills(tags=[]) {
- const list=node('ul',undefined,'cloud-tag-pills');list.setAttribute('aria-label','Tags');list.setAttribute('role','list');
- for(const tag of tags){const item=node('li',undefined,'cloud-tag-pill');item.append(uiIcon('tag'),node('span',tag));list.append(item);}
- return list;
-}
+const cardViews = createCloudCards();
 let uploadWorkflow = null, uploadRecovery, uploadViewError = null;
 let peopleView, librarySession = null, uploadTagPicker = null, stopUploadTags = null;
 function clearLibrarySession(){if(librarySession?.active)librarySession.discard();librarySession=null;}
@@ -185,10 +182,6 @@ function renderAccount() {
   accountDialog.append(action('Abmelden', () => navigation.logout()));
 }
 
-function cloudStatusLabel(target, text, modified = false) {
-  const icon = node('span', undefined, 'cloud-status-icon'); icon.innerHTML = cloudIcon(modified);
-  target.replaceChildren(icon, node('span', text));
-}
 const navigate = (next, library = null) => navigation.show(next, library);
 
 function focusSection(box) {
@@ -410,34 +403,19 @@ async function libraryView(id, detail) {
   const entriesBox = node('div', undefined, 'cloud-library-entries cloud-library-compact'); body.append(entriesBox);
   entriesBox.setAttribute('aria-label', 'Figuren in Bibliotheksreihenfolge');
   for (const [index, entry] of detail.entries.entries()) {
-    const rev = entry.published ?? entry.pending, box = node('details', undefined, 'cloud-library-figure'); box.dataset.libraryFigure = entry.figure_id;
-    const summary = node('summary', undefined, 'cloud-library-summary');
-    summary.append(node('span', String(index + 1), 'cloud-order-number'));
-    const picture = node('span', undefined, 'cloud-library-picture'); if (rev?.videos?.length) thumbnail(picture, rev); summary.append(picture);
-    const name = node('div', undefined, 'cloud-library-name');
-    name.append(node('h3', rev?.title ?? 'Noch nicht veröffentlicht'));
-    if (rev?.tags?.length) { const tags = tagPills(rev.tags); tags.title = rev.tags.join(', '); name.append(tags); }
-    summary.append(name);
-    const availability = node('span', undefined, 'cloud-library-availability');
-    const update = () => {
-      const local = localIndex.resolve(rev, localFigures, { figureId: entry.figure_id });
-      cloudStatusLabel(availability, local.label, local.modified);
-      availability.dataset.local = String(local.available); availability.title = local.detail ?? local.label;
-    }; localUpdates.push(update); update(); summary.append(availability);
-    box.append(summary); const content = node('div', undefined, 'cloud-library-content'); box.append(content); let mounted = false;
-    box.ontoggle = () => {
-      if (!box.open) { clearPreviews(content); return; }
-      for (const other of entriesBox.querySelectorAll('details[open]')) if (other !== box) other.open = false;
-      if (!mounted) {
-        mounted = true;
-        if (entry.published) revisionCard(content, { ...entry.published, figure_id: entry.figure_id }, 'Aktuelle Figur', rev.title, true, true);
-        if (entry.pending && entry.pending.id !== entry.published?.id) revisionCard(content, { ...entry.pending, figure_id: entry.figure_id }, 'Zur Freigabe', rev.title, true, rev.id === entry.pending.id);
-        if (!entry.published && entry.pending) content.append(node('p', 'Diese Figur ist noch nicht für Besucher freigegeben.'));
-      }
-      revealLibraryFigure(box);
-    };
+    const rev = entry.published ?? entry.pending;
+    const view = createCloudFigureCard({ kind: 'library', id: entry.figure_id, title: rev?.title ?? 'Noch nicht veröffentlicht', tags: rev?.tags, position: index + 1 });
+    const { card: box, picture, content } = view;
+    if (rev?.videos?.length) thumbnail(picture, rev);
+    const update = () => view.setAvailability(localIndex.resolve(rev, localFigures, { figureId: entry.figure_id }));
+    localUpdates.push(update); update();
+    const lifetime = cardViews.register({ card: box, content, group: entriesBox, build: () => {
+      if (entry.published) revisionCard(content, { ...entry.published, figure_id: entry.figure_id }, 'Aktuelle Figur', rev.title, true, true);
+      if (entry.pending && entry.pending.id !== entry.published?.id) revisionCard(content, { ...entry.pending, figure_id: entry.figure_id }, 'Zur Freigabe', rev.title, true, rev.id === entry.pending.id);
+      if (!entry.published && entry.pending) content.append(node('p', 'Diese Figur ist noch nicht für Besucher freigegeben.'));
+    }, opened: () => revealLibraryFigure(box) });
     entriesBox.append(box);
-    if (savedLibraryFigure === entry.figure_id) { box.open = true; savedLibraryFigure = null; }
+    if (savedLibraryFigure === entry.figure_id) { lifetime.open(); savedLibraryFigure = null; }
   }
   if (!detail.entries.length) entriesBox.append(node('p', 'Noch keine sichtbaren Figuren in dieser Bibliothek.'));
   libraryShare(id, lib);
@@ -582,13 +560,8 @@ function versionLabel(revision) {
   const date = new Date(revision.created_at);
   return Number.isFinite(date.getTime()) ? `Stand vom ${date.toLocaleString('de', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Version ohne Datumsangabe';
 }
-function clearPreviews(root) { root.querySelectorAll('video').forEach(player => { player.pause(); player.removeAttribute('src'); player.load(); player.remove(); }); }
-async function previewVideo(box, revision, video) {
-  const signed = await cloudCall('media_url', { revision: revision.id, media: video.id });
-  if (!box.isConnected || box.closest('details')?.open === false) return;
-  clearPreviews(box);
-  const player = node('video'); player.controls = true; player.playsInline = true; player.src = signed.url; box.append(player);
-}
+function clearPreviews(root) { if (root === body) cardViews.dispose(root); else cardViews.clear(root); }
+function previewVideo(box, revision, video) { return cardViews.preview(box, () => cloudCall('media_url', { revision: revision.id, media: video.id })); }
 function revisionCard(parent, rev, label, parentTitle = parent.querySelector('h3')?.textContent, compact = false, tagsInSummary = false) {
   const box = node('article', undefined, 'cloud-revision'), heading = node('div', undefined, 'revision-heading');
   const copy = node('div'); copy.append(node('h4', label), node('p', versionLabel(rev))); heading.append(copy);
@@ -596,7 +569,7 @@ function revisionCard(parent, rev, label, parentTitle = parent.querySelector('h3
   box.append(heading);
   if (rev.title !== parentTitle) box.append(node('p', rev.title, 'revision-title'));
   parent.append(box);
-  box.append(node('p', rev.description, 'cloud-figure-description')); if(!tagsInSummary && rev.tags?.length)box.append(tagPills(rev.tags));
+  appendFigureDescription(box, rev.description); if(!tagsInSummary && rev.tags?.length)box.append(tagPills(rev.tags));
   downloadControls(box, rev);
 }
 const videoSize=value=>Number.isFinite(Number(value)) && Number(value)>0?MB(value):'Größe unbekannt';
@@ -731,21 +704,13 @@ function ownFigures() {
   figures.sort((a, b) => collator.compare(title(a), title(b)));
   for (const f of figures) {
     const revisions = f.revisions;
-    const latest = revisions[0], card = node('details', undefined, 'cloud-own-figure'); card.dataset.ownFigure = f.id;
-    const summary = node('summary', undefined, 'cloud-own-summary');
-    const picture = node('span', undefined, 'cloud-library-picture'); if (latest?.videos?.length) thumbnail(picture, latest);
-    const name = node('div', undefined, 'cloud-own-name'); name.append(node('h3', latest?.title ?? 'Noch nicht fertig hochgeladene Figur'));
-    name.append(node('small', `${latest?.videos?.length ?? 0} Video${latest?.videos?.length === 1 ? '' : 's'} · ${f.public_allowed ? 'Öffentliche Freigabe erlaubt' : 'Privat verwendbar'}`));
-    const availability = node('span', undefined, 'cloud-own-availability');
-    const update = () => {
-      const local = localIndex.resolve(latest, localFigures, { figureId: f.id, revisionIds: revisions.map(rev => rev.id) });
-      cloudStatusLabel(availability, local.label, local.modified);
-      availability.dataset.local = String(local.available); availability.title = local.detail ?? local.label;
-    }; localUpdates.push(update); update();
-    summary.append(picture, name, availability); card.append(summary);
-    const content = node('div', undefined, 'cloud-own-content'); card.append(content); let mounted = false, selectedTab = 'videos';
+    const latest = revisions[0];
+    const view = createCloudFigureCard({ kind: 'own', id: f.id, title: latest?.title ?? 'Noch nicht fertig hochgeladene Figur', subtitle: `${latest?.videos?.length ?? 0} Video${latest?.videos?.length === 1 ? '' : 's'} · ${f.public_allowed ? 'Öffentliche Freigabe erlaubt' : 'Privat verwendbar'}` });
+    const { card, picture, content } = view;
+    if (latest?.videos?.length) thumbnail(picture, latest);
+    const update = () => view.setAvailability(localIndex.resolve(latest, localFigures, { figureId: f.id, revisionIds: revisions.map(rev => rev.id) }));
+    localUpdates.push(update); update(); let selectedTab = 'videos';
     const mount = () => {
-      if (mounted) return; mounted = true;
       const tabs = node('div', undefined, 'cloud-library-editor-tabs cloud-own-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', `Optionen für ${latest?.title ?? 'Cloud-Figur'}`);
       const videos = node('div', undefined, 'cloud-own-panel'), box = node('div', undefined, 'cloud-own-panel');
       const videoTab = action('Figur', () => chooseTab('videos')), manageTab = action('Verwalten', () => chooseTab('manage'));
@@ -767,7 +732,7 @@ function ownFigures() {
       }
       tabs.append(videoTab, manageTab); content.append(tabs, videos, box);
       if (latest) {
-        if (latest.description) videos.append(node('p', latest.description, 'cloud-figure-description'));
+        appendFigureDescription(videos, latest.description);
         if (latest.tags?.length) videos.append(tagPills(latest.tags));
         downloadControls(videos, { ...latest, figure_id: f.id }, { own: true, revisionIds: revisions.map(r => r.id) });
       } else videos.append(node('p', 'Der Upload dieser Figur ist noch nicht abgeschlossen.'));
@@ -792,14 +757,12 @@ function ownFigures() {
       },true));
       chooseTab(ownFigureSelection.id === f.id ? ownFigureSelection.tab : 'videos');
     };
-    card.ontoggle = () => {
-      if (!card.isConnected) return;
-      if (!card.open) { clearPreviews(content); if (ownFigureSelection.id === f.id) ownFigureSelection.id = null; return; }
-      for (const other of list.querySelectorAll('details[open]')) if (other !== card) other.open = false;
-      mount(); ownFigureSelection = { id: f.id, tab: selectedTab, owner: state.me?.id };
-    };
+    const lifetime = cardViews.register({ card, content, group: list, build: mount,
+      opened: () => { ownFigureSelection = { id: f.id, tab: selectedTab, owner: state.me?.id }; },
+      closed: () => { if (ownFigureSelection.id === f.id) ownFigureSelection.id = null; }
+    });
     list.append(card);
-    if (ownFigureSelection.id === f.id) { mount(); card.open = true; }
+    if (ownFigureSelection.id === f.id) lifetime.open();
   }
 }
 function renderUploadRecovery(afterSaved = uploadRecovery?.afterSaved) {
@@ -1092,7 +1055,7 @@ export function initCloud(callbacks) {
     load, render: renderCloud, run, logout, resetSession: resetCloudSession,
     dismissAccount, dismissLogin, showLogin: showGuestLogin,
     showAccount() { renderAccount(); if (state?.me) { accountDialog.showModal(); accountTrigger.setAttribute('aria-expanded', 'true'); } },
-    settings() { document.getElementById('cloudSettings').focus({ preventScroll: true }); hooks.settings?.(); }
+    settings() { cardViews.clear(body); document.getElementById('cloudSettings').focus({ preventScroll: true }); hooks.settings?.(); }
   }, drafts: {
     peopleLeave: active => peopleView.leave(active), library: () => librarySession,
     leaveLibrary: leaveLibraryDraft, clearLibrary: clearLibrarySession, resumeLibrary: resumeLibraryUpload
