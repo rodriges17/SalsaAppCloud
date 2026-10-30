@@ -27,7 +27,7 @@ globalThis.fetch=async(_url,options)=>{
 const {initCloud,openCloud,closeCloud}=await import('../pwa/cloud.js');
 const prompts=[];
 initCloud({localFigures:async()=>[],chooseImport:async()=>({}),confirm:async options=>{prompts.push(options);return false;}});
-const button=name=>[...document.querySelectorAll('button')].find(b=>b.textContent===name);
+const button=name=>{const buttons=[...document.querySelectorAll('button')];return buttons.find(b=>b.textContent===name)||buttons.find(b=>b.getAttribute('aria-label')===name);};
 const click=async el=>{assert.ok(el,'control exists');await el.onclick();};
 
 test('entering My Figures collapses a previously opened cloud figure, including reopening Cloud',async()=>{

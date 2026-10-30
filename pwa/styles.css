@@ -64,7 +64,7 @@ a{color:var(--lavender)}input[type=checkbox],input[type=radio]{accent-color:var(
 .chips button{font-size:13px;border-radius:20px;min-height:38px;padding:7px 12px}
 .chips button[aria-pressed=true]{color:var(--primary-text);background:var(--purple);border-color:var(--purple)}
 .list-toolbar{margin:20px 0 12px}.list-toolbar select{color:var(--lavender)}
-.figure-card{border-radius:14px;padding:12px;gap:12px;border:1px solid color-mix(in srgb,var(--border) 35%,transparent)}
+.figure-card{border-radius:14px;padding:12px;gap:12px;border:1px solid var(--border)}
 .card-main{gap:12px}.card-thumb{width:82px;height:82px;border-radius:9px}.card-copy{gap:5px;padding-right:15px}
 .card-title{font-size:17px;line-height:1.3;font-weight:600}.card-status{font-size:12px;line-height:1.3;padding:3px 8px;border-radius:12px;width:fit-content}
 .status-new{background:#efcbf0;color:#442249}.status-practice{background:#ffd1ad;color:#56351a}.status-learned{background:#c4dfbb;color:#294924}
@@ -381,7 +381,7 @@ button.storage-choice:disabled{opacity:1;cursor:default}
 .card-details .card-storage-status .card-provenance{flex:0 0 21px;width:21px;min-height:20px;height:20px;margin-left:auto}
 .card-details .card-provenance svg{width:19px;height:19px}.card-details .card-folder-icon{flex-basis:14px;width:14px;height:20px}.card-details .card-folder-icon svg{width:14px;height:14px}
 .figure-card>.card-options{width:22px}
-.cloud-own-summary,.cloud-library-summary{align-items:flex-start}
+.cloud-own-summary,.cloud-library-summary{align-items:center}
 .cloud-own-summary::marker,.cloud-library-summary::marker{content:''}
 .cloud-own-availability,.cloud-library-availability{align-self:flex-start;justify-content:flex-end;margin-left:auto;flex-shrink:0;white-space:nowrap;max-width:none;line-height:20px;font-size:11px}
 .cloud-own-name h3,.cloud-library-summary h3{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -533,3 +533,19 @@ a.cloud-library-card:active{background:var(--selection)}
 /* Highlight the local destination within library figure actions. */
 button.cloud-local-open,
 .cloud-library-content .cloud-revision > button:not(.subtle) { background:var(--purple); border-color:var(--purple); color:var(--primary-text); box-shadow:none; }
+
+/* Equal vertical insets and centered card artwork, including taller summaries. */
+.cloud-own-summary,.cloud-library-summary{padding-block:12px}
+.cloud-library-summary>.cloud-order-number,.cloud-library-summary>.cloud-library-picture,.cloud-own-summary>.cloud-library-picture{align-self:center;margin-block:0}
+.figure-card>.card-thumbnail-button{align-self:center;margin-block:0}
+.cloud-figures-heading{display:flex;align-items:center;gap:4px;min-width:0}
+.cloud-figures-heading h3{margin:0}
+.cloud-figures-heading .cloud-figures-info{display:grid;place-items:center;flex:0 0 44px;width:44px;height:44px;min-height:44px;padding:11px;border:0;background:transparent;color:var(--lavender)}
+.cloud-figures-info svg{display:block;width:20px;height:20px}
+.cloud-figures-explanation{margin:0;color:var(--muted);font-size:14px;line-height:1.55}
+
+.cloud-libraries-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+.cloud-libraries-heading h3{margin:0}
+
+.cloud-library-hero>.cloud-library-edit{display:grid;place-items:center;align-self:center;width:44px;height:44px;min-width:44px;min-height:44px;padding:10px;border:0;background:transparent;color:var(--lavender)}
+.cloud-library-edit svg{display:block;width:24px;height:24px}

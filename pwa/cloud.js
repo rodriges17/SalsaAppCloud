@@ -328,12 +328,24 @@ async function renderCloud(library, detail) {
   if (area === 'create') { libraryForm(); return; }
   if (area === 'figures') {
     if (!state.me.upload_enabled) body.append(node('p', 'Uploads sind für dein Konto deaktiviert. Vorhandene Cloud-Figuren bleiben erreichbar und lokal übernehmbar.', 'cloud-person-notice'));
-    body.append(node('h3', 'Meine Cloud-Figuren'), node('p', 'Alle deine hochgeladenen Figuren – auch ohne Bibliothekszuordnung. Eine Figur kann in mehreren Bibliotheken verwendet werden.'));
+    const heading = node('div', undefined, 'cloud-figures-heading');
+    const explanation = node('p', 'Alle deine hochgeladenen Figuren – auch ohne Bibliothekszuordnung. Eine Figur kann in mehreren Bibliotheken verwendet werden.', 'cloud-figures-explanation');
+    explanation.id = 'cloudFiguresExplanation'; explanation.hidden = true;
+    const info = action('', () => { explanation.hidden = !explanation.hidden; info.setAttribute('aria-expanded', String(!explanation.hidden)); });
+    info.className = 'cloud-figures-info'; info.setAttribute('aria-label', 'Informationen zu Meine Figuren'); info.setAttribute('aria-controls', explanation.id); info.setAttribute('aria-expanded', 'false');
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    icon.setAttribute('viewBox', '0 0 24 24'); icon.setAttribute('fill', 'none'); icon.setAttribute('stroke', 'currentColor'); icon.setAttribute('stroke-width', '1.7'); icon.setAttribute('stroke-linecap', 'round'); icon.setAttribute('aria-hidden', 'true');
+    icon.innerHTML = '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>'; info.append(icon);
+    heading.append(node('h3', 'Meine Figuren'), info); body.append(heading, explanation);
     ownFigures(); return;
   }
   if (area === 'admin' && state.me?.is_admin) { adminForm(); return; }
-  body.append(node('h3', 'Bibliotheken'));
-  if (state.me?.upload_enabled) { const create = action('Bibliothek erstellen', () => navigate('create')); create.className = 'primary'; body.append(create); }
+  const librariesHeading = node('div', undefined, 'cloud-libraries-heading'); librariesHeading.append(node('h3', 'Bibliotheken'));
+  if (state.me?.upload_enabled) {
+    const create = action('', () => navigate('create')); create.className = 'primary add-trigger'; create.setAttribute('aria-label', 'Bibliothek erstellen'); create.title = 'Bibliothek erstellen';
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); icon.setAttribute('viewBox', '0 0 24 24'); icon.setAttribute('fill', 'none'); icon.setAttribute('stroke', 'currentColor'); icon.setAttribute('stroke-width', '1.7'); icon.setAttribute('stroke-linecap', 'round'); icon.setAttribute('aria-hidden', 'true'); icon.innerHTML = '<path d="M12 5v14M5 12h14"/>'; create.append(icon); librariesHeading.append(create);
+  }
+  body.append(librariesHeading);
   for (const lib of state.libraries) {
     const box = libraryCard(lib); if (lib.owner_id === state.me?.id) box.append(node('p', 'Besitzer · Bibliothek verwalten', 'cloud-role-badge')); else if (lib.manage) box.append(node('p', 'Plattform-Administrator · Bibliothek verwalten', 'cloud-role-badge')); else if (lib.contribute) box.append(node('p', 'Mitwirkender', 'cloud-role-badge')); else box.append(node('p', 'Lesen', 'cloud-role-badge')); box.append(node('p', `${lib.visibility === 'public' ? 'Öffentlich' : 'Privat'} · ${lib.collaborative ? 'Mitwirkende erlaubt' : 'Nur Besitzer'} · ${lib.moderated ? 'Mit Freigabe' : 'Sofort veröffentlichen'}`));
   }
@@ -389,7 +401,8 @@ async function libraryView(id, detail) {
     const edit = action('Bibliothek bearbeiten', () => {
       beginLibrarySession(detail);
       return renderCloud(id, detail);
-    }); edit.className = 'cloud-library-edit'; title.after(edit);
+    }); edit.className = 'cloud-library-edit'; edit.setAttribute('aria-label', 'Bibliothek bearbeiten'); edit.title = 'Bibliothek bearbeiten';
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); icon.setAttribute('viewBox', '0 0 24 24'); icon.setAttribute('fill', 'none'); icon.setAttribute('stroke', 'currentColor'); icon.setAttribute('stroke-width', '1.7'); icon.setAttribute('stroke-linecap', 'round'); icon.setAttribute('stroke-linejoin', 'round'); icon.setAttribute('aria-hidden', 'true'); icon.innerHTML = '<path d="m16 3 5 5M4 20l4-1L21 6a2.1 2.1 0 0 0-3-3L5 16z"/>'; edit.replaceChildren(icon); title.after(edit);
   }
   if (lib.description) intro.append(node('p', lib.description, 'cloud-library-description'));
   intro.append(node('p', `${detail.entries.length} Figuren${manage ? lib.owner_id === state.me.id ? ' · Besitzer' : ' · Plattform-Administrator' : ''}`, 'cloud-library-meta'));
