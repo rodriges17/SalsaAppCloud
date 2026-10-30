@@ -12,11 +12,16 @@ async function start(page) {
   await expect(page.locator('html')).toHaveAttribute('data-offline-status','ready', { timeout: 30000 });
   await page.evaluate(async () => { await navigator.serviceWorker.ready; if (!navigator.serviceWorker.controller) await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true })); });
 }
+async function pickVideos(page, files) {
+  const choosing = page.waitForEvent('filechooser');
+  await page.locator('#pickVideos').click();
+  await (await choosing).setFiles(files);
+}
 async function addFigure(page) {
   await page.locator('#openAddFigure').tap(); await page.locator('#addFigure').click();
   await page.locator('#figureTitle').fill('Ocho'); await page.locator('#figureDescription').fill('Links drehen');
   for (const tag of ['Drehung','Anfänger']) { await page.locator('#figureTags').fill(tag); await page.getByRole('button',{name:`Neues Tag „${tag}“ anlegen`,exact:true}).click(); }
-  await page.locator('#videoFiles').setInputFiles([clip, portrait]);
+  await pickVideos(page, [clip, portrait]);
   await expect(page.locator('#saveFigure')).toBeDisabled();
   await page.getByRole('button', { name: 'Alle neuen Videos prüfen' }).click();
   for (let i = 0; i < 2; i++) {
@@ -95,7 +100,7 @@ test('rename, reorder, preview replacement cancellation, discard and deletion', 
 
 test('invalid preview cannot be saved and metadata conflicts roll back new blobs', async ({ page }) => {
   await start(page); await page.locator('#openAddFigure').tap(); await page.locator('#addFigure').click(); await page.locator('#figureTitle').fill('Invalid');
-  await page.locator('#videoFiles').setInputFiles({ name: 'broken.mp4', mimeType: 'video/mp4', buffer: Buffer.from('not a movie') });
+  await pickVideos(page, { name: 'broken.mp4', mimeType: 'video/mp4', buffer: Buffer.from('not a movie') });
   await page.locator('.draft-card').getByRole('button', { name: 'Vorschau', exact: true }).click();
   await expect(page.locator('#previewError')).toBeVisible(); await expect(page.locator('#acceptVideo')).toBeDisabled();
   await page.locator('#previewBack').click(); await expect(page.locator('#saveFigure')).toBeDisabled();
@@ -311,7 +316,7 @@ test('mobile page gestures keep app scale fixed while one-finger scrolling remai
 });
 
 test('saving shows figure and video message with an activity indicator until the copy finishes',async({page})=>{
- await start(page);await page.locator('#openAddFigure').tap();await page.locator('#addFigure').tap();await page.locator('#figureTitle').fill('Speichertest');await page.locator('#videoFiles').setInputFiles(clip);
+ await start(page);await page.locator('#openAddFigure').tap();await page.locator('#addFigure').tap();await page.locator('#figureTitle').fill('Speichertest');await pickVideos(page, clip);
  await page.locator('#reviewAll').tap();await expect(page.locator('#acceptVideo')).toBeEnabled();await page.locator('#acceptVideo').tap();
  await page.evaluate(()=>{const put=Cache.prototype.put;Cache.prototype.put=async function(request,...args){if(String(request).includes('__private_media__'))await new Promise(resolve=>window.releaseSaving=resolve);return put.call(this,request,...args);};});
  await page.locator('#saveFigure').tap();await page.waitForFunction(()=>!!window.releaseSaving);

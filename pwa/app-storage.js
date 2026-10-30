@@ -103,7 +103,7 @@ export async function saveFigure(figure, drafts, expectedRevision = null) {
       const tx = db.transaction(['figures', 'videos', 'imports'], 'readwrite');
       const figures = tx.objectStore('figures'), videos = tx.objectStore('videos'), imports = tx.objectStore('imports');
       let error, saved; const obsolete = [];
-      const abort = message => { error = new Error(message); tx.abort(); };
+      const abort = (message, code) => { error = Object.assign(new Error(message), { code }); tx.abort(); };
       tx.onabort = () => reject(error ?? tx.error ?? new Error('Speichern abgebrochen.')); tx.onerror = () => {};
       tx.oncomplete = () => resolve({ saved, obsolete });
       const marker = imports.get(job.id);
@@ -112,7 +112,7 @@ export async function saveFigure(figure, drafts, expectedRevision = null) {
         const request = figures.get(figure.id);
         request.onsuccess = () => {
           const previous = request.result;
-          if ((previous?.revision ?? null) !== expectedRevision) return abort('Diese Figur wurde inzwischen geändert. Bitte den Entwurf schließen und erneut öffnen.');
+          if ((previous?.revision ?? null) !== expectedRevision) return abort('Diese Figur wurde inzwischen geändert. Bitte neu laden oder den Entwurf behalten.', 'FIGURE_CONFLICT');
           const owned = new Set(previous?.videoIds ?? []);
           if (prepared.some(d => d.existing && !owned.has(d.id))) return abort('Ein Video gehört nicht zu dieser Figur.');
           const videoIds = prepared.map(d => d.id);
@@ -120,7 +120,7 @@ export async function saveFigure(figure, drafts, expectedRevision = null) {
             if (draft.existing) {
               const old = videos.get(draft.id);
               old.onsuccess = () => {
-                if (!old.result || old.result.figureId !== figure.id || old.result.cacheKey !== draft.cacheKey) return abort('Ein gespeichertes Video wurde inzwischen geändert.');
+                if (!old.result || old.result.figureId !== figure.id || old.result.cacheKey !== draft.cacheKey) return abort('Ein gespeichertes Video wurde inzwischen geändert.', 'FIGURE_CONFLICT');
                 const { existing, ...record } = draft; videos.put(record);
               };
             } else { const { existing, ...record } = draft; videos.put(record); }

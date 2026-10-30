@@ -101,7 +101,7 @@ async function folderStaging(folder, signal) {
 export async function writeFolderFigure(folder, figure, drafts, expectedRevision, mirror) {
   validateDraft(figure.title, drafts); await permission(folder.handle);
   const library = await readLibrary(folder.handle), previous = library.figures.find(f => f.id === figure.id);
-  if (library.id !== folder.id || (previous?.revision ?? null) !== expectedRevision) throw new Error('Diese Figur oder der Geräteordner wurde inzwischen geändert. Bitte neu laden.');
+  if (library.id !== folder.id || (previous?.revision ?? null) !== expectedRevision) throw Object.assign(new Error('Diese Figur oder der Geräteordner wurde inzwischen geändert. Bitte neu laden.'), { code: 'FIGURE_CONFLICT' });
   const original = JSON.stringify(library);
   const stage = await folderStaging(folder), videos = [];
   try {
@@ -127,7 +127,7 @@ export async function writeFolderFigure(folder, figure, drafts, expectedRevision
     const saved = { videoContent: contentVideos(videos), id: figure.id, title: figure.title.trim(), description: figure.description, tags: figure.tags, status: figure.status, createdAt: previous?.createdAt ?? figure.createdAt ?? Date.now(), revision: crypto.randomUUID(), importFingerprint: figure.importFingerprint ?? previous?.importFingerprint ?? null, backupOrigin: previous?.backupOrigin ?? figure.backupOrigin ?? null, duration: videos[0].duration, posterBytes, videos };
     library.figures = library.figures.filter(f => f.id !== saved.id); library.figures.push(saved);
     library.garbage.push(...(previous?.videos ?? []).filter(v => !videos.some(n => n.file === v.file)).map(v => v.file));
-    if (JSON.stringify(await readLibrary(folder.handle)) !== original) throw new Error('Der Bibliotheksordner wurde während des Kopierens geändert. Bitte erneut versuchen.');
+    if (JSON.stringify(await readLibrary(folder.handle)) !== original) throw Object.assign(new Error('Der Bibliotheksordner wurde während des Kopierens geändert. Bitte erneut versuchen.'), { code: 'FIGURE_CONFLICT' });
     await stage.commit(library, mirror);
     return hydrateFolder(saved, folder.id);
   } finally { await stage.discard(); }

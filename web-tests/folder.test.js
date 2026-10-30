@@ -29,7 +29,7 @@ test('folder: failed second video write leaves previous catalog intact and remov
 });
 test('folder: stale revision cannot overwrite metadata or existing video',async()=>{
  const {folder,mirror}=setup(),f=figure();await writeFolderFigure(folder,f,[draft()],null,mirror);
- await assert.rejects(writeFolderFigure(folder,{...f,title:'overwrite'},[draft()],null,mirror),/inzwischen/);assert.equal((await readLibrary(folder.handle)).figures[0].title,'Salsa');
+ await assert.rejects(writeFolderFigure(folder,{...f,title:'overwrite'},[draft()],null,mirror),{code:'FIGURE_CONFLICT'});assert.equal((await readLibrary(folder.handle)).figures[0].title,'Salsa');
 });
 test('folder: ambiguous manifest close never removes media referenced on disk',async()=>{
  const {folder,mirror}=setup();folder.handle.failManifest='after';await assert.rejects(writeFolderFigure(folder,figure(),[draft()],null,mirror),/ambiguous/);

@@ -40,3 +40,7 @@ Abmelden, Kontowechsel und eine definitiv widerrufene Sitzung entfernen deren Ca
 Der identische Browservertrag prüft Wiederöffnen und Neustart ohne weiteren Listen-/Bildabruf, Offline-Anzeige, gedrosselte und zusammengeführte Hintergrundabrufe, Fehlerwiederholung, Abmeldung mit Löschung von Daten/Bildern, verspätete Kontoantworten sowie Token-Erneuerung in einem zweiten Tab ohne Entwurfsverlust.
 
 Bereits erzeugte Ersatz-Vorschaubilder bleiben wiederverwendbar, auch wenn die Cloud noch kein Bild bereitstellt. Eine erneute Bildprüfung darf deshalb nicht erneut das Quellvideo für dieselbe Version laden.
+
+## Lokale Figurenbearbeitung
+
+Die Cloud-PWA nutzt wie Android die gekapselte Figuren-Bearbeitungssitzung. Entwurf, aktueller Speicherstand, Konfliktentscheidungen und Speicherabschluss werden am selben Interface geprüft. Siehe [Lokale Figurenbearbeitung](LOKALE-FIGURENBEARBEITUNG.md).
