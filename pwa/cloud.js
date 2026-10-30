@@ -596,7 +596,7 @@ function revisionCard(parent, rev, label, parentTitle = parent.querySelector('h3
   box.append(heading);
   if (rev.title !== parentTitle) box.append(node('p', rev.title, 'revision-title'));
   parent.append(box);
-  box.append(node('p', rev.description)); if(!tagsInSummary && rev.tags?.length)box.append(tagPills(rev.tags));
+  box.append(node('p', rev.description, 'cloud-figure-description')); if(!tagsInSummary && rev.tags?.length)box.append(tagPills(rev.tags));
   downloadControls(box, rev);
 }
 const videoSize=value=>Number.isFinite(Number(value)) && Number(value)>0?MB(value):'Größe unbekannt';
@@ -767,7 +767,7 @@ function ownFigures() {
       }
       tabs.append(videoTab, manageTab); content.append(tabs, videos, box);
       if (latest) {
-        if (latest.description) videos.append(node('p', latest.description));
+        if (latest.description) videos.append(node('p', latest.description, 'cloud-figure-description'));
         if (latest.tags?.length) videos.append(tagPills(latest.tags));
         downloadControls(videos, { ...latest, figure_id: f.id }, { own: true, revisionIds: revisions.map(r => r.id) });
       } else videos.append(node('p', 'Der Upload dieser Figur ist noch nicht abgeschlossen.'));

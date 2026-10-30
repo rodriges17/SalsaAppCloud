@@ -549,3 +549,9 @@ button.cloud-local-open,
 
 .cloud-library-hero>.cloud-library-edit{display:grid;place-items:center;align-self:center;width:44px;height:44px;min-width:44px;min-height:44px;padding:10px;border:0;background:transparent;color:var(--lavender)}
 .cloud-library-edit svg{display:block;width:24px;height:24px}
+
+/* Match library summaries to the approved own-figure cards. */
+.cloud-library-summary{min-height:66px}
+.cloud-library-summary .cloud-library-name h3{font-size:14px;font-weight:700;line-height:normal}
+@media(max-width:540px){.cloud-library-summary .cloud-library-name h3{font-size:13px}}
+.cloud-figure-description{white-space:pre-wrap;overflow-wrap:anywhere}
