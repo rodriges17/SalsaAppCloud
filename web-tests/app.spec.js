@@ -36,7 +36,7 @@ async function addFigure(page) {
 }
 async function openEdit(page) { await page.getByRole('button', { name: 'Optionen für Ocho' }).click(); await page.getByRole('button', { name: 'Bearbeiten', exact: true }).click(); await expect(page.locator('#editor')).toBeVisible(); }
 
-test('multi-video import, player settings, loops, rotation, reload and offline playback', async ({ page, context }, info) => {
+test('multi-video import, player settings, A–B, rotation, reload and offline playback', async ({ page, context }, info) => {
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await start(page); await addFigure(page);
   await page.screenshot({ path: info.outputPath('overview.png'), fullPage: true });
@@ -49,12 +49,12 @@ test('multi-video import, player settings, loops, rotation, reload and offline p
   await page.locator('#playPause').click(); await page.locator('#learningVideo').evaluate(v => { v.currentTime = 1; }); await page.locator('#markA').click();
   await page.locator('#learningVideo').evaluate(v => { v.currentTime = 2.5; }); await expect(page.locator('#markB')).toBeEnabled(); await page.locator('#markB').click();
   await expect(page.locator('#abStatus')).toContainText('B 0:02');
-  await page.locator('#fullLoop').click(); await expect(page.locator('#abStatus')).toHaveText('');
-  await expect(page.locator('#fullLoop')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#clearAB').click(); await expect(page.locator('#abStatus')).toHaveText('');
+  await expect(page.locator('#fullLoop')).toHaveCount(0);
   await page.locator('#playerVideoChoice').selectOption('1');
   await expect(page.locator('#learningVideo')).toHaveJSProperty('videoWidth', 180);
   await expect(page.locator('#learningVideo')).toHaveJSProperty('playbackRate', 0.5);
-  await expect(page.locator('#fitCrop')).toHaveText('Crop'); await expect(page.locator('#fullLoop')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#fitCrop')).toHaveText('Crop'); await expect(page.locator('#abStatus')).toHaveText('');
   await page.screenshot({ path: info.outputPath('player-landscape.png') });
   await page.locator('#rewind').click(); await expect(page.locator('#learningVideo')).toHaveJSProperty('currentTime', 0);
   await page.locator('#playerBack').click(); await expect(page.locator('#playerScreen')).not.toBeVisible();

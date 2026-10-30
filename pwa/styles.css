@@ -555,3 +555,27 @@ button.cloud-local-open,
 .cloud-figure-availability[data-local=true]{color:var(--success)}
 @media(max-width:540px){.cloud-figure-summary{gap:9px;padding-inline:10px}.cloud-figure-name h3{font-size:13px}.cloud-figure-availability{font-size:10px}}
 @media(max-width:420px){.cloud-figure-availability{gap:4px}.cloud-figure-availability .cloud-status-icon{width:16px;flex-basis:16px}.cloud-figure-availability svg{width:16px;height:16px}}
+
+/* Compact learning controls; the bottom group can become one overlay. */
+.player-bottom{flex-shrink:0;min-width:0;background:var(--bg)}
+.player-controls{display:grid;grid-template-columns:repeat(15,minmax(0,1fr));gap:7px}
+.player-controls #rewind,.player-controls #playPause,.player-controls #speed{grid-column:span 5}
+.player-controls #fitCrop,.player-controls #markA,.player-controls #markB,.player-controls #clearAB,.player-controls #fullscreen{grid-column:span 3}
+.player-controls button,.player-controls select{min-width:0;white-space:normal;min-height:44px}
+#retryPlayer{align-self:center;margin:4px 12px 8px}
+
+.player-screen.is-immersive{padding:0;background:#000;overflow:hidden}
+.player-screen.is-immersive .video-stage{position:absolute;inset:0;min-height:0;width:100%;height:100%;flex:none}
+.player-screen.is-immersive .screen-header{position:absolute;inset:0 0 auto;z-index:3;background:linear-gradient(var(--bg),color-mix(in srgb,var(--bg) 65%,transparent))}
+.player-screen.is-immersive .player-bottom{position:absolute;inset:auto 0 0;z-index:3;background:color-mix(in srgb,var(--bg) 94%,transparent);padding-bottom:env(safe-area-inset-bottom);max-height:65%;overflow:auto}
+.player-screen.is-immersive .screen-header,.player-screen.is-immersive .player-bottom{visibility:hidden;pointer-events:none}
+.player-screen.is-immersive .bottom-nav,.player-screen.is-immersive .player-description{display:none!important}
+.player-screen.is-immersive #playerError{position:absolute;top:35%;left:5%;right:5%;z-index:5;background:var(--bg);padding:16px;border-radius:12px}
+.player-screen.is-immersive #retryPlayer{position:absolute;top:60%;left:50%;transform:translateX(-50%);z-index:5;background:var(--bg)}
+.player-fullscreen-hint{position:absolute;top:72px;left:5%;right:5%;z-index:6;background:var(--elevated);color:var(--text);padding:12px;border-radius:10px;font-size:13px;text-align:center;pointer-events:none}
+
+.player-screen.is-immersive .video-stage{touch-action:none;outline-offset:-4px}
+.player-screen.is-immersive.controls-visible .screen-header,.player-screen.is-immersive.controls-visible .player-bottom{visibility:visible;pointer-events:auto}
+.player-screen.is-immersive .screen-header{padding-top:env(safe-area-inset-top)}
+.player-screen.is-immersive .player-bottom .video-choice{padding-top:8px}
+@media(min-width:650px){.player-screen.is-immersive .player-controls{display:flex;justify-content:center;overflow:visible}.player-screen.is-immersive .player-controls>*{flex:1;width:auto}}
