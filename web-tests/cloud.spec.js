@@ -123,7 +123,7 @@ test('cloud keeps its brand header, settings and back navigation fixed',async({p
 test('libraries and own cloud figures are separate; creation is explicit and cancellable',async({page})=>{
  // Navigation uses a known server poster instead of depending on video frame extraction.
  await signIn(page);const calls=await mock(page,true,true,true,{posters:new Map([['rev-1',{poster:POSTER,kind:'frame'}]])});await start(page);await page.locator('#cloudButton').tap();
- await expect(page.getByRole('heading',{name:'Meine Cloud-Figuren',exact:true})).toBeVisible();
+ await expect(page.locator('.cloud-figures-heading').getByRole('heading',{name:'Meine Figuren',exact:true})).toBeVisible();
  await expect(page.locator('.cloud-thumbnail')).toHaveAttribute('src', /^blob:/);
  await page.getByRole('button',{name:'Bibliotheken',exact:true}).tap();
  await expect(page.getByLabel('Name',{exact:true})).toHaveCount(0);
@@ -233,7 +233,7 @@ for(const existing of [false,true])test(`upload ${existing?'a new version':'a ne
  await expect(target.locator('option')).toHaveText('Nur in Meine Cloud-Figuren hochladen');
  if(existing){await page.getByRole('combobox',{name:'Cloudfigur speichern',exact:true}).selectOption('figure-1');await expect(page.locator('#cloudBody')).toContainText('in allen verknüpften Bibliotheken');}
  await page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true}).tap();
- await expect(page.getByRole('heading',{name:'Meine Cloud-Figuren',exact:true})).toBeVisible();
+ await expect(page.locator('.cloud-figures-heading').getByRole('heading',{name:'Meine Figuren',exact:true})).toBeVisible();
  expect(calls.filter(c=>['reserve','upload','finalize','commit','attach'].includes(c.action)).map(c=>c.action)).toEqual(['reserve','upload','finalize','commit']);
  expect(calls.find(c=>c.action==='reserve').payload.figure).toBe(existing?'figure-1':null);
  expect(calls.find(c=>c.action==='commit').payload.public_allowed).toBe(existing);
@@ -417,7 +417,7 @@ test('partial creation retries membership only and never recreates the account',
 for(const mode of ['reader','revoked','owner'])test(`role-aware navigation: ${mode}`,async({page})=>{
  await signIn(page);const me={id:'viewer',email:'viewer@example.test',is_admin:false,upload_enabled:false,used:mode==='revoked'?3:0,quota:250000000};await mock(page,false,mode==='revoked',false,{me,manage:mode==='owner',owner:mode==='owner'?'viewer':'owner'});await start(page);await page.locator('#cloudButton').tap();
  await expect(page.getByRole('button',{name:'Plattformverwaltung',exact:true})).toHaveCount(0);
- if(mode==='revoked'){await expect(page.getByRole('heading',{name:'Meine Cloud-Figuren',exact:true})).toBeVisible();await expect(page.locator('#cloudBody')).toContainText('Uploads sind für dein Konto deaktiviert.');await expandOwnFigure(page);await expect(page.getByRole('button',{name:'Lokal verfügbar machen',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Bibliothek zuordnen',exact:true})).toHaveCount(0);}else{await expect(page.locator('.cloud-tabs button')).toHaveText(['Bibliotheken']);}
+ if(mode==='revoked'){await expect(page.locator('.cloud-figures-heading').getByRole('heading',{name:'Meine Figuren',exact:true})).toBeVisible();await expect(page.locator('#cloudBody')).toContainText('Uploads sind für dein Konto deaktiviert.');await expandOwnFigure(page);await expect(page.getByRole('button',{name:'Lokal verfügbar machen',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Bibliothek zuordnen',exact:true})).toHaveCount(0);}else{await expect(page.locator('.cloud-tabs button')).toHaveText(['Bibliotheken']);}
  if(mode==='owner'){await expect(page.getByText('Besitzer · Bibliothek verwalten',{exact:true})).toBeVisible();await page.locator('a.cloud-library-card').tap();await expandLibraryFigure(page);await editSettings(page);await expect(page.getByRole('heading',{name:'Mitglieder & Zugriff',exact:true})).toBeVisible();await expect(page.getByLabel('Vollständige E-Mail-Adresse',{exact:true})).toHaveCount(0);await page.getByRole('button',{name:'Mitglied hinzufügen',exact:true}).tap();await expect(page.getByLabel('Vollständige E-Mail-Adresse',{exact:true})).toBeVisible();await expect(page.getByLabel('Personen suchen',{exact:true})).toHaveCount(0);}
 });
 
@@ -469,7 +469,7 @@ test('explicit variant reuses accessible video without uploading it again',async
  await signIn(page);const calls=await mock(page,true,false,true,{duplicate:true,noLibraries:true});await localUpload(page);
  await page.getByLabel('Bewusst eine eigene Figur / Variante erstellen, auch wenn das Video bereits existiert',{exact:true}).check();
  await page.getByRole('button',{name:'Ausgewählte Figur hochladen',exact:true}).tap();
- await expect(page.getByRole('heading',{name:'Meine Cloud-Figuren',exact:true})).toBeVisible();
+ await expect(page.locator('.cloud-figures-heading').getByRole('heading',{name:'Meine Figuren',exact:true})).toBeVisible();
  expect(calls.find(c=>c.action==='reserve').payload).toMatchObject({variant:true,videos:[{reuse:'existing-video'}]});
  expect(calls.some(c=>['upload','finalize'].includes(c.action))).toBe(false);expect(calls.some(c=>c.action==='commit')).toBe(true);
 });

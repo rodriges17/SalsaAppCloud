@@ -381,7 +381,7 @@ button.storage-choice:disabled{opacity:1;cursor:default}
 .card-details .card-storage-status .card-provenance{flex:0 0 21px;width:21px;min-height:20px;height:20px;margin-left:auto}
 .card-details .card-provenance svg{width:19px;height:19px}.card-details .card-folder-icon{flex-basis:14px;width:14px;height:20px}.card-details .card-folder-icon svg{width:14px;height:14px}
 .figure-card>.card-options{width:22px}
-.cloud-own-summary,.cloud-library-summary{align-items:center}
+.cloud-own-summary,.cloud-library-summary{align-items:flex-start}
 .cloud-own-summary::marker,.cloud-library-summary::marker{content:''}
 .cloud-own-availability,.cloud-library-availability{align-self:flex-start;justify-content:flex-end;margin-left:auto;flex-shrink:0;white-space:nowrap;max-width:none;line-height:20px;font-size:11px}
 .cloud-own-name h3,.cloud-library-summary h3{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
