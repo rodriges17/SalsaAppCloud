@@ -31,3 +31,9 @@ Cloud-PWA und Android verwenden dasselbe Modul `cloud-people.js` und denselben C
 ## Kompakte Mitgliederverwaltung
 
 In einer verwalteten Bibliothek stehen Mitgliederliste und Besitzerkennzeichnung zuerst. Ein Mitglied klappt zur Rollenänderung oder Entfernung auf. Rollenänderungen werden ausdrücklich gespeichert, Entzug von Mitwirken und Entfernen werden bestätigt. Hinzufügen öffnet einen separaten zweistufigen Bereich und schließt den aufgeklappten Eintrag. Plattformadministratoren laden dafür eine aktuelle Personenliste und wählen eine bereits angelegte Person aus. Bibliotheksbesitzer ohne Plattformrechte verwenden die vollständige E-Mail-Adresse; die Prüfung erfolgt beim Weitergehen. Die Rollenwahl bietet Mitwirken nur mit Upload-Freigabe und gemeinschaftlicher Bibliothek an. Nach Fehlern bleiben die Eingaben im Hinzufügen-Bereich erhalten. Es gibt keine zusätzliche Übersicht aller Zugriffswege oder aller Plattformadministratoren.
+
+## Gemeinsamer Speicherablauf
+
+`cloud-people-grant.js` hält die Entwürfe und den Speicherfortschritt für Personenbearbeitung und „Person hinzufügen“. Erfolgreiche Kontofreigaben und Bibliothekszuweisungen bleiben bei Fehlern erhalten; Wiederholen schreibt nur offene Schritte. Beim Anlegen werden weitere ausgewählte Zuweisungen trotz eines einzelnen Fehlers versucht, beim Bearbeiten endet der Lauf beim ersten Fehler wie bisher. Verwerfen nimmt keine gespeicherten Rechte zurück.
+
+Eine Sperre umfasst auch die Bestätigung beim Entziehen der Upload-Freigabe. Kontowechsel oder Sitzungsablauf entwerten den Ablauf über `reset()`: Bereits abgesendete Schreibvorgänge können noch wirksam werden, ihre Antworten ändern aber weder neue Entwürfe noch Ansichten und starten keine weiteren Schritte. Die Darstellung übernimmt Validierung, Rückfragen und Ergebnisanzeige; die Cloud-Berechtigungsprüfung bleibt unverändert.
