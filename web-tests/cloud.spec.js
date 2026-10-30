@@ -701,8 +701,10 @@ test('available cloud figures share a top-right label, keep expansion without ar
  await page.getByRole('button',{name:'Bibliotheken',exact:true}).tap();await page.locator('a.cloud-library-card').tap();
  await expect(page.getByRole('button',{name:'< Zurück zu allen Bibliotheken',exact:true})).toBeVisible();const summary=page.locator('.cloud-library-summary').first();
  await expect(summary.locator('.cloud-library-availability')).toHaveText('Lokal verfügbar');await expect(summary.locator('.cloud-library-chevron')).toHaveCount(0);
- expect(await summary.evaluate(row=>{const a=row.querySelector('.cloud-library-availability').getBoundingClientRect(),title=row.querySelector('h3').getBoundingClientRect(),r=row.getBoundingClientRect();return Math.abs(a.top-title.top)<2&&Math.abs(a.right-r.right)<2;})).toBe(true);
+ expect(await summary.evaluate(row=>{const a=row.querySelector('.cloud-library-availability').getBoundingClientRect(),title=row.querySelector('h3').getBoundingClientRect(),r=row.getBoundingClientRect(),padding=parseFloat(getComputedStyle(row).paddingRight);return Math.abs(a.top-title.top)<2&&Math.abs(a.right-(r.right-padding))<2;})).toBe(true);
  await expandLibraryFigure(page);const entry=page.locator('.cloud-library-figure').first();await expect(entry.getByRole('checkbox')).toHaveCount(0);await expect(entry.getByRole('button',{name:'Lokal öffnen',exact:true})).toBeVisible();
+ await expect(entry).toHaveCSS('border-radius','14px');
+ await expect(entry.getByRole('button',{name:'Lokal öffnen',exact:true})).toHaveCSS('background-color',await page.evaluate(()=>{const b=document.createElement('button');b.className='primary';document.body.append(b);const color=getComputedStyle(b).backgroundColor;b.remove();return color;}));
  await expect(entry.getByRole('button',{name:'Lokal öffnen',exact:true})).toHaveClass(/cloud-local-open/);
  await expect(entry.getByRole('button',{name:'Lokal öffnen',exact:true})).toHaveCSS('box-shadow','none');
  await page.screenshot({path:info.outputPath('available-library-row-top-right.png')});
