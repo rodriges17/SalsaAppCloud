@@ -52,3 +52,6 @@ Das durchsuchbare Mehrfachauswahlfeld mit vorhandenen Vorschlägen und einzeln e
 
 **Personenfreigabe**:
 Der gemeinsame Ablauf zum Anlegen und Bearbeiten einer Person mit Kontofreigabe, Speicherlimit und Bibliothekszuweisungen. Der Entwurf hält erfolgreiche und offene Speicherschritte getrennt; Wiederholen führt nur offene Schritte aus. Verwerfen entfernt ausschließlich ungespeicherte Änderungen. Kontowechsel und Sitzungsablauf entwerten den Ablauf, ohne bereits gespeicherte Rechte zurückzunehmen.
+
+**Figuren-Bearbeitungssitzung**:
+Der gemeinsame Ablauf für Hinzufügen, Bearbeiten und Importieren einer lokalen Figur. Er hält Angaben, Videoentwurf, Vorschauannahme, Versionsgrundlage und Speicherergebnis zusammen. Schließen beendet laufende Prüfungen; Konflikte erhalten den Entwurf bis zum bestätigten erfolgreichen Neuladen. Ein bestätigter Speichererfolg bleibt auch bei fehlgeschlagenem Nachladen der Übersicht erhalten.

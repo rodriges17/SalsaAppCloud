@@ -184,8 +184,10 @@ test('folder editor stays editable without autofocus and ignores obsolete verifi
  test.skip(browserName!=='chromium');
  await enablePicker(page,'editor-loading-'+info.testId.replace(/\W/g,''));await start(page);await choose(page);await seed(page);await page.reload();
  await expect(page.getByRole('button',{name:'Ordner Ocho lernen',exact:true})).toBeVisible();
- await page.evaluate(()=>{const original=FileSystemFileHandle.prototype.getFile;window.releaseEditorMedia=[];window.restoreEditorMedia=()=>{FileSystemFileHandle.prototype.getFile=original;};
-  FileSystemFileHandle.prototype.getFile=async function(){if(/\.(mp4|mov|m4v|webm|ogv|media)$/i.test(this.name))await new Promise(r=>window.releaseEditorMedia.push(r));return original.call(this);};
+ await page.evaluate(()=>{const original=FileSystemFileHandle.prototype.getFile;window.releaseEditorMedia=[];window.editorMediaStarted=[];window.editorMediaPhase=0;window.restoreEditorMedia=()=>{FileSystemFileHandle.prototype.getFile=original;};
+  // Each editing session can read a file more than once: fresh inventory plus verification.
+  const gates=[0,1].map(index=>new Promise(resolve=>window.releaseEditorMedia[index]=resolve));
+  FileSystemFileHandle.prototype.getFile=async function(){if(/\.(mp4|mov|m4v|webm|ogv|media)$/i.test(this.name)){const phase=window.editorMediaPhase;window.editorMediaStarted[phase]=true;await gates[phase];}return original.call(this);};
  });
  async function edit(){await page.getByRole('button',{name:'Optionen für Ordner Ocho',exact:true}).tap();await page.getByRole('button',{name:'Bearbeiten',exact:true}).tap();}
  await edit();await expect(page.locator('#editor')).toBeVisible();await expect(page.locator('#editorLoading')).toBeVisible();
@@ -193,10 +195,10 @@ test('folder editor stays editable without autofocus and ignores obsolete verifi
  await expect(page.locator('#figureTitle')).toHaveValue('Ordner Ocho');await expect(page.locator('#figureTitle')).toBeEnabled();
  await expect(page.locator('#figureDescription')).toBeEnabled();await expect(page.locator('#pickVideos')).toBeDisabled();
  expect(await page.evaluate(()=>document.activeElement.matches('input,textarea,select'))).toBe(false);await expect(page.locator('#saveFigure')).toBeDisabled();await expect(page.locator('#editorBack')).toBeEnabled();
- await page.waitForFunction(()=>window.releaseEditorMedia.length===1);
+ await page.waitForFunction(()=>window.editorMediaStarted[0]);
  await page.screenshot({path:info.outputPath('editor-loading.png')});
  await page.locator('#editorBack').tap();await expect(page.locator('#editor')).toBeHidden();
- await edit();await page.waitForFunction(()=>window.releaseEditorMedia.length===2);
+ await page.evaluate(()=>window.editorMediaPhase=1);await edit();await page.waitForFunction(()=>window.editorMediaStarted[1]);
  await page.locator('#figureDescription').fill('Während der Prüfung bearbeitet');
  await page.evaluate(()=>window.releaseEditorMedia[0]());await expect(page.locator('#editorLoading')).toBeVisible();await expect(page.locator('#saveFigure')).toBeDisabled();
  await page.evaluate(()=>window.releaseEditorMedia[1]());await expect(page.locator('#editorLoading')).toBeHidden();await expect(page.locator('#figureTitle')).toBeEnabled();await expect(page.locator('#saveFigure')).toBeEnabled();
