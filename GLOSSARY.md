@@ -55,3 +55,6 @@ Der gemeinsame Ablauf zum Anlegen und Bearbeiten einer Person mit Kontofreigabe,
 
 **Figuren-Bearbeitungssitzung**:
 Der gemeinsame Ablauf für Hinzufügen, Bearbeiten und Importieren einer lokalen Figur. Er hält Angaben, Videoentwurf, Vorschauannahme, Versionsgrundlage und Speicherergebnis zusammen. Schließen beendet laufende Prüfungen; Konflikte erhalten den Entwurf bis zum bestätigten erfolgreichen Neuladen. Ein bestätigter Speichererfolg bleibt auch bei fehlgeschlagenem Nachladen der Übersicht erhalten.
+
+**Figurenkarte**:
+Die Darstellung einer Figur mit Titel, Vorschau und kontextabhängigen Angaben und Aktionen. Cloud-Figurenkarten teilen einen Rahmen; lokale Figurenkarten behalten ihre eigene Darstellung. Gemeinsame Darstellungsregeln sind gebündelt. Geöffnete Cloud-Karten besitzen ihre Inhalts- und Vorschaulebensdauer unabhängig von Figuren-Downloads.

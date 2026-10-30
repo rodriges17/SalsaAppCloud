@@ -2,8 +2,8 @@ import { createFigureEditSession } from './figure-edit-session.js';
 import { connectTagSuggestions } from './tag-suggestions.js';
 import { mountTagPicker } from './tag-picker.js';
 import { cloudLocalIndex } from './cloud-local.js';
-import { provenanceIcon, provenanceLabel } from './cloud-provenance.js';
-const APP_VERSION = '2026-10-28-pur-cloud-v1';
+import { createLocalCardsView, tagIcon } from './figure-card.js';
+const APP_VERSION = '2026-10-30-shared-figure-cards-v1';
 import { initBackup } from './backup-ui.js';
 import { createFileDelivery } from './file-delivery.js';
 import { createFigureZipWorkflow } from './figure-zip.js';
@@ -21,7 +21,7 @@ function focusFiguresNavigation() { document.querySelector('#overview + .bottom-
 let figures = [], statusFilter = '', selectedTag = '', editor = null, preview = null, learning = null;
 let route = 'home', opening = false, toastTimer;
 let fileSelection = null;
-let posterURLs = [], videoURL = null, previewURL = null;
+let videoURL = null, previewURL = null;
 const channel = 'BroadcastChannel' in window ? new BroadcastChannel(`salsa-trainer-library:${new URL('./', import.meta.url).pathname}`) : null;
 const loop = new ABLoop();
 let playIntent = false, wakeLock = null;
@@ -75,44 +75,11 @@ async function refresh({ strict = false } = {}) {
   try { figures = await listFigures(); renderOverview(); }
   catch (error) { $('empty').hidden = false; $('empty').replaceChildren(el('h2', '', 'Speicher nicht verfügbar'), el('p', '', storageMessage(error))); if (strict) throw error; }
 }
-// Tag chips share the exact icon used by the tag filter.
-const tagIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 3 8 0 10 10-8 8L3 11V3Z"/><circle cx="7" cy="7" r="1"/></svg>';
-function fitCardTags(row) {
-  const chips = [...row.querySelectorAll('.card-tag-chip')];
-  const more = row.querySelector('.card-tags-more');
-  chips.forEach(chip => { chip.hidden = false; });
-  more.hidden = false;
-  const gap = parseFloat(getComputedStyle(row).columnGap) || 0;
-  const available = row.clientWidth;
-  let used = 0, count = 0;
-  for (const chip of chips) {
-    const width = chip.getBoundingClientRect().width;
-    const reserve = count < Number(row.dataset.total) - 1 ? more.getBoundingClientRect().width + gap : 0;
-    if (used + width + reserve > available + 0.5) break;
-    used += width + gap; count++;
-  }
-  chips.forEach((chip, index) => { chip.hidden = index >= count; });
-  more.hidden = count === Number(row.dataset.total);
-}
-const tagRowsObserver = new ResizeObserver(entries => entries.forEach(({ target }) => fitCardTags(target)));
-document.fonts.ready.then(() => document.querySelectorAll('.card-tags').forEach(fitCardTags));
-function createCardTags(tags) {
-  const row = el('span', 'card-tags');
-  row.dataset.total = tags.length;
-  row.title = tags.join(' · ');
-  row.setAttribute('role', 'group'); row.setAttribute('aria-label', `Tags: ${tags.join(', ')}`);
-  tags.slice(0, 3).forEach(tag => {
-    const chip = el('span', 'card-tag-chip'); chip.setAttribute('aria-hidden', 'true');
-    chip.innerHTML = tagIcon; chip.append(el('span', 'card-tag-text', tag)); row.append(chip);
-  });
-  const more = el('span', 'card-tags-more', '…'); more.setAttribute('aria-hidden', 'true'); row.append(more);
-  tagRowsObserver.observe(row);
-  return row;
-}
+const localCards = createLocalCardsView({ open: openPlayer, status: figure => cloudLocalIndex.status(figure), notify: toast });
 
 function renderOverview() {
-  tagRowsObserver.disconnect();
-  closeMenus(); posterURLs.forEach(url => URL.revokeObjectURL(url)); posterURLs = [];
+  localCards.reset();
+  closeMenus();
   const visible = filterFigures(figures, { query: $('search').value, status: statusFilter, tag: selectedTag, sort: $('sort').value });
   $('figureCount').textContent = `${visible.length} Figuren`;
   $('figureList').replaceChildren(); $('activeTag').replaceChildren();
@@ -127,34 +94,8 @@ function renderOverview() {
   $('empty').hidden = visible.length > 0;
   $('empty').replaceChildren(el('span', 'dance-icon', '♪'), el('h2', '', figures.length ? 'Keine Treffer' : 'Deine erste Figur'), el('p', '', figures.length ? 'Ändere deine Suche oder die Filter.' : 'Füge eigene Videos hinzu und übe in deinem Tempo.'));
   for (const figure of visible) {
-    const card = el('article', 'figure-card'); card.dataset.figureId = figure.id;
-    const main = button('', () => openPlayer(figure), 'card-main'); main.setAttribute('aria-label', `${figure.title} lernen`);
-    let thumb;
-    if (figure.poster) { const url = URL.createObjectURL(figure.poster); posterURLs.push(url); thumb = el('img', 'card-thumb'); thumb.src = url; thumb.alt = ''; }
-    else { thumb = el('span', 'card-thumb thumb-placeholder', '▷'); thumb.setAttribute('aria-hidden', 'true'); }
-    const copy = el('span', 'card-copy'); copy.append(el('span', 'card-title', figure.title));
-    const learningStatus = el('span', 'card-status status-' + (figure.status === 'Sitzt' ? 'learned' : figure.status === 'Am Üben' ? 'practice' : 'new'), figure.status);
-    learningStatus.title = `Lernstand: ${figure.status}`;
-    if (figure.tags.length) copy.append(createCardTags(figure.tags));
-    main.append(copy);
-    const thumbnailButton = button('', () => openPlayer(figure), 'card-thumbnail-button');
-    thumbnailButton.setAttribute('aria-label', `Vorschaubild von ${figure.title} abspielen`); thumbnailButton.append(thumb);
+    const { card, main, thumbnailButton } = localCards.card(figure);
     thumbnailButton.addEventListener('contextmenu', event => { event.preventDefault(); closeMenus(); showMenu(); });
-    const statusBar = el('div', 'card-storage-status');
-    const cloudStatus = cloudLocalIndex.status(figure);
-    const badge = button('', () => toast(provenanceLabel(cloudStatus)), 'card-provenance');
-    badge.innerHTML = provenanceIcon(cloudStatus); badge.title = provenanceLabel(cloudStatus);
-    badge.setAttribute('aria-label', badge.title); badge.dataset.cloudStatus = cloudStatus;
-    const folderName = figure.storageFolder ? figure.folderName || 'SalsaTrainer' : 'App-Speicher';
-    const folder = el('span', 'card-storage-folder', folderName); folder.title = folderName;
-    const metadata = el('span', 'card-meta', `${timeLabel(figure.duration)} · ${figure.videoIds.length} Video${figure.videoIds.length === 1 ? '' : 's'}`);
-    const folderIcon = el('span', 'card-folder-icon'); folderIcon.setAttribute('aria-hidden', 'true');
-    folderIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M20 20H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2Z"/></svg>';
-    statusBar.append(folderIcon);
-    statusBar.append(folder, learningStatus, badge);
-    metadata.title = metadata.textContent;
-    const learningLine = el('span', 'card-learning-line'); learningLine.append(metadata);
-    copy.insertBefore(learningLine, copy.querySelector('.card-tags'));
     const options = button('⋮', event => { event.stopPropagation(); const wasOpen = options.getAttribute('aria-expanded') === 'true'; closeMenus(); if (!wasOpen) showMenu(); }, 'card-options');
     options.setAttribute('aria-label', `Optionen für ${figure.title}`); options.setAttribute('aria-expanded', 'false');
     function showMenu() {
@@ -169,7 +110,7 @@ function renderOverview() {
       placeFigureMenu(menu, options);
     }
     main.addEventListener('contextmenu', event => { event.preventDefault(); closeMenus(); showMenu(); });
-    const details = el('div', 'card-details'); details.append(main, statusBar); card.append(thumbnailButton, details, options);
+    card.append(options);
     if (figure.folderAccessRequired || figure.storageProblem) {
       card.append(el('span', 'card-storage-warning', figure.folderAccessRequired ? 'Ordner gespeichert – Zugriff erneut erlauben' : `${figure.storageFolder ? 'Geräteordner' : 'App-Speicher'}: ${figure.storageProblem}`));
     }

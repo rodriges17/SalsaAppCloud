@@ -44,3 +44,7 @@ Bereits erzeugte Ersatz-Vorschaubilder bleiben wiederverwendbar, auch wenn die C
 ## Lokale Figurenbearbeitung
 
 Die Cloud-PWA nutzt wie Android die gekapselte Figuren-Bearbeitungssitzung. Entwurf, aktueller Speicherstand, Konfliktentscheidungen und Speicherabschluss werden am selben Interface geprüft. Siehe [Lokale Figurenbearbeitung](LOKALE-FIGURENBEARBEITUNG.md).
+
+## Gemeinsame Figurenkarten
+
+Beide Apps verwenden identischen gemeinsamen Kartencode. Cloud-Kontexte teilen ihre Gestaltung; die lokale Darstellung bleibt eigenständig. Der gemeinsame Browservertrag und die vorhandenen lokalen Layoutprüfungen sichern diese Unterschiede. Siehe [Figurenkarten](FIGURENKARTEN.md).
