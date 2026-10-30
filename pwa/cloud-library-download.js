@@ -148,6 +148,7 @@ export async function downloadLibrary(revisions, services, { signal, targetFolde
     if (!signal?.aborted) throw error;
     result.cancelled = true;
   }
+  if (signal?.aborted) result.cancelled = true;
   emit(result.cancelled ? 'cancelled' : 'done');
   return result;
 }
@@ -170,8 +171,8 @@ export async function inspectCloudVideo(blob, signal) {
       const canvas = document.createElement('canvas'), ratio = Math.min(1, 360 / player.videoWidth);
       canvas.width = Math.max(1, Math.round(player.videoWidth * ratio)); canvas.height = Math.max(1, Math.round(player.videoHeight * ratio));
       canvas.getContext('2d').drawImage(player, 0, 0, canvas.width, canvas.height);
-      poster = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.72));
-    } catch { /* Poster is optional; decoded metadata is required. */ }
+      poster = await abortable(() => new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.72)), signal);
+    } catch (error) { if (signal?.aborted) throw error; /* Poster is optional; decoded metadata is required. */ }
     return { duration: player.duration, width: player.videoWidth, height: player.videoHeight, poster };
   } finally { player.pause(); player.removeAttribute('src'); player.load(); URL.revokeObjectURL(url); }
 }
@@ -220,4 +221,80 @@ export async function downloadFigure(revision, services, { target = null, target
     if (record && hash) await rememberLocalVideoHash(record, draft.blob.size, hash).catch(() => {});
   }
   return saved;
+}
+
+// Platform adapters live at this seam; callers only select figures and present results.
+export function createFigureDownload(adapters) {
+  let current = null;
+  const cancelled = () => new DOMException('Download abgebrochen.', 'AbortError');
+  async function execute(kind, input, options = {}) {
+    if (current) throw new Error('Ein Download läuft bereits.');
+    const run = { owner: adapters.identity(), controller: new AbortController() };
+    current = run;
+    const signal = run.controller.signal;
+    const visible = () => current === run && run.owner === adapters.identity() && (options.active?.() ?? true);
+    const check = () => {
+      if (!visible() && !signal.aborted) run.controller.abort(cancelled());
+      signal.throwIfAborted();
+    };
+    const guard = work => abortable(async () => { check(); const value = await work(); check(); return value; }, signal);
+    const progress = value => { if (visible()) options.progress?.(value); };
+    const services = {
+      listFigures: () => guard(adapters.listFigures),
+      readMedia: figure => guard(() => adapters.readMedia(figure)),
+      readCloudMedia: payload => guard(() => adapters.readCloudMedia(payload)),
+      inspectVideo: blob => guard(() => (adapters.inspectVideo ?? inspectCloudVideo)(blob, signal)),
+      confirmReplace: figure => guard(() => adapters.confirmReplace?.(figure)),
+      // Cancellation must never race an atomic save. Finish it, then stop.
+      saveFigure: (...args) => { check(); return adapters.saveFigure(...args); },
+      async fetchVideo(revision, video) {
+        const signed = await guard(() => adapters.call('media_url', { revision: revision.id, media: video.id }));
+        const response = await guard(() => (adapters.fetch ?? globalThis.fetch)(signed.url, {
+          signal: AbortSignal.any([signal, AbortSignal.timeout(120000)])
+        }));
+        if (!response.ok) throw new Error('Video konnte nicht geladen werden. Bitte erneut versuchen.');
+        const blob = await guard(() => response.blob()); return blob.slice(0, blob.size, video.type);
+      },
+      async readPoster(revision) {
+        const cached = await guard(() => adapters.readCache(run.owner, `poster:${revision.id}:${revision.created_at ?? ''}`));
+        if (cached?.value.bytes) return new Blob([cached.value.bytes], { type: 'image/jpeg' });
+        const value = await guard(() => adapters.call('poster_get', { revision: revision.id }));
+        return value.poster ? new Blob([Uint8Array.from(atob(value.poster), character => character.charCodeAt(0))], { type: 'image/jpeg' }) : null;
+      }
+    };
+    let phase = 'failed';
+    try {
+      check(); options.lifecycle?.({ phase: 'started', kind });
+      if (kind === 'figure') {
+        if (!input.videos.length) throw new Error('Bitte mindestens ein Video auswählen.');
+        if (input.videos.some(video => !Number.isSafeInteger(video.size) || video.size <= 0) || input.videos.reduce((sum, video) => sum + video.size, 0) > 250 * 1024 * 1024) throw new Error('Bitte weniger Videos wählen: maximal 250 MB pro Übernahme.');
+      }
+      if (kind === 'enrich') {
+        const result = await enrichCloudMetadata(options.target, input, services, signal);
+        check(); phase = 'done'; return result;
+      }
+      const settings = await guard(adapters.storageSettings);
+      if (!options.target && settings.activeFolder && settings.folders.find(folder => folder.id === settings.activeFolder)?.access !== 'granted') {
+        throw new Error(kind === 'library' ? 'Bitte den gewählten Geräteordner in den Einstellungen freigeben, bevor du die Bibliothek herunterlädst.' : 'Bitte den gewählten Geräteordner in den Einstellungen freigeben.');
+      }
+      const args = { ...options, signal, progress, targetFolder: settings.activeFolder ?? null };
+      const result = kind === 'library' ? await downloadLibrary(input, services, args) : await downloadFigure(input, services, args);
+      if (kind !== 'library') check();
+      phase = result.cancelled ? 'cancelled' : 'done'; return result;
+    } catch (error) {
+      if (signal.aborted) phase = 'cancelled';
+      throw error;
+    } finally {
+      const notify = visible();
+      if (current === run) current = null;
+      if (notify) options.lifecycle?.({ phase, kind });
+    }
+  }
+  return {
+    figure: (revision, options) => execute('figure', revision, options),
+    enrich: (target, revision, options) => execute('enrich', revision, { ...options, target }),
+    library: (revisions, options) => execute('library', revisions, options),
+    cancel() { current?.controller.abort(cancelled()); },
+    reset() { current?.controller.abort(cancelled()); current = null; }
+  };
 }

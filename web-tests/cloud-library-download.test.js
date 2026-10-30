@@ -186,3 +186,16 @@ test('bulk progress always reports a structured phase and numeric counts',async(
  }});
  assert.equal(result.saved,1);assert.ok(events.some(event=>event.phase==='save'));
 });
+
+test('cancelling while replacing the final outdated library figure still reports the committed replacement',async()=>{
+ const f=await fixture(),old=f.add({},['a']),controller=new AbortController();
+ cloudLocalIndex.remember('@device','old-version',old,[{cloud:'a',local:old.videoIds[0]}],'same-figure');
+ const revision={...f.rev('new-version',['a','b']),figure_id:'same-figure'};
+ assert.equal(cloudLocalIndex.resolve(revision,f.figures).kind,'outdated');
+ const save=f.services.saveFigure;
+ f.services.saveFigure=async(...args)=>{const result=await save(...args);controller.abort();return result;};
+ f.services.readMedia=async figure=>{controller.signal.throwIfAborted();return (f.records.get(figure.id)??[]).map(record=>({...record,load:async()=>record}));};
+ const result=await downloadLibrary([revision],f.services,{signal:controller.signal});
+ assert.equal(result.cancelled,true);assert.equal(result.saved,1);assert.equal(result.remaining,0);
+ assert.equal(f.figures.find(figure=>figure.id===old.id).videoIds.length,2);
+});

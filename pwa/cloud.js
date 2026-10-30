@@ -12,7 +12,7 @@ import { cloudReadState, contentState } from './cloud-read-state.js';
 import { cloudCall, signedIn, uploadMedia, logout, loginWithLink, loginWithPassword, setAdminPassword, cloudIdentity, setLinkLoginConfirmation } from './cloud-api.js';
 import { CLOUD_FILE_LIMIT } from './cloud-config.js';
 import { figureVideos, figureMedia, listFigures, saveFigure, storageSettings } from './storage.js';
-import { downloadLibrary, downloadFigure, inspectCloudVideo, enrichCloudMetadata } from './cloud-library-download.js';
+import { createFigureDownload } from './cloud-library-download.js';
 import { readCloudCache, writeCloudCache, cloudCacheRevision } from './cloud-cache.js';
 import { cloudLocalIndex as localIndex } from './cloud-local.js';
 import { createPosterView, posterPayload } from './cloud-posters.js';
@@ -75,7 +75,7 @@ async function leaveLibraryDraft(active = navigation.capture()){
 }
 
 let loginDialog, loginTrigger, cloudNavigation, accountDialog, accountTrigger;
-let dialog, body, errorBox, statusBox, hooks, state, current, busy = false, controller, source = null, area = 'figures';
+let dialog, body, errorBox, statusBox, hooks, state, current, busy = false, source = null, area = 'figures';
 function report(error, target = errorBox) { target.textContent = error?.message ?? 'Cloud-Aufruf fehlgeschlagen.'; target.hidden = false; target.scrollIntoView({ block: 'nearest' }); }
 function field(form, label, value = '', type = 'text') {
   const wrap = node('label', label), input = node(type === 'textarea' ? 'textarea' : 'input');
@@ -128,7 +128,7 @@ async function run(message, work, errorTarget = errorBox, retainStatus = false) 
   }
 }
 function resetCloudSession() {
-  controller?.abort(); controller = null; uploadWorkflow?.cancel();
+  figureDownload.reset(); uploadWorkflow?.cancel();
   uploadRecovery.hidden = true; uploadRecovery.replaceChildren();
   document.querySelectorAll('.cloud-unsaved-dialog').forEach(prompt => prompt.dispatchEvent(new Event('cancel', { cancelable: true })));
   if (pendingConfirmations && document.getElementById('confirmDialog')?.open) document.getElementById('confirmDialog').dispatchEvent(new Event('cancel', { cancelable: true }));
@@ -220,6 +220,17 @@ async function cloudMediaHash(payload) {
   })();
   mediaHashRequests.set(requestKey, work);
   try { return await work; } finally { mediaHashRequests.delete(requestKey); }
+}
+const figureDownload = createFigureDownload({
+  identity: cloudIdentity, call: cloudCall, readCache: readCloudCache, storageSettings,
+  listFigures, readMedia: figureMedia, readCloudMedia: cloudMediaHash, saveFigure,
+  confirmReplace: figure => confirmCloud({ title: 'Lokale Änderungen überschreiben?', message: `„${figure.title}“ wurde lokal geändert. Mit der Cloud-Version überschreiben?`, ok: 'Mit Cloud-Version überschreiben' })
+});
+function downloadLifecycle({ phase }) {
+  const cancel = document.getElementById('cloudCancelUpload');
+  cancel.hidden = phase !== 'started'; cancel.disabled = false;
+  cancel.textContent = phase === 'started' ? 'Abbrechen' : 'Upload abbrechen';
+  if (phase !== 'started') document.getElementById('cloudDownloadProgress').hidden = true;
 }
 function cacheStatus(message, temporary = false) {
   clearTimeout(statusTimer); statusBox.textContent = message;
@@ -532,29 +543,9 @@ function libraryDownloadControls(parent, entries) {
   const start = action('Alle Figuren lokal verfügbar machen', async () => {
     if (!await confirmCloud({ title: 'Alle Figuren lokal verfügbar machen?', message: 'Alle veröffentlichten Figuren direkt im gewählten lokalen Speicher sichern. Vorhandene Videos werden wiederverwendet; bestehende Lernstände und Notizen bleiben erhalten.', ok: 'Lokal verfügbar machen' })) return;
     return run('Lokalen Bestand prüfen …', async active => {
-    if (librarySession?.dirty) throw new Error('Bitte zuerst die Bibliothek speichern, bevor du alle Figuren lokal verfügbar machst.');
-    const settings = await storageSettings();
-    if (settings.activeFolder && settings.folders.find(folder => folder.id === settings.activeFolder)?.access !== 'granted') throw new Error('Bitte den gewählten Geräteordner in den Einstellungen freigeben, bevor du die Bibliothek herunterlädst.');
-    if (!active()) return;
-    const downloadController = new AbortController(); controller = downloadController; const signal = downloadController.signal;
-    const cancel = document.getElementById('cloudCancelUpload'); cancel.textContent = 'Abbrechen'; cancel.hidden = false;
-    progress.hidden = false; progress.max = revisions.length; progress.value = 0; resultText.hidden = false; failures.replaceChildren(); failures.hidden = true;
-    try {
-      const result = await downloadLibrary(revisions, {
-        listFigures, readMedia: figureMedia, readCloudMedia: cloudMediaHash, confirmReplace: figure => confirmCloud({ title: 'Lokale Änderungen überschreiben?', message: `„${figure.title}“ wurde lokal geändert. Mit der Cloud-Version überschreiben?`, ok: 'Mit Cloud-Version überschreiben' }), inspectVideo: inspectCloudVideo, saveFigure,
-        async fetchVideo(revision, video, signal) {
-          const signed = await cloudCall('media_url', { revision: revision.id, media: video.id }); signal.throwIfAborted();
-          const response = await fetch(signed.url, { signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]) });
-          if (!response.ok) throw new Error('Video konnte nicht geladen werden. Bitte erneut versuchen.');
-          const blob = await response.blob(); return blob.slice(0, blob.size, video.type);
-        },
-        async readPoster(revision) {
-          const cached = await readCloudCache(cloudIdentity(), `poster:${revision.id}:${revision.created_at ?? ''}`);
-          if (cached?.value.bytes) return new Blob([cached.value.bytes], { type: 'image/jpeg' });
-          const value = await cloudCall('poster_get', { revision: revision.id });
-          return value.poster ? new Blob([Uint8Array.from(atob(value.poster), character => character.charCodeAt(0))], { type: 'image/jpeg' }) : null;
-        }
-      }, { signal, targetFolder: settings.activeFolder ?? null, progress: state => {
+      if (librarySession?.dirty) throw new Error('Bitte zuerst die Bibliothek speichern, bevor du alle Figuren lokal verfügbar machst.');
+      progress.hidden = false; progress.max = revisions.length; progress.value = 0; resultText.hidden = false; failures.replaceChildren(); failures.hidden = true;
+      const result = await figureDownload.library(revisions, { active, lifecycle: downloadLifecycle, progress: state => {
         if (!active()) return;
         progress.value = state.done;
         const phase = { index: 'Lokalen Bestand prüfen', check: 'Vorhandene Videos prüfen', download: `Video ${state.video} von ${state.videos} laden`, save: 'Figur speichern', saved: 'Figur gespeichert', skip: 'Bereits vorhanden', error: 'Figur konnte nicht gespeichert werden', done: 'Abgeschlossen', cancelled: 'Abgebrochen' }[state.phase];
@@ -566,9 +557,9 @@ function libraryDownloadControls(parent, entries) {
       if (result.remaining) resultText.textContent += ` ${result.remaining} Figuren noch offen.`;
       if (result.cancelled || result.failed.length) resultText.textContent += ' Erneut starten lädt nur die noch fehlenden Figuren.';
       await hooks.localChanged?.();
+      if (!active()) return;
       await refreshLocalFigures();
-    } finally { if (controller === downloadController) { controller = null; cancel.hidden = true; cancel.textContent = 'Upload abbrechen'; progress.hidden = true; } }
-  }, errorBox, true);
+    }, errorBox, true);
   });
   start.className = 'primary';
   box.append(start, failures);
@@ -619,46 +610,27 @@ function downloadControls(box, rev, { own = false, revisionIds = [rev.id] } = {}
     await refreshLocalFigures(); if (!activeDownload()) return;
     const linked = localIndex.resolve(rev, localFigures, { revisionIds }).current;
     if (linked && !replace) {
-      const saved = await run('Angaben ergänzen …', () => enrichCloudMetadata(linked, rev, { readMedia: figureMedia, saveFigure }));
+      const saved = await run('Angaben ergänzen …', active => figureDownload.enrich(linked, rev, { active }));
       if (!saved) return;
       await hooks.localChanged?.(); if (!activeDownload()) return; await close(); if (activeDownload() && !dialog.open) return hooks.openLocal?.(saved); return;
     }
     return run('Figur wird lokal verfügbar gemacht …', async active => {
-    if (librarySession?.dirty) throw new Error('Bitte zuerst die Bibliothek speichern, bevor du eine Figur übernimmst.');
-    const selected = chosen.filter(([check]) => !check || check.checked).map(([, v]) => v);
-    if (!selected.length) throw new Error('Bitte mindestens ein Video auswählen.');
-    if (selected.reduce((n, v) => n + v.size, 0) > 250 * 1024 * 1024) throw new Error('Bitte weniger Videos wählen: maximal 250 MB pro Übernahme.');
-    const resolved = localIndex.resolve(rev, localFigures, { revisionIds });
-    const target = resolved.figure && !resolved.modified ? { figure: resolved.figure } : await hooks.chooseImport({ title: rev.title, fingerprint: fingerprint(selected), revisionIds, figureId: rev.figure_id });
-    if (!target || !active()) return;
-    const settings = await storageSettings();
-    if (!target.figure && settings.activeFolder && settings.folders.find(folder => folder.id === settings.activeFolder)?.access !== 'granted') throw new Error('Bitte den gewählten Geräteordner in den Einstellungen freigeben.');
-    if (!active()) return;
-    const downloadController = new AbortController(); controller = downloadController; const signal = downloadController.signal;
-    const cancel = document.getElementById('cloudCancelUpload'); cancel.textContent = 'Abbrechen'; cancel.hidden = false;
-    try {
-      await downloadFigure({ ...rev, videos: selected }, {
-        listFigures, readMedia: figureMedia, readCloudMedia: cloudMediaHash, confirmReplace: figure => confirmCloud({ title: 'Lokale Änderungen überschreiben?', message: `„${figure.title}“ wurde lokal geändert. Mit der Cloud-Version überschreiben?`, ok: 'Mit Cloud-Version überschreiben' }), inspectVideo: inspectCloudVideo, saveFigure,
-        async fetchVideo(revision, video, signal) {
-          const signed = await cloudCall('media_url', { revision: revision.id, media: video.id }); signal.throwIfAborted();
-          const response = await fetch(signed.url, { signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]) });
-          if (!response.ok) throw new Error('Video konnte nicht geladen werden. Bitte erneut versuchen.');
-          const blob = await response.blob(); return blob.slice(0, blob.size, video.type);
-        },
-        async readPoster(revision) {
-          const cached = await readCloudCache(cloudIdentity(), `poster:${revision.id}:${revision.created_at ?? ''}`);
-          if (cached?.value.bytes) return new Blob([cached.value.bytes], { type: 'image/jpeg' });
-          const value = await cloudCall('poster_get', { revision: revision.id });
-          return value.poster ? new Blob([Uint8Array.from(atob(value.poster), character => character.charCodeAt(0))], { type: 'image/jpeg' }) : null;
-        }
-      }, { signal, target: target.figure ?? null, targetFolder: settings.activeFolder ?? null, progress: text => { if (active()) statusBox.textContent = text; } });
+      if (librarySession?.dirty) throw new Error('Bitte zuerst die Bibliothek speichern, bevor du eine Figur übernimmst.');
+      const selected = chosen.filter(([check]) => !check || check.checked).map(([, v]) => v);
+      if (!selected.length) throw new Error('Bitte mindestens ein Video auswählen.');
+      if (selected.reduce((n, v) => n + v.size, 0) > 250 * 1024 * 1024) throw new Error('Bitte weniger Videos wählen: maximal 250 MB pro Übernahme.');
+      const resolved = localIndex.resolve(rev, localFigures, { revisionIds });
+      const target = resolved.figure && !resolved.modified ? { figure: resolved.figure } : await hooks.chooseImport({ title: rev.title, fingerprint: fingerprint(selected), revisionIds, figureId: rev.figure_id });
+      if (!target || !active()) return;
+      await figureDownload.figure({ ...rev, videos: selected }, {
+        active, lifecycle: downloadLifecycle, target: target.figure ?? null, progress: text => { if (active()) statusBox.textContent = text; }
+      });
       if (!active()) return;
       await hooks.localChanged?.();
       if (!active()) return;
       busy = false; await close(); if (active()) hooks.localSaved?.();
-    } finally { if (controller === downloadController) { controller = null; cancel.hidden = true; cancel.textContent = 'Upload abbrechen'; } }
 
-  });
+    });
   };
   const take = action(label, () => download());
   // Keep recovery available when files were removed or modified outside the app.
@@ -1143,7 +1115,7 @@ export function initCloud(callbacks) {
   document.getElementById('cloudBack').onclick = cloudBack;
   dialog.querySelector('[data-nav=figures]').onclick = close;
   dialog.querySelector('[data-nav=cloud]').onclick = () => { if (!busy) navigate('initial'); };
-  document.getElementById('cloudCancelUpload').onclick = () => { if (uploadWorkflow?.currentAccount && ['hashing', 'reserving', 'uploading', 'poster'].includes(uploadWorkflow.phase)) uploadWorkflow.cancel(); else controller?.abort(); };
+  document.getElementById('cloudCancelUpload').onclick = () => { if (uploadWorkflow?.currentAccount && ['hashing', 'reserving', 'uploading', 'poster'].includes(uploadWorkflow.phase)) uploadWorkflow.cancel(); else figureDownload.cancel(); };
   dialog.addEventListener('cancel', e => { e.preventDefault(); void cloudBack(); });
   document.getElementById('cloudButton').onclick = () => openCloud();
   const query = new URLSearchParams(location.search); if (query.has('library') || query.has('cloud')) setTimeout(() => openCloud(null, query.get('library')), 0);
