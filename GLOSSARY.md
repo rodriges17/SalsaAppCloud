@@ -49,3 +49,6 @@ Der im Arbeitsspeicher gehaltene Entwurf einer bestehenden Bibliothek mit Angabe
 
 **Tag-Auswahl**:
 Das durchsuchbare Mehrfachauswahlfeld mit vorhandenen Vorschlägen und einzeln entfernbaren Zuordnungen. Die Suche ignoriert Groß-/Kleinschreibung, die Tag-Identität nicht.
+
+**Personenfreigabe**:
+Der gemeinsame Ablauf zum Anlegen und Bearbeiten einer Person mit Kontofreigabe, Speicherlimit und Bibliothekszuweisungen. Der Entwurf hält erfolgreiche und offene Speicherschritte getrennt; Wiederholen führt nur offene Schritte aus. Verwerfen entfernt ausschließlich ungespeicherte Änderungen. Kontowechsel und Sitzungsablauf entwerten den Ablauf, ohne bereits gespeicherte Rechte zurückzunehmen.

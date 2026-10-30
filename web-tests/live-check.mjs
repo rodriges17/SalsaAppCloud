@@ -1,7 +1,8 @@
 import { chromium, webkit, devices } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir, readFile } from 'node:fs/promises';
-const url = 'https://rodriges17.github.io/SalsaAppCloud/';
+const [owner, repository] = (process.env.GITHUB_REPOSITORY || 'rodriges17/StepByStepCloudPWA').split('/');
+const url = `https://${owner}.github.io/${repository}/`;
 const source = await readFile(new URL('../pwa/app.js', import.meta.url), 'utf8');
 const expectedVersion = source.match(/const APP_VERSION = '([^']+)'/)?.[1];
 assert.ok(expectedVersion, 'The source app must declare its deployment version.');

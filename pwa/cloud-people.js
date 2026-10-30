@@ -1,14 +1,16 @@
+import { createPeopleGrant } from './cloud-people-grant.js';
 // Administrator-only people UI. Drafts and generated links live only in this view.
 export function createPeopleView({ node, action, field, select, checkbox, call, run, confirm, state, refresh, report, account, extraManagement = () => null }) {
   let expanded = null, adding = null, query = '', filter = 'Alle', activeTab = 'Konto', more, platformDraft = null;
-  const dirty = () => [...drafts].some(([id,d]) => { const p = state()?.people?.find(p => p.id === id); return p && (d.enabled !== p.upload_enabled || Number(d.quota) !== p.quota / 1000000 || Object.keys(d.members || {}).length); });
+  const grants = createPeopleGrant({ call });
+  const dirty = () => grants.pending;
   async function leave(active = () => true) {
+    const current = grants.capture();
     if (!dirty() && !adding && platformDraft === null) return true;
     if (!await confirm({title:'Ungespeicherte Änderungen', message:'Möchtest du die Änderungen verwerfen oder weiter bearbeiten?', ok:'Verwerfen', cancel:'Weiter bearbeiten', destructive:true})) return false;
-    if (!active()) return false;
-    drafts.clear(); adding = null; platformDraft = null; return true;
+    if (!active() || !current()) return false;
+    grants.discard(); adding = null; platformDraft = null; return true;
   }
-  const drafts = new Map();
   const mb = n => `${(Number(n ?? 0) / 1000000).toFixed(1)} MB`;
   const manageable = () => state().libraries.filter(l => l.manage);
   function permissions(form, draft, onChange = () => {}) {
@@ -53,20 +55,28 @@ export function createPeopleView({ node, action, field, select, checkbox, call, 
     const original = box; box = panels.Konto;
     box.append(node('h4','Kontoinformationen'),node('p',person.email),node('p',person.is_admin ? 'Plattform-Administrator' : 'Benutzer'));
     box.append(node('p', `${person.is_admin ? 'Administrator · ' : ''}${person.upload_enabled ? 'Uploads erlaubt' : 'Nur Lesen'} · ${mb(person.used)} / ${mb(person.quota)}`));
-    const draft = drafts.get(person.id) ?? { enabled: person.upload_enabled, quota: person.quota / 1000000 }; drafts.set(person.id, draft);
+    const draft = grants.edit(person);
     box = panels.Berechtigungen;
     box.append(node('h4','Cloud-Freigabe'), node('p','Die Upload-Freigabe gilt für neue Figuren und neue Bibliotheken. Lesen bleibt möglich.','small muted'));
     const form = node('form'), saveError = node('p','','error'); saveError.setAttribute('role','alert'); saveError.hidden=true; box.append(form,saveError);
     let save;
-    const dirty = () => { if (save) save.disabled = draft.enabled === person.upload_enabled && Number(draft.quota) === person.quota / 1000000 && !Object.keys(draft.members || {}).length; };
+    const dirty = () => { if (save) save.disabled = !grants.dirty(draft); };
     const fields = permissions(form, draft, dirty);
     if (person.id === state().me.id) { fields.enabled.disabled = true; form.append(node('p', 'Die eigene Upload-Freigabe kann hier nicht entzogen werden.', 'small muted')); }
     save = action('Änderungen speichern', async () => {
       if (!form.reportValidity()) return;
-      if (person.upload_enabled && !draft.enabled && !await confirm({ title: `${person.email}: Uploads deaktivieren?`, message: 'Neue Uploads und neue Bibliotheken werden gesperrt. Bestehende Cloud-Figuren und Leserechte bleiben erhalten. Mitwirken ist ohne Upload-Freigabe nicht mehr nutzbar; eigene Bibliotheken bleiben verwaltbar.', ok: 'Uploads deaktivieren', destructive: true })) return;
-      await run('Freigabe speichern …', async () => { await call('admin_user', { email: person.email, enabled: draft.enabled, quota: Math.floor(Number(draft.quota) * 1000000) });
-        for (const [library, role] of Object.entries(draft.members || {})) { await call('member', {library, email:person.email, role}); delete draft.members[library]; }
-        drafts.delete(person.id); await refresh(); const target = host.querySelector('.cloud-person-details'); if (target) notice(target, 'Änderungen gespeichert.'); }, saveError);
+      await run('Freigabe speichern …', async () => {
+        const outcome = await grants.save(draft, { confirm: () => !draft.saved.enabled || draft.enabled || confirm({
+          title: `${person.email}: Uploads deaktivieren?`,
+          message: 'Neue Uploads und neue Bibliotheken werden gesperrt. Bestehende Cloud-Figuren und Leserechte bleiben erhalten. Mitwirken ist ohne Upload-Freigabe nicht mehr nutzbar; eigene Bibliotheken bleiben verwaltbar.',
+          ok: 'Uploads deaktivieren', destructive: true,
+        }) });
+        if (outcome.kind !== 'saved') return;
+        await refresh();
+        if (!grants.current(draft)) return;
+        const target = host.querySelector('.cloud-person-details');
+        if (target) notice(target, 'Änderungen gespeichert.');
+      }, saveError);
     }); save.className = 'primary'; form.append(save); dirty(); form.onsubmit = e => e.preventDefault();
     const access = node('div'); panels.Berechtigungen.append(access); box = panels.Aktionen;
     if (person.id === state().me.id && person.is_admin) box.append(action('Passwort unter „Mein Konto“ ändern', account));
@@ -116,14 +126,9 @@ export function createPeopleView({ node, action, field, select, checkbox, call, 
       if (d.step === 0) { d.email = email.value.trim().toLowerCase(); if (state().people.some(p => p.email.toLowerCase() === d.email)) { result.textContent = 'Diese Person ist bereits angelegt. Bitte öffne ihren Eintrag in der Personenliste.'; return; } }
       if (d.step < 2) { d.step++; render(); return; }
       await run('Person und Zugriffe speichern …', async () => {
-        if (!d.created) { await call('admin_user', { email: d.email, enabled: d.enabled, quota: Math.floor(Number(d.quota) * 1000000), create_only: true }); d.created = true; }
-        let failed = false;
-        for (const [library, role] of Object.entries(d.libraries)) {
-          if (!role || d.done[library]) continue;
-          try { await call('member', { library, email: d.email, role }); d.done[library] = true; delete d.failures?.[library]; }
-          catch (e) { failed = true; (d.failures ??= {})[library] = e.message; const lib = state().libraries.find(l => l.id === library); notice(result, `Person angelegt. Zugriff auf „${lib?.title ?? library}“ konnte nicht gespeichert werden: ${e.message}`); }
-        }
-        if (failed) { render(); return; }
+        const outcome = await grants.save(d);
+        if (!grants.current(d) || outcome.kind === 'busy' || outcome.kind === 'stale') return;
+        if (outcome.kind === 'partial') { render(); return; }
         adding = null; query = ''; expanded = { email: d.email }; await refresh();
       });
     }));
@@ -136,7 +141,7 @@ export function createPeopleView({ node, action, field, select, checkbox, call, 
     host.replaceChildren();
     if (!state()?.me?.is_admin) return;
     if (adding) { wizard(host); return; }
-    const heading = node('div', undefined, 'cloud-person-heading'); heading.append(node('h3', 'Benutzer'), action('Person hinzufügen', async () => { if (!await leave()) return; adding = { step: 0, email: '', enabled: false, quota: 250, libraries: {}, done: {}, created: false }; render(); })); host.append(heading);
+    const heading = node('div', undefined, 'cloud-person-heading'); heading.append(node('h3', 'Benutzer'), action('Person hinzufügen', async () => { if (!await leave()) return; adding = grants.create(); render(); })); host.append(heading);
     const search = field(host, 'Benutzer suchen', query, 'search'); search.autocomplete = 'off'; search.placeholder = 'Name oder E-Mail';
     const filters = node('div',undefined,'cloud-person-filters'); filters.setAttribute('aria-label','Benutzer filtern'); host.append(filters);
     for (const name of ['Alle','Admins','Gesperrt']) { const button = action(name,async()=>{ if (!await leave()) return; filter=name; render(); }); button.setAttribute('aria-pressed',String(filter===name)); filters.append(button); }
@@ -167,5 +172,5 @@ export function createPeopleView({ node, action, field, select, checkbox, call, 
     total.oninput=()=>{ platformDraft=Number(total.value)===state().settings.total_limit/1000000 ? null : total.value; };
     limits.append(action('Gesamtlimit speichern', () => run('Speichern …', async () => { if (!total.reportValidity()) return; await call('admin_limit', { bytes: Math.floor(Number(total.value) * 1000000) }); platformDraft=null; await refresh(); })));
   }
-  return { get more() { return more; }, get dirty() { return dirty() || !!adding || platformDraft !== null; }, leave, mount(box) { host = box; render(); }, reset() { expanded = null; adding = null; drafts.clear(); platformDraft = null; query = ''; filter = 'Alle'; activeTab = 'Konto'; } };
+  return { get more() { return more; }, get dirty() { return dirty() || !!adding || platformDraft !== null; }, leave, mount(box) { host = box; render(); }, reset() { expanded = null; adding = null; grants.reset(); platformDraft = null; query = ''; filter = 'Alle'; activeTab = 'Konto'; } };
 }
