@@ -18,6 +18,7 @@ test('first frame remains paused and loading errors can be retried',async({page}
  await page.locator('#learningVideo').evaluate(v=>v.dispatchEvent(new Event('error')));
  await page.getByRole('button',{name:'Erneut versuchen',exact:true}).click();
  await expect(page.locator('#videoLoading')).toBeHidden();await expect(page.locator('#playerError')).toBeHidden();
+ await expect(page.getByRole('button',{name:'Video starten',exact:true})).toBeVisible();
  await expect(page.locator('#learningVideo')).toHaveJSProperty('paused',true);
 });
 test('denied browser fullscreen keeps custom controls, tap playback and Back navigation',async({page})=>{
@@ -61,4 +62,43 @@ test('browser Back leaves fullscreen before leaving the player and keeps positio
  expect(await page.locator('#learningVideo').evaluate(v=>v.currentTime)).toBeGreaterThanOrEqual(2.9);
  await expect(page.locator('#abStatus')).toHaveText('A 0:01 · B 0:03');
  await page.goBack();await expect(page.locator('#playerScreen')).toBeHidden();
+});
+
+test('double taps seek within A–B and accumulate feedback while paused play can be hidden',async({page})=>{
+ await openPlayer(page);await page.clock.install();
+ await expect(page.getByRole('button',{name:'Video starten',exact:true})).toBeVisible({timeout:1500});
+ await page.locator('#learningVideo').evaluate(v=>v.currentTime=1);await page.locator('#markA').click();
+ await page.locator('#learningVideo').evaluate(v=>v.currentTime=3);await page.locator('#markB').click();
+ const b=await page.locator('#videoStage').boundingBox();const y=b.y+b.height*.3;
+ await page.mouse.dblclick(b.x+b.width*.85,y,{delay:80});
+ await expect(page.locator('#learningVideo')).toHaveJSProperty('currentTime',3);
+ await expect(page.locator('#learningVideo')).toHaveJSProperty('paused',true);
+ await page.mouse.dblclick(b.x+b.width*.85,y,{delay:80});await expect(page.locator('.player-seek-feedback')).toHaveText('▶▶ 10 s');
+ await page.mouse.dblclick(b.x+b.width*.15,y,{delay:80});await expect(page.locator('#learningVideo')).toHaveJSProperty('currentTime',1);
+ await page.mouse.click(b.x+b.width*.15,y);await page.clock.fastForward(350);await expect(page.getByRole('button',{name:'Video starten',exact:true})).toBeHidden();
+ await page.mouse.click(b.x+b.width*.15,y);await page.clock.fastForward(350);await expect(page.getByRole('button',{name:'Video starten',exact:true})).toBeVisible();
+});
+
+test('fullscreen menu keeps browser safe area clear through rotation without moving video',async({page,browserName})=>{
+ test.skip(browserName!=='chromium','Native browser safe-area emulation requires Chromium CDP');
+ await openPlayer(page);await page.evaluate(()=>{document.querySelector('#playerScreen').requestFullscreen=()=>Promise.reject(Error('test viewport fallback'));});const cdp=await page.context().newCDPSession(page);
+ await cdp.send('Emulation.setSafeAreaInsetsOverride',{insets:{bottom:48}});
+ await page.locator('#fullscreen').click();await page.keyboard.press('ArrowUp');
+ const video=await page.locator('#videoStage').boundingBox();const button=await page.locator('#fullscreen').boundingBox();
+ expect(button.y+button.height).toBeLessThanOrEqual(video.y+video.height-48-8);
+ await page.keyboard.press('ArrowDown');expect(await page.locator('#videoStage').boundingBox()).toEqual(video);
+ await page.setViewportSize({width:844,height:390});await cdp.send('Emulation.setSafeAreaInsetsOverride',{insets:{bottom:0,right:48}});await page.keyboard.press('ArrowUp');
+ const rotated=await page.locator('#fullscreen').boundingBox();expect(rotated.x+rotated.width).toBeLessThanOrEqual(844-48);
+});
+
+ test('changing video cancels delayed taps and loading errors hide the play affordance',async({page})=>{
+ await openPlayer(page,2);await page.clock.install();
+ const b=await page.locator('#videoStage').boundingBox();await page.mouse.click(b.x+b.width*.15,b.y+b.height*.3);
+ await page.locator('#playerVideoChoice').selectOption('1');await page.clock.fastForward(400);
+ await expect(page.getByRole('button',{name:'Video starten',exact:true})).toBeVisible();
+ await page.mouse.dblclick(b.x+b.width*.15,b.y+b.height*.3,{delay:80});await expect(page.locator('.player-seek-feedback')).toBeVisible();
+ await page.locator('#fullscreen').click();await expect(page.locator('.player-seek-feedback')).toBeHidden({timeout:100});
+ await page.locator('#learningVideo').evaluate(v=>v.dispatchEvent(new Event('error')));
+ await expect(page.getByRole('button',{name:'Video starten',exact:true})).toBeHidden();
+ await expect(page.getByRole('button',{name:'Erneut versuchen',exact:true})).toBeVisible();
 });
