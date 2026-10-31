@@ -13,6 +13,7 @@ export function createPlayerView({ screen, video, isActive = () => true, toggleP
   const ready = () => isActive() && video.readyState >= 2 && !video.error && screen.querySelector('#videoLoading')?.hidden !== false && screen.querySelector('#retryPlayer')?.hidden !== false;
   function feedback() { playButton.hidden = !ready() || !video.paused || playHidden || !pauseIcon.hidden; }
   for (const element of [screen.querySelector('#videoLoading'),screen.querySelector('#retryPlayer')]) if(element)new win.MutationObserver(feedback).observe(element,{attributes:true,attributeFilter:['hidden']});
+  function clearTransient() { clearTimeout(tapTimer);clearTimeout(feedbackTimer);clearTimeout(pauseTimer);pendingTap=null;gesture=null;pauseIcon.hidden=true;seekIcon.hidden=true;total=0;direction=0;feedback(); }
   function clearActions() { clearTimeout(tapTimer); clearTimeout(feedbackTimer); clearTimeout(pauseTimer); pendingTap = null; gesture = null; total = 0; direction = 0; playHidden = false; pauseIcon.hidden = true; seekIcon.hidden = true; playButton.hidden = true; }
   function singleTap() { if (!ready()) return; if(video.paused){playHidden = !playHidden; feedback();}else togglePlayback?.(); }
   function tap(x) {
@@ -56,7 +57,7 @@ export function createPlayerView({ screen, video, isActive = () => true, toggleP
   }
   async function exit({ history = true } = {}) {
     if (!full) return false;
-    clearTimeout(tapTimer); pendingTap=null; gesture=null;
+    clearTransient();
     full = false; controls = false; clearTimeout(hideTimer); generation++; clearTimeout(hintTimer); hint.hidden = true; paint();
     native()?.setFullscreen(false);
     if (doc.fullscreenElement === screen) try { await doc.exitFullscreen(); } catch { /* App chrome still returns. */ }
@@ -65,7 +66,7 @@ export function createPlayerView({ screen, video, isActive = () => true, toggleP
   }
   async function enter({ history = true } = {}) {
     if (full || !isActive()) return;
-    clearTimeout(tapTimer); pendingTap=null;
+    clearTransient();
     full = true; controls = false; gesture = null; interacting = false; selectionOpen = false; const request = ++generation; paint();
     if (history) win.history.pushState({...win.history.state, view:'player', playerFullscreen:true}, '', '#lernen');
     if (native()) { native().setFullscreen(true); return; }

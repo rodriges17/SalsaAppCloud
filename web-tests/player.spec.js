@@ -96,6 +96,8 @@ test('fullscreen menu keeps browser safe area clear through rotation without mov
  const b=await page.locator('#videoStage').boundingBox();await page.mouse.click(b.x+b.width*.15,b.y+b.height*.3);
  await page.locator('#playerVideoChoice').selectOption('1');await page.clock.fastForward(400);
  await expect(page.getByRole('button',{name:'Video starten',exact:true})).toBeVisible();
+ await page.mouse.dblclick(b.x+b.width*.15,b.y+b.height*.3,{delay:80});await expect(page.locator('.player-seek-feedback')).toBeVisible();
+ await page.locator('#fullscreen').click();await expect(page.locator('.player-seek-feedback')).toBeHidden({timeout:100});
  await page.locator('#learningVideo').evaluate(v=>v.dispatchEvent(new Event('error')));
  await expect(page.getByRole('button',{name:'Video starten',exact:true})).toBeHidden();
  await expect(page.getByRole('button',{name:'Erneut versuchen',exact:true})).toBeVisible();
